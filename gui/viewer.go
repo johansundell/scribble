@@ -37,6 +37,7 @@ type Viewer struct {
 	doublePos     fyne.Position // and where
 }
 
+// newViewer returns an empty viewer for ui that wraps words.
 func newViewer(ui *UI) *Viewer {
 	v := &Viewer{ui: ui}
 	v.Wrapping = fyne.TextWrapWord
@@ -76,6 +77,7 @@ func (v *Viewer) selection() (int, int) {
 	return min(a, n), min(b, n)
 }
 
+// selectRange selects from a to b and redraws the highlight.
 func (v *Viewer) selectRange(a, b int) {
 	v.anchor, v.caret = a, b
 	if v.r != nil {
@@ -115,8 +117,11 @@ func (v *Viewer) expand(p fyne.Position, in func(rune) bool) {
 	v.selectRange(a, b)
 }
 
+// isWordRune reports whether r is part of a word for a double-click.
 func isWordRune(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' }
 
+// copySelection puts the selected text on clip, or on the app's clipboard
+// if clip is nil.
 func (v *Viewer) copySelection(clip fyne.Clipboard) {
 	if text := v.SelectedText(); text != "" {
 		if clip == nil {
@@ -157,6 +162,7 @@ func (v *Viewer) Dragged(e *fyne.DragEvent) {
 	}
 	if !v.dragging {
 		v.dragging = true
+		v.ui.w.Canvas().Focus(v)
 		v.anchor = v.r.offsetAt(e.Position.Subtract(e.Dragged))
 	}
 	v.selectRange(v.anchor, v.r.offsetAt(e.Position))
@@ -173,6 +179,7 @@ func (v *Viewer) DoubleTapped(e *fyne.PointEvent) {
 
 // TappedSecondary shows the context menu.
 func (v *Viewer) TappedSecondary(e *fyne.PointEvent) {
+	v.ui.w.Canvas().Focus(v)
 	cp := fyne.NewMenuItem("Copy", func() { v.copySelection(nil) })
 	cp.Disabled = v.SelectedText() == ""
 	c := fyne.CurrentApp().Driver().CanvasForObject(v)
@@ -238,6 +245,8 @@ func (r *textRun) index(x float32) int {
 	return len(r.text)
 }
 
+// viewerRenderer draws RichText's objects with the selection highlight
+// around them.
 type viewerRenderer struct {
 	v     *Viewer
 	inner fyne.WidgetRenderer // RichText's own
@@ -538,6 +547,7 @@ func (c *runCollector) textRun(o fyne.CanvasObject) (textRun, bool) {
 	return textRun{}, false
 }
 
+// canvasTextRun returns the run for t, drawn at pos in the viewer.
 func canvasTextRun(t *canvas.Text, pos fyne.Position) textRun {
 	w := fyne.MeasureText(t.Text, t.TextSize, t.TextStyle).Width
 	return textRun{text: []rune(t.Text), pos: pos.AddXY(alignOffset(t.Alignment, t.Size().Width, w), 0),

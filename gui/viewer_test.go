@@ -128,8 +128,9 @@ func TestDraggingFromALinkSelectsInsteadOfFollowing(t *testing.T) {
 	c := newServer(t)
 	create(t, c, "# Recipes\nsoup")
 	create(t, c, "# Plans\nsee [[Recipes]] for dinner")
-	ui, _ := open(t, c)
+	ui, w := open(t, c)
 	ui.List.Select(0)
+	w.Canvas().Focus(ui.Search)
 
 	// A link is not draggable, so the drag goes to the viewer under it.
 	if _, ok := any(&widget.Hyperlink{}).(fyne.Draggable); ok {
@@ -141,6 +142,13 @@ func TestDraggingFromALinkSelectsInsteadOfFollowing(t *testing.T) {
 	}
 	if strings.HasPrefix(ui.Editor.Text, "# Recipes") {
 		t.Fatal("dragging across a link should not follow it")
+	}
+	// The press went to the link, so the drag has to focus the viewer for
+	// Edit > Copy to reach it rather than the search field.
+	w.Canvas().Unfocus()
+	menuItem(t, w, "Edit", "Copy").Action()
+	if got := fyne.CurrentApp().Clipboard().Content(); got != "Recipes for" {
+		t.Fatalf("Edit > Copy after the drag copied %q", got)
 	}
 }
 
