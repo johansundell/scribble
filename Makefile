@@ -36,6 +36,15 @@ compile:
 	-output "build/scribble_$(VERSION)_{{.OS}}_{{.Arch}}/scribble" \
 	./cmd/scribble
 
+	@gox -ldflags "-X 'main.Version=$(VERSION)'" \
+	-osarch="darwin/amd64" \
+	-osarch="darwin/arm64" \
+	-osarch="linux/amd64" \
+	-osarch="linux/arm64" \
+	-osarch="windows/amd64" \
+	-output "build/scribble-gui_$(VERSION)_{{.OS}}_{{.Arch}}/scribble-gui" \
+	./cmd/scribble-gui
+
 install:
 	go install -ldflags "-X main.Version=$(VERSION)"
 
