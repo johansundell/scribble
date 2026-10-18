@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver"
@@ -52,6 +53,9 @@ type UI struct {
 	Backlinks *fyne.Container
 
 	Status *widget.Label // the last error, empty when all is well
+	ConnStatus *ConnStatus   // connection indicator in status bar
+	ConnDot    *canvas.Circle // status dot: grey/green/red
+	ConnLabel  *widget.Label  // "Connecting...", "Connected", "Offline"
 
 	backlinkButtons *fyne.Container // inside Backlinks
 
@@ -109,6 +113,7 @@ func New(w fyne.Window, c *client.Client, store *offline.Store) *UI {
 	ui.Delete = widget.NewButton("Delete", ui.confirmDelete)
 	ui.Status = widget.NewLabel("")
 	ui.Status.Wrapping = fyne.TextWrapWord
+	ui.ConnStatus = newConnStatus(ui)
 	ui.backlinkButtons = container.NewHBox()
 	ui.Backlinks = container.NewVBox(
 		widget.NewLabelWithStyle("Linked from", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
@@ -122,7 +127,8 @@ func New(w fyne.Window, c *client.Client, store *offline.Store) *UI {
 			container.NewStack(container.NewVScroll(ui.Viewer), ui.Editor)),
 	)
 	split.Offset = 0.3
-	w.SetContent(container.NewBorder(nil, ui.Status, nil, nil, split))
+	statusBar := container.NewBorder(nil, nil, nil, ui.ConnStatus, ui.Status)
+	w.SetContent(container.NewBorder(nil, statusBar, nil, nil, split))
 	w.SetCloseIntercept(ui.Close)
 	ui.setupMenu()
 	ui.showView()
@@ -724,6 +730,11 @@ func (ui *UI) StartSync(interval time.Duration) {
 func (ui *UI) synced(r offline.Report, err error) {
 	wasOffline := ui.offline
 	ui.offline = client.IsUnreachable(err)
+	if ui.offline {
+		ui.setOffline()
+	} else {
+		ui.setConnected()
+	}
 	switch {
 	case ui.offline:
 		if !wasOffline || ui.Status.Text == "" {
@@ -834,6 +845,8 @@ func (ui *UI) selectCurrent() {
 // reportOnline is report for an action only the server can do.
 func (ui *UI) reportOnline(err error) bool {
 	if client.IsUnreachable(err) {
+		ui.offline = true
+		ui.setOffline()
 		ui.Status.SetText("The server is unreachable. Renaming, deleting and overwriting a note need it; try again when it is back.")
 		return true
 	}
