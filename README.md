@@ -43,10 +43,16 @@ git log --oneline -5 | ./scribble append "Work log"
 ./scribble edit Ideas
 ./scribble projects            # every #project; `projects <name>` lists its notes
 
-# GUI (same SCRIBBLE_URL / SCRIBBLE_TOKEN)
+# GUI (same SCRIBBLE_URL / SCRIBBLE_TOKEN; optional SCRIBBLE_HOTKEY, default Ctrl+Alt+N)
 make build-gui
 ./scribble-gui
 ```
+
+`scribble-gui` registers a system tray icon (**New Note**, **Open Scribble**,
+**Quit**) so closing the main window keeps the app resident in the tray, and a
+global hotkey (`Ctrl+Alt+N` by default; override with `SCRIBBLE_HOTKEY`, or set
+`SCRIBBLE_HOTKEY=none` to disable) that opens or focuses a new-note editor from
+anywhere.
 
 The GUI is built with [Fyne](https://fyne.io), so it needs CGO and a C
 compiler. On Linux it also needs the GL, X11, Wayland and xkbcommon
@@ -93,7 +99,7 @@ notes/                           Note type, [[link]] and #project helpers (no se
 client/                          Go API client
 cmd/scribble/                    CLI
 gui/                             Fyne GUI: windows and widgets
-cmd/scribble-gui/                GUI entry point (reads SCRIBBLE_URL / SCRIBBLE_TOKEN)
+cmd/scribble-gui/                GUI entry point (reads SCRIBBLE_URL / SCRIBBLE_TOKEN / SCRIBBLE_HOTKEY)
 docs/service-template.md         the template's own docs
 ```
 
@@ -117,5 +123,5 @@ also against a real server.
 - [ ] GUI: clickable `[[links]]` (`notes.LinkifyForView` already turns them
       into `note://` links for Fyne's Markdown renderer) and a backlinks panel
 - [ ] GUI: conflict resolution, and a local cache synced through `/changes`
-- [ ] Global hotkey / tray icon for "instant new note"
+- [x] Global hotkey / tray icon for "instant new note"
 - [ ] Import from Tomboy `.note` XML

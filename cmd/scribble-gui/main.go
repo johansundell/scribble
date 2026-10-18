@@ -1,7 +1,8 @@
 // Command scribble-gui is the desktop client for a scribble server.
 //
-//	SCRIBBLE_URL    server address (default http://localhost:8080)
-//	SCRIBBLE_TOKEN  the server's AUTH_TOKEN
+//	SCRIBBLE_URL     server address (default http://localhost:8080)
+//	SCRIBBLE_TOKEN   the server's AUTH_TOKEN
+//	SCRIBBLE_HOTKEY  global new-note shortcut (default Ctrl+Alt+N; "none" to disable)
 package main
 
 import (
@@ -9,6 +10,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/widget"
 	"github.com/johansundell/scribble/client"
 	"github.com/johansundell/scribble/gui"
@@ -29,7 +31,14 @@ func main() {
 	if token == "" {
 		w.SetContent(widget.NewLabel("SCRIBBLE_TOKEN is not set. Set it to the server's AUTH_TOKEN and start scribble-gui again."))
 	} else {
-		gui.New(w, client.New(baseURL, token))
+		ui := gui.New(w, client.New(baseURL, token))
+		if desk, ok := a.(desktop.App); ok {
+			ui.SetupTray(desk)
+		}
+		if unregister, err := ui.RegisterHotkey(os.Getenv("SCRIBBLE_HOTKEY")); err == nil && unregister != nil {
+			defer unregister()
+		}
 	}
 	w.ShowAndRun()
 }
+

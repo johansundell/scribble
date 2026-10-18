@@ -20,6 +20,7 @@ import (
 	"github.com/johansundell/scribble/router"
 	"github.com/johansundell/scribble/store"
 	"github.com/johansundell/scribble/types"
+	"golang.design/x/hotkey"
 )
 
 type discardSink struct{}
@@ -62,18 +63,8 @@ func create(t *testing.T, c *client.Client, body string) {
 // open shows the GUI in a headless test window.
 func open(t *testing.T, c *client.Client) (*gui.UI, fyne.Window) {
 	t.Helper()
-	a := test.NewTempApp(t)
-	w := test.NewWindow(nil)
-	// Some tests close the window themselves; the test driver panics if it
-	// is closed twice.
-	t.Cleanup(func() {
-		if slices.Contains(a.Driver().AllWindows(), w) {
-			w.Close()
-		}
-	})
-	ui := gui.New(w, c)
-	w.Resize(fyne.NewSize(900, 600))
-	return ui, w
+	ui, w := openWithSpy(t, c)
+	return ui, w.Window
 }
 
 // listTitles returns the titles the note list is showing, top to bottom.
@@ -699,3 +690,259 @@ func TestDeleteNoteAfterConfirming(t *testing.T) {
 		t.Error("viewer still shows the deleted note")
 	}
 }
+
+type spyWindow struct {
+	fyne.Window
+	hidden bool
+	closed bool
+}
+
+func (s *spyWindow) Hide() {
+	s.hidden = true
+	s.Window.Hide()
+}
+
+func (s *spyWindow) Show() {
+	s.hidden = false
+	s.Window.Show()
+}
+
+func (s *spyWindow) Close() {
+	s.closed = true
+	s.Window.Close()
+}
+
+type fakeTray struct {
+	menu *fyne.Menu
+	icon fyne.Resource
+	win  fyne.Window
+}
+
+func (f *fakeTray) SetSystemTrayMenu(m *fyne.Menu)    { f.menu = m }
+func (f *fakeTray) SetSystemTrayIcon(r fyne.Resource) { f.icon = r }
+func (f *fakeTray) SetSystemTrayWindow(w fyne.Window) { f.win = w }
+
+func trayItem(t *testing.T, m *fyne.Menu, label string) *fyne.MenuItem {
+	t.Helper()
+	if m == nil {
+		t.Fatal("tray menu is nil")
+	}
+	for _, item := range m.Items {
+		if item.Label == label {
+			return item
+		}
+	}
+	t.Fatalf("tray menu has no %q item", label)
+	return nil
+}
+
+func openWithSpy(t *testing.T, c *client.Client) (*gui.UI, *spyWindow) {
+	t.Helper()
+	a := test.NewTempApp(t)
+	raw := test.NewWindow(nil)
+	t.Cleanup(func() {
+		if slices.Contains(a.Driver().AllWindows(), raw) {
+			raw.Close()
+		}
+	})
+	w := &spyWindow{Window: raw}
+	ui := gui.New(w, c)
+	w.Resize(fyne.NewSize(900, 600))
+	return ui, w
+}
+
+func TestSystemTrayKeepsAppResidentAndReopensWindow(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Ideas\nfly")
+
+	ui, w := openWithSpy(t, c)
+	tray := &fakeTray{}
+	ui.SetupTray(tray)
+
+	if tray.icon == nil {
+		t.Fatal("expected system tray icon to be set")
+	}
+	if tray.win != w {
+		t.Fatal("expected system tray window to be set")
+	}
+	for _, label := range []string{"New Note", "Open Scribble", "Quit"} {
+		if item := trayItem(t, tray.menu, label); item.Action == nil {
+			t.Fatalf("tray item %q has no action", label)
+		}
+	}
+
+	ui.List.Select(0)
+	test.Tap(ui.EditToggle)
+	ui.Editor.SetText("# Ideas\nunsaved")
+
+	// Closing the main window with a tray hides it instead of closing or asking to discard.
+	ui.Close()
+	if w.closed || !w.hidden {
+		t.Fatalf("closing the window should hide it to the tray (closed=%v, hidden=%v)", w.closed, w.hidden)
+	}
+	if w.Canvas().Overlays().Top() != nil {
+		t.Fatal("hiding to the tray should not ask to discard unsaved edits")
+	}
+	if ui.Editor.Text != "# Ideas\nunsaved" {
+		t.Fatalf("unsaved edit was lost on hide: %q", ui.Editor.Text)
+	}
+
+	// Open Scribble shows the window again with the unsaved edit intact.
+	trayItem(t, tray.menu, "Open Scribble").Action()
+	if w.hidden {
+		t.Fatal("Open Scribble should show the hidden window")
+	}
+	if ui.Editor.Text != "# Ideas\nunsaved" || !ui.Editor.Visible() {
+		t.Fatalf("expected unsaved edit still open after Open Scribble, got %q", ui.Editor.Text)
+	}
+}
+
+func TestSystemTrayQuitAsksBeforeDiscardingEdits(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Ideas\nfly")
+
+	ui, w := openWithSpy(t, c)
+	tray := &fakeTray{}
+	ui.SetupTray(tray)
+
+	ui.List.Select(0)
+	test.Tap(ui.EditToggle)
+	ui.Editor.SetText("# Ideas\nunsaved")
+	ui.Close() // hidden to tray
+
+	// Quit from the tray while hidden with unsaved edits shows the window and asks.
+	trayItem(t, tray.menu, "Quit").Action()
+	if w.hidden {
+		t.Fatal("Quit with unsaved edits should show the window so the prompt is visible")
+	}
+	tapDialogButton(t, w, "Cancel")
+	if w.closed || ui.Editor.Text != "# Ideas\nunsaved" {
+		t.Fatal("cancelling Quit should keep the window and edit open")
+	}
+
+	trayItem(t, tray.menu, "Quit").Action()
+	tapDialogButton(t, w, "Discard")
+	if !w.closed {
+		t.Fatal("discarding on Quit should close the window")
+	}
+
+	// Without unsaved changes, Quit closes straight away.
+	ui2, w2 := openWithSpy(t, c)
+	tray2 := &fakeTray{}
+	ui2.SetupTray(tray2)
+	ui2.Close()
+	trayItem(t, tray2.menu, "Quit").Action()
+	if !w2.closed {
+		t.Fatal("Quit without unsaved changes should close straight away")
+	}
+}
+
+func TestOpenNewNoteFromTrayOrHotkey(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Ideas\nfly")
+
+	ui, w := openWithSpy(t, c)
+	tray := &fakeTray{}
+	ui.SetupTray(tray)
+
+	ui.List.Select(0)
+	ui.Close() // hidden to tray
+
+	// Tray "New Note" shows the window, opens a blank note, and focuses the editor ready for typing.
+	trayItem(t, tray.menu, "New Note").Action()
+	if w.hidden {
+		t.Fatal("New Note should show the hidden window")
+	}
+	if !ui.Editor.Visible() || ui.Editor.Text != "" {
+		t.Fatalf("expected blank editor visible, got %q", ui.Editor.Text)
+	}
+	if w.Canvas().Focused() != ui.Editor {
+		t.Fatal("editor should be focused ready for typing")
+	}
+	test.Type(w.Canvas().Focused(), "# Quick note")
+	if ui.Editor.Text != "# Quick note" {
+		t.Fatalf("typing on focused widget landed %q, want %q", ui.Editor.Text, "# Quick note")
+	}
+
+	// Pressing the global hotkey (OpenNewNote) with unsaved edits asks before discarding.
+	ui.Close()
+	ui.OpenNewNote()
+	if w.hidden {
+		t.Fatal("OpenNewNote should show the hidden window")
+	}
+	tapDialogButton(t, w, "Cancel")
+	if ui.Editor.Text != "# Quick note" {
+		t.Fatalf("cancelling should keep the draft, got %q", ui.Editor.Text)
+	}
+
+	ui.OpenNewNote()
+	tapDialogButton(t, w, "Discard")
+	if ui.Editor.Text != "" || w.Canvas().Focused() != ui.Editor {
+		t.Fatalf("discarding should open a fresh focused editor, got %q", ui.Editor.Text)
+	}
+}
+
+func TestParseHotkey(t *testing.T) {
+	mods, key, err := gui.ParseHotkey("")
+	if err != nil {
+		t.Fatalf("default hotkey failed: %v", err)
+	}
+	if !slices.Equal(mods, []hotkey.Modifier{gui.ModCtrl, gui.ModAlt}) || key != hotkey.KeyN {
+		t.Fatalf("default hotkey = (%v, %v), want Ctrl+Alt+N", mods, key)
+	}
+
+	mods, key, err = gui.ParseHotkey("ctrl+shift+f12")
+	if err != nil {
+		t.Fatalf("ctrl+shift+f12 failed: %v", err)
+	}
+	if !slices.Equal(mods, []hotkey.Modifier{gui.ModCtrl, gui.ModShift}) || key != hotkey.KeyF12 {
+		t.Fatalf("got (%v, %v), want Ctrl+Shift+F12", mods, key)
+	}
+
+	mods, key, err = gui.ParseHotkey("Alt+Super+Space")
+	if err != nil {
+		t.Fatalf("Alt+Super+Space failed: %v", err)
+	}
+	if !slices.Equal(mods, []hotkey.Modifier{gui.ModAlt, gui.ModSuper}) || key != hotkey.KeySpace {
+		t.Fatalf("got (%v, %v), want Alt+Super+Space", mods, key)
+	}
+
+	for _, disabled := range []string{"none", "OFF"} {
+		mods, key, err = gui.ParseHotkey(disabled)
+		if err != nil || mods != nil || key != 0 {
+			t.Fatalf("ParseHotkey(%q) = (%v, %v, %v), want disabled", disabled, mods, key, err)
+		}
+	}
+
+	for _, bad := range []string{"N", "Ctrl+", "Ctrl+Unknown", "Unknown+N"} {
+		if _, _, err := gui.ParseHotkey(bad); err == nil {
+			t.Errorf("ParseHotkey(%q) succeeded, want error", bad)
+		}
+	}
+}
+
+func TestHotkeyEventOpensFocusedNewNoteEditor(t *testing.T) {
+	c := newServer(t)
+	ui, w := openWithSpy(t, c)
+	tray := &fakeTray{}
+	ui.SetupTray(tray)
+	ui.Close()
+
+	ch := make(chan hotkey.Event, 1)
+	done := ui.BindHotkey(ch)
+	ch <- hotkey.Event{}
+	close(ch)
+	<-done
+
+	if w.hidden {
+		t.Fatal("hotkey should show the hidden window")
+	}
+	if !ui.Editor.Visible() || w.Canvas().Focused() != ui.Editor {
+		t.Fatal("hotkey should open and focus the new-note editor")
+	}
+}
+
+
+
+
+

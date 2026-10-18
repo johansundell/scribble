@@ -11,7 +11,9 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/johansundell/scribble/client"
 	"github.com/johansundell/scribble/notes"
@@ -42,6 +44,7 @@ type UI struct {
 
 	w        fyne.Window
 	c        *client.Client
+	hasTray  bool
 	notes    []notes.Note
 	projects []string // the server's #projects, as of the last reload
 	// current is the open note, nil when none; ID 0 for a new, unsaved
@@ -103,9 +106,61 @@ func New(w fyne.Window, c *client.Client) *UI {
 	return ui
 }
 
-// Close closes the window, first asking to discard any unsaved changes. The
-// window's close button calls it.
-func (ui *UI) Close() { ui.unlessUnsaved(ui.w.Close) }
+// SetupTray registers the system tray icon and menu ("New Note", "Open
+// Scribble", "Quit") on desk and makes closing the main window hide it to
+// the tray instead of exiting.
+func (ui *UI) SetupTray(desk desktop.App) {
+	if desk == nil {
+		return
+	}
+	ui.hasTray = true
+	quit := fyne.NewMenuItem("Quit", ui.quit)
+	quit.IsQuit = true
+	menu := fyne.NewMenu("Scribble",
+		fyne.NewMenuItem("New Note", ui.OpenNewNote),
+		fyne.NewMenuItem("Open Scribble", ui.showWindow),
+		fyne.NewMenuItemSeparator(),
+		quit,
+	)
+	desk.SetSystemTrayIcon(theme.DocumentIcon())
+	desk.SetSystemTrayMenu(menu)
+	desk.SetSystemTrayWindow(ui.w)
+	// SetSystemTrayWindow replaces the window's close intercept with w.Hide;
+	// restore ui.Close so ui.Close() and the window's close button share one path.
+	ui.w.SetCloseIntercept(ui.Close)
+}
+
+func (ui *UI) showWindow() {
+	ui.w.Show()
+	ui.w.RequestFocus()
+}
+
+// OpenNewNote shows and focuses the main window and opens a new-note editor
+// ready for typing, asking first if there are unsaved changes.
+func (ui *UI) OpenNewNote() {
+	ui.showWindow()
+	ui.unlessUnsaved(ui.startNote)
+}
+
+func (ui *UI) quit() {
+	if ui.hasUnsavedChanges() {
+		ui.showWindow()
+	}
+	ui.unlessUnsaved(func() {
+		ui.w.Close()
+		fyne.CurrentApp().Quit()
+	})
+}
+
+// Close closes the window, or hides it to the system tray when a tray is
+// active. Without a tray, it first asks to discard any unsaved changes.
+func (ui *UI) Close() {
+	if ui.hasTray {
+		ui.w.Hide()
+		return
+	}
+	ui.unlessUnsaved(ui.w.Close)
+}
 
 func requestContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), requestTimeout)
@@ -156,6 +211,7 @@ func (ui *UI) startNote() {
 	ui.Editor.CursorRow, ui.Editor.CursorColumn = 0, 0
 	ui.Editor.Refresh()
 	ui.showEdit()
+	ui.w.Canvas().Focus(ui.Editor)
 	ui.selectCurrent()
 }
 

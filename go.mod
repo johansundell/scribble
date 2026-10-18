@@ -11,6 +11,7 @@ require (
 	github.com/ncruces/go-sqlite3 v0.35.5
 	github.com/stretchr/testify v1.12.1
 	github.com/yuin/goldmark v1.8.2
+	golang.design/x/hotkey v0.6.4
 )
 
 require (
