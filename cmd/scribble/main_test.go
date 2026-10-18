@@ -76,3 +76,39 @@ func TestCmdProjects(t *testing.T) {
 		t.Error("two arguments should be refused")
 	}
 }
+
+func TestCmdAutoLink(t *testing.T) {
+	ctx := context.Background()
+	c := newClient(t)
+	for _, body := range []string{"# Plans\nsee groceries and Go Tips, [[Go]]", "# Groceries\nmilk", "# Go Tips\nx", "# Go\ny"} {
+		if _, err := c.Create(ctx, body); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var out bytes.Buffer
+	if err := cmdAutoLink(ctx, c, &out, []string{"plans"}); err != nil {
+		t.Fatal(err)
+	}
+	if want := "linked 2 mention(s) in \"Plans\"\n"; out.String() != want {
+		t.Errorf("printed %q, want %q", out.String(), want)
+	}
+	n, err := c.ByTitle(ctx, "Plans")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "# Plans\nsee [[groceries]] and [[Go Tips]], [[Go]]"; n.Body != want {
+		t.Errorf("body = %q, want %q", n.Body, want)
+	}
+
+	out.Reset()
+	if err := cmdAutoLink(ctx, c, &out, []string{"Plans"}); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != "no mentions to link\n" {
+		t.Errorf("second run printed %q", out.String())
+	}
+	if err := cmdAutoLink(ctx, c, &out, nil); err == nil {
+		t.Error("missing title should be refused")
+	}
+}

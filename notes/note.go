@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
@@ -150,8 +152,9 @@ var markdown = goldmark.New(goldmark.WithExtensions(extension.Strikethrough, ext
 
 // plainTextSpans returns the byte ranges of body that Markdown renders as
 // plain text: not code, HTML, links, images, link destinations or reference
-// definitions (those never become text nodes, or are skipped here).
-func plainTextSpans(body string) [][2]int {
+// definitions (those never become text nodes, or are skipped here). With
+// forView, task-list items are skipped too, for Fyne's sake.
+func plainTextSpans(body string, forView bool) [][2]int {
 	var spans [][2]int
 	doc := markdown.Parser().Parse(text.NewReader([]byte(body)))
 	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
@@ -164,7 +167,7 @@ func plainTextSpans(body string) [][2]int {
 		case *ast.TextBlock, *ast.Paragraph:
 			// Fyne (v2.8) renders a task item from the single text node
 			// after its checkbox: a link there panics it or drops the rest.
-			if _, ok := n.FirstChild().(*east.TaskCheckBox); ok {
+			if _, ok := n.FirstChild().(*east.TaskCheckBox); ok && forView {
 				return ast.WalkSkipChildren, nil
 			}
 		case *ast.Text:
@@ -182,7 +185,7 @@ func plainTextSpans(body string) [][2]int {
 // Used by GUI clients.
 func LinkifyProjectsForView(body string) string {
 	start := titleEnd(body)
-	spans := plainTextSpans(body)
+	spans := plainTextSpans(body, true)
 	var b strings.Builder
 	last, s := 0, 0
 	for _, m := range projectRe.FindAllStringSubmatchIndex(body, -1) {
@@ -204,6 +207,97 @@ func LinkifyProjectsForView(body string) string {
 	}
 	b.WriteString(body[last:])
 	return b.String()
+}
+
+// urlRe matches bare URLs. Markdown renders them as plain text, but a title
+// inside one must not be linked.
+var urlRe = regexp.MustCompile(`(?i)\b(?:[a-z][a-z0-9+.-]*://|www\.)\S+`)
+
+// AutoLink wraps bare mentions of titles in body as [[links]], keeping the
+// mention's spelling. Matching is case-insensitive and on word boundaries,
+// and a longer title wins over a shorter one it starts with. The title
+// line, the note's own title, existing [[links]], URLs, code and Markdown
+// links are left alone.
+func AutoLink(body string, titles []string) string {
+	self := TitleOf(body)
+	var ts []string
+	for _, t := range titles {
+		if t = strings.TrimSpace(t); t != "" && !strings.EqualFold(t, self) {
+			ts = append(ts, t)
+		}
+	}
+	if len(ts) == 0 {
+		return body
+	}
+	slices.SortFunc(ts, func(a, b string) int { return len(b) - len(a) })
+	skip := append(linkRe.FindAllStringIndex(body, -1), urlRe.FindAllStringIndex(body, -1)...)
+	start := titleEnd(body)
+
+	var b strings.Builder
+	last := 0
+	for _, sp := range mergeSpans(plainTextSpans(body, false)) {
+		for i := max(sp[0], start); i < sp[1]; {
+			n := mentionAt(body, i, sp[1], ts)
+			if n == 0 || overlapsAny(skip, i, i+n) {
+				_, size := utf8.DecodeRuneInString(body[i:])
+				i += size
+				continue
+			}
+			b.WriteString(body[last:i])
+			b.WriteString("[[" + body[i:i+n] + "]]")
+			i += n
+			last = i
+		}
+	}
+	b.WriteString(body[last:])
+	return b.String()
+}
+
+// mentionAt returns the length of the longest title (ts is sorted longest
+// first) that body mentions at i, ending by end, or 0.
+func mentionAt(body string, i, end int, ts []string) int {
+	for _, t := range ts {
+		j := i + len(t)
+		if j > end || !strings.EqualFold(body[i:j], t) {
+			continue
+		}
+		first, _ := utf8.DecodeRuneInString(t)
+		lastR, _ := utf8.DecodeLastRuneInString(t)
+		before, _ := utf8.DecodeLastRuneInString(body[:i])
+		after, _ := utf8.DecodeRuneInString(body[j:])
+		if (isWordRune(first) && isWordRune(before)) || (isWordRune(lastR) && isWordRune(after)) {
+			continue
+		}
+		return len(t)
+	}
+	return 0
+}
+
+func isWordRune(r rune) bool {
+	return r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r)
+}
+
+// mergeSpans joins sorted spans that touch, since Markdown splits one run
+// of text into several nodes at characters such as '['.
+func mergeSpans(spans [][2]int) [][2]int {
+	var out [][2]int
+	for _, s := range spans {
+		if len(out) > 0 && out[len(out)-1][1] == s[0] {
+			out[len(out)-1][1] = s[1]
+			continue
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
+func overlapsAny(ranges [][]int, start, end int) bool {
+	for _, r := range ranges {
+		if start < r[1] && r[0] < end {
+			return true
+		}
+	}
+	return false
 }
 
 // LinkifyForView rewrites [[Title]] into a Markdown link with the note://

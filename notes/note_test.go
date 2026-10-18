@@ -154,3 +154,33 @@ func TestLinkifyProjectsForViewLinksTagsInPlainText(t *testing.T) {
 		}
 	}
 }
+
+func TestAutoLink(t *testing.T) {
+	titles := []string{"Go", "Go Tips", "Shopping", "C++", "Self"}
+	cases := map[string]struct{ in, want string }{
+		"plain mention":       {"# T\nbuy from Shopping list", "# T\nbuy from [[Shopping]] list"},
+		"longest match wins":  {"# T\nread Go Tips now", "# T\nread [[Go Tips]] now"},
+		"falls back to short": {"# T\nGo Tipsy", "# T\n[[Go]] Tipsy"},
+		"case-insensitive":    {"# T\nsee go tips and SHOPPING", "# T\nsee [[go tips]] and [[SHOPPING]]"},
+		"word boundaries":     {"# T\nGoogle, Gopher, ago, Go_x, Go2", "# T\nGoogle, Gopher, ago, Go_x, Go2"},
+		"unicode boundary":    {"# T\nGoä and Go!", "# T\nGoä and [[Go]]!"},
+		"punctuated title":    {"# T\nI like C++.", "# T\nI like [[C++]]."},
+		"every mention":       {"# T\nGo, then Go", "# T\n[[Go]], then [[Go]]"},
+		"existing links":      {"# T\n[[Go Tips]] and [[go]] and [[Shopping list]]", "# T\n[[Go Tips]] and [[go]] and [[Shopping list]]"},
+		"self link":           {"# Self\nSelf reference to Go", "# Self\nSelf reference to [[Go]]"},
+		"title line":          {"# Go Tips\nnothing", "# Go Tips\nnothing"},
+		"urls":                {"# T\nhttps://example.com/Go and www.go.dev/Go", "# T\nhttps://example.com/Go and www.go.dev/Go"},
+		"code":                {"# T\n`Go` and\n\n```\nGo\n```\n", "# T\n`Go` and\n\n```\nGo\n```\n"},
+		"markdown links":      {"# T\n[Go](http://x) and <http://go>", "# T\n[Go](http://x) and <http://go>"},
+		"emphasis":            {"# T\n*Go* and **Shopping**", "# T\n*[[Go]]* and **[[Shopping]]**"},
+		"task item":           {"# T\n- [ ] Shopping", "# T\n- [ ] [[Shopping]]"},
+	}
+	for name, tc := range cases {
+		if got := AutoLink(tc.in, titles); got != tc.want {
+			t.Errorf("%s: AutoLink(%q)\n got  %q\n want %q", name, tc.in, got, tc.want)
+		}
+	}
+	if got := AutoLink("# T\nGo", nil); got != "# T\nGo" {
+		t.Errorf("no titles: got %q", got)
+	}
+}

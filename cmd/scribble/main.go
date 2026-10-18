@@ -33,6 +33,7 @@ Usage:
   scribble backlinks <title>         notes that link to this note
   scribble projects [<name>]         list #projects, or the notes in one
   scribble rename <title> <new>      retitle a note and fix [[links]] to it
+  scribble autolink <title>          turn mentions of other note titles into [[links]]
   scribble rm <title>                delete a note
 
 Environment:
@@ -127,6 +128,8 @@ func run(args []string) error {
 		})
 	case "projects":
 		return cmdProjects(ctx, c, os.Stdout, rest)
+	case "autolink":
+		return cmdAutoLink(ctx, c, os.Stdout, rest)
 	case "rm":
 		return withNote(ctx, c, rest, 1, func(n *notes.Note, _ []string) error {
 			if err := c.Delete(ctx, n.ID); err != nil {
@@ -194,6 +197,31 @@ func cmdProjects(ctx context.Context, c *client.Client, w io.Writer, args []stri
 		return nil
 	}
 	return fmt.Errorf("usage: scribble projects [<name>]")
+}
+
+// cmdAutoLink turns bare mentions of other notes' titles in one note into
+// [[links]] and saves it. Auto-linking is opt-in: nothing else calls it.
+func cmdAutoLink(ctx context.Context, c *client.Client, w io.Writer, args []string) error {
+	return withNote(ctx, c, args, 1, func(n *notes.Note, _ []string) error {
+		list, err := c.List(ctx, "")
+		if err != nil {
+			return err
+		}
+		titles := make([]string, len(list))
+		for i, o := range list {
+			titles[i] = o.Title
+		}
+		body := notes.AutoLink(n.Body, titles)
+		if body == n.Body {
+			fmt.Fprintln(w, "no mentions to link")
+			return nil
+		}
+		if _, err := c.Update(ctx, n.ID, body, n.Revision); err != nil {
+			return explain(err, n.Title)
+		}
+		fmt.Fprintf(w, "linked %d mention(s) in %q\n", len(notes.Links(body))-len(notes.Links(n.Body)), n.Title)
+		return nil
+	})
 }
 
 func stdinPiped() bool {
