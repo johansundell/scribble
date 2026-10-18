@@ -523,6 +523,39 @@ func TestTappingProjectLinkSwitchesFilter(t *testing.T) {
 	assertTitles(t, ui, "Job", "Plans")
 }
 
+// checkBox returns the viewer's task-list item with exactly this text.
+func checkBox(segs []widget.RichTextSegment, text string) *widget.CheckBoxSegment {
+	for _, s := range segs {
+		switch s := s.(type) {
+		case *widget.CheckBoxSegment:
+			if s.Text == text {
+				return s
+			}
+		case interface {
+			Segments() []widget.RichTextSegment
+		}:
+			if c := checkBox(s.Segments(), text); c != nil {
+				return c
+			}
+		}
+	}
+	return nil
+}
+
+func TestTaskListWithTagsRenders(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Todo\n\n- [ ] #home\n- [x] do #home more")
+
+	ui, _ := open(t, c)
+	ui.List.Select(0) // panicked in Fyne's renderer before the fix
+
+	for _, want := range []string{"#home", "do #home more"} {
+		if checkBox(ui.Viewer.Segments, want) == nil {
+			t.Errorf("no task item %q, segments %#v", want, ui.Viewer.Segments)
+		}
+	}
+}
+
 func TestNewNoteInProjectStaysInProject(t *testing.T) {
 	c := newServer(t)
 	create(t, c, "# Plans\n#scribble")

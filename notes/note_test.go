@@ -124,6 +124,10 @@ func TestLinkifyProjectsForViewLeavesMarkdownIntact(t *testing.T) {
 		"    #indented code",
 		`<span title=" #x">hi</span>`,
 		"_see #home_", // the regex would take the closing '_' too
+		// Fyne renders a task item from the one text node after its
+		// checkbox; a link there panics it or drops the rest.
+		"- [ ] #home",
+		"- [x] do #home more",
 	}
 	for _, md := range unchanged {
 		// Blank lines: definitions and indented code cannot interrupt a
@@ -141,7 +145,6 @@ func TestLinkifyProjectsForViewLinksTagsInPlainText(t *testing.T) {
 		// Brackets without a matching definition are plain text.
 		"T\n[TODO #home]":         "T\n[TODO [#home](project://home)]",
 		"T\n*see #home*":          "T\n*see [#home](project://home)*",
-		"T\n- [ ] do #home":       "T\n- [ ] do [#home](project://home)",
 		"T\n## Part #home":        "T\n## Part [#home](project://home)",
 		"T\n| a |\n| - |\n| #x |": "T\n| a |\n| - |\n| [#x](project://x) |",
 	}

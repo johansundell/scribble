@@ -12,6 +12,7 @@ import (
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
+	east "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
 )
 
@@ -160,6 +161,12 @@ func plainTextSpans(body string) [][2]int {
 		switch n := n.(type) {
 		case *ast.Link, *ast.Image, *ast.AutoLink, *ast.CodeSpan, *ast.RawHTML:
 			return ast.WalkSkipChildren, nil
+		case *ast.TextBlock, *ast.Paragraph:
+			// Fyne (v2.8) renders a task item from the single text node
+			// after its checkbox: a link there panics it or drops the rest.
+			if _, ok := n.FirstChild().(*east.TaskCheckBox); ok {
+				return ast.WalkSkipChildren, nil
+			}
 		case *ast.Text:
 			spans = append(spans, [2]int{n.Segment.Start, n.Segment.Stop})
 		}
