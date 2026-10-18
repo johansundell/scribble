@@ -114,6 +114,8 @@ also against a real server.
       search, view, edit, create and delete
 - [x] `#project` tags: `/projects`, `?project=`, `scribble projects`, and a
       project filter with clickable tags in the GUI
+- [x] Opt-in auto-linking: `scribble autolink <title>` turns mentions of
+      other notes' titles into `[[links]]` (`notes.AutoLink`)
 - [ ] GUI: clickable `[[links]]` (`notes.LinkifyForView` already turns them
       into `note://` links for Fyne's Markdown renderer) and a backlinks panel
 - [ ] GUI: conflict resolution, and a local cache synced through `/changes`
