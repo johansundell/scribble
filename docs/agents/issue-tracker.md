@@ -11,7 +11,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
 - **Close**: `gh issue close <number> --comment "..."`
 - **Branch & PR per issue**: Every issue must be worked on in its own dedicated branch (`<type>/<ticket-id>-<short-description>` branched off `master`) and submitted as a pull request (`gh pr create`).
-- **Merge gate**: Always ask the user to merge the PR (or ask for explicit confirmation before running `gh pr merge`). Never merge a PR automatically.
+- **Merge gate**: Always ask the user for explicit confirmation before performing any merge—whether merging `master` into a branch (`git merge` / `git rebase`) or merging a PR (`gh pr merge`). Never merge automatically.
 
 Infer the repo from `git remote -v`. `gh` does this automatically when run inside a clone.
 

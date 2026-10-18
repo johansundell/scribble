@@ -10,13 +10,13 @@ When working on a ticket or issue, always create a dedicated branch before makin
 - **Base Branch**: Always branch off the latest `master`.
 - **Isolation**: Keep all changes, tests, and commits strictly within the ticket branch. Do not commit directly to `master`.
 - **Pull Requests**: Every issue must have its own dedicated branch and pull request (`gh pr create`).
-- **Merging**: Always ask the user to merge (or ask for explicit confirmation before merging) the PR. Never merge a PR automatically without asking first.
+- **Merging**: Always ask the user for explicit confirmation before performing **any** merge—including merging `master` (or another branch) into a feature branch (`git merge` / `git rebase`) and merging a pull request (`gh pr merge`). Never run a git merge or PR merge automatically without asking first.
 
 ## Agent skills
 
 ### Issue tracker
 
-Issues and specs are tracked in GitHub Issues (`gh` CLI), with a dedicated branch and PR per issue (always ask before merging). See `docs/agents/issue-tracker.md`.
+Issues and specs are tracked in GitHub Issues (`gh` CLI), with a dedicated branch and PR per issue (always ask before any branch merge or PR merge). See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

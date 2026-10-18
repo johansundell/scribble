@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"math"
 	"net/http"
 	"strconv"
 
@@ -238,7 +239,7 @@ func (h *Handler) NoteChanges(c *gin.Context) error {
 	if err != nil {
 		return err
 	}
-	since, err := queryInt(c, "since", 0, 0, 1<<62)
+	since, err := queryInt(c, "since", 0, 0, math.MaxInt)
 	if err != nil {
 		return httperror.ReturnWithHTTPStatus(err, http.StatusBadRequest)
 	}
