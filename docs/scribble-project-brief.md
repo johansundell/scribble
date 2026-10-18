@@ -25,7 +25,7 @@ Tomboy-NG (cross-platform rewrite, runs on Windows), Gnote, Joplin (has a CLI, R
 | --- | --- | --- |
 | Note format | Raw Markdown text, nothing else | CLI, API and every client see the same readable content |
 | Title | First non-empty line of the body (leading `#` ignored) | Feels like Tomboy, keeps the CLI simple (`scribble append "Title" "text"`). Titles are unique, case-insensitive |
-| Links | Explicit `[[Note Title]]` only | Degrades gracefully in any Markdown viewer. Auto-linking by title match was **deferred**: short titles match everywhere, and titles change. It can be added later as opt-in without changing storage |
+| Links | Explicit `[[Note Title]]` only | Degrades gracefully in any Markdown viewer. Auto-linking by title match is **opt-in only** (`scribble autolink <title>`), because short titles match everywhere and titles change. It writes ordinary `[[links]]`, so storage is unchanged |
 | Link logic location | Server stays "dumb": stores text, answers backlink queries, rewrites links on rename. Rendering and click handling are client-side | Keeps the server small |
 | Rename | Dedicated endpoint that rewrites `[[old]]` to `[[new]]` in all other notes in one transaction | A first-line title means renames would otherwise break links |
 | Conflicts | Optimistic concurrency: PUT carries `base_revision`; stale gives **412** | Simple and safe for one user on several devices |
@@ -39,7 +39,7 @@ Tomboy-NG (cross-platform rewrite, runs on Windows), Gnote, Joplin (has a CLI, R
 
 ### Fyne
 - Fyne's `Entry` widget is plain text only. `RichText` renders Markdown but is **display-only**. Live rich-text editing would need a custom widget, which is a lot of work, and it isn't needed here.
-- **Planned UI:** an edit/view toggle. Edit raw Markdown in an `Entry`; view in a `RichText` made with `widget.NewRichTextFromMarkdown`, where `[[links]]` become taps. `notes.LinkifyForView` already rewrites `[[Title]]` to `[Title](note://Title%20…)`. Handle taps on the `note://` scheme to open the target note, or **create it if missing** (Tomboy behavior).
+- **UI:** an edit/view toggle. Edit raw Markdown in an `Entry`; view in a `RichText` made with `widget.NewRichTextFromMarkdown`, where `[[links]]` become taps. `notes.LinkifyForView` rewrites `[[Title]]` to `[Title](note:///Title%20…)` (the title is path-escaped; `note://Title` would put it in the URL host, where Go rejects `%20`), and `notes.LinkTitle` reads it back. A tap opens the target note, or **creates it if missing** (Tomboy behavior). Links in task-list items stay plain text, because Fyne v2.8 can't render a link there (see #11).
 - A "Linked from" backlinks panel needs no custom widgets.
 - Windows builds need CGO and a C compiler (MinGW or Zig), or cross-compile from Linux with `fyne-cross`. Binaries are about 20-30 MB, and the look is non-native.
 - Tray icon is supported. A global "instant new note" hotkey needs an extra library such as `golang-design/hotkey`.
@@ -69,7 +69,7 @@ Built and tested (zip delivered; the user pushes it to https://github.com/johans
   | POST | `/notes/:id/rename` | `{"title"}`; rewrites links elsewhere |
   | GET | `/changes?since=N` | `{notes, latest_seq}`; deleted notes flagged |
 
-- **`notes/`**: the `Note` type and link helpers (`TitleOf`, `SetTitle`, `Links`, `HasLinkTo`, `RewriteLinks`, `LinkifyForView`). No server dependencies.
+- **`notes/`**: the `Note` type and link helpers (`TitleOf`, `SetTitle`, `Links`, `HasLinkTo`, `RewriteLinks`, `LinkifyForView`, `LinkTitle`). No server dependencies.
 - **`client/`**: Go API client (`List`, `ByTitle`, `Get`, `Create`, `Update`, `Delete`, `Backlinks`, `Rename`, `Changes`, plus `IsNotFound`/`IsTitleTaken`/`IsStale`/`IsUnauthorized`).
 - **`cmd/scribble/`**: CLI with `new`, `show`, `edit` (`$VISUAL`/`$EDITOR`, keeps the temp file if the save fails), `append` (creates the note if missing, retries on conflict, reads stdin), `ls`, `search`, `links`, `backlinks`, `rename`, `rm`. Configured with `SCRIBBLE_URL` and `SCRIBBLE_TOKEN`.
 - **Tests:** link helpers, the SQLite note store (conflicts, tombstones, rename, backlinks), the full API over HTTP through the real router (including that notes routes are authenticated and not logged), and the client against a live test server. A manual smoke test of the CLI against the running binary also passed.
@@ -96,7 +96,7 @@ docs/service-template.md
    - Handle 412 (stale revision) with a clear choice: reload, or overwrite with `base_revision` 0.
 2. **Instant new note:** tray icon plus global hotkey.
 3. **Import** from Tomboy `.note` XML (the files are easy to parse and convert to Markdown).
-4. Optional: opt-in **auto-linking** by title match (longest title first, case-insensitive, word boundaries).
+4. Opt-in **auto-linking** in the GUI, once `[[links]]` are clickable there (`notes.AutoLink` and `scribble autolink` already exist).
 5. Not yet done: nothing has been run on Windows, and the server hasn't been deployed (the Dockerfile and compose file from the template are untouched apart from renaming).
 
 ## 6. Open questions

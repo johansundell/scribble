@@ -4,10 +4,13 @@
 package notes
 
 import (
+	"net/url"
 	"regexp"
 	"slices"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
@@ -206,11 +209,246 @@ func LinkifyProjectsForView(body string) string {
 	return b.String()
 }
 
-// LinkifyForView rewrites [[Title]] into a Markdown link with the note://
-// scheme, ready for a Markdown renderer. Used by GUI clients.
-func LinkifyForView(body string) string {
-	return linkRe.ReplaceAllStringFunc(body, func(s string) string {
-		t := strings.TrimSpace(s[2 : len(s)-2])
-		return "[" + t + "](note://" + strings.ReplaceAll(t, " ", "%20") + ")"
+// addressRe matches bare URLs and email addresses. Markdown renders them as
+// plain text, but a title inside one must not be linked.
+var addressRe = regexp.MustCompile(`(?i)\b(?:[a-z][a-z0-9+.-]*://|www\.)\S+|[\w.+-]+@[\w-]+(?:\.[\w-]+)+`)
+
+// AutoLink wraps bare mentions of titles in body as [[links]] and reports
+// how many it added. A link keeps the mention's spelling unless that would
+// not resolve (see mention.target). Matching is case-insensitive and on
+// word boundaries; where mentions overlap, the longest wins. The title line, the note's own title, existing [[links]],
+// bracketed text, URLs, email addresses, #project tags, code, Markdown links
+// and task-list items are left alone.
+func AutoLink(body string, titles []string) (string, int) {
+	self := TitleOf(body)
+	var candidates []string
+	for _, t := range titles {
+		t = strings.TrimSpace(t)
+		// A title linkRe cannot hold would give a broken link.
+		if t != "" && !strings.ContainsAny(t, "[]\n") && !strings.EqualFold(t, self) {
+			candidates = append(candidates, t)
+		}
+	}
+	if len(candidates) == 0 {
+		return body, 0
+	}
+
+	var mentions []mention
+	start := titleEnd(body)
+	for _, sp := range mergeSpans(plainTextSpans(body)) {
+		for i := max(sp[0], start); i < sp[1]; {
+			for _, t := range candidates {
+				if size := mentionAt(body, i, sp[1], t); size > 0 {
+					text := body[i : i+size]
+					mentions = append(mentions, mention{
+						start: i, end: i + size, runes: utf8.RuneCountInString(text),
+						title: t, asWritten: equalFoldASCII(text, t),
+					})
+				}
+			}
+			_, size := utf8.DecodeRuneInString(body[i:])
+			i += size
+		}
+	}
+	// Longest first, then earliest, then a title the mention spells (so of
+	// "École" and "école", "école" links "école"); a mention survives if
+	// none of its bytes are taken yet.
+	slices.SortFunc(mentions, func(a, b mention) int {
+		if a.runes != b.runes {
+			return b.runes - a.runes
+		}
+		if a.start != b.start {
+			return a.start - b.start
+		}
+		switch {
+		case a.asWritten && !b.asWritten:
+			return -1
+		case b.asWritten && !a.asWritten:
+			return 1
+		}
+		return 0
 	})
+	taken := protectedBytes(body)
+	var linked []mention
+	for _, m := range mentions {
+		if !slices.Contains(taken[m.start:m.end], true) {
+			for i := m.start; i < m.end; i++ {
+				taken[i] = true
+			}
+			linked = append(linked, m)
+		}
+	}
+	slices.SortFunc(linked, func(a, b mention) int { return a.start - b.start })
+
+	var b strings.Builder
+	last := 0
+	for _, m := range linked {
+		b.WriteString(body[last:m.start])
+		b.WriteString("[[" + m.target(body) + "]]")
+		last = m.end
+	}
+	b.WriteString(body[last:])
+	return b.String(), len(linked)
+}
+
+// mention is a match of title at body[start:end], runes characters long.
+// asWritten is set when the text differs from title only in ASCII case,
+// which is all the store folds when it resolves a link.
+type mention struct {
+	start, end, runes int
+	title             string
+	asWritten         bool
+}
+
+// target is the link text for m: the mention's own spelling when that
+// resolves to the title, otherwise the title itself.
+func (m mention) target(body string) string {
+	if m.asWritten {
+		return body[m.start:m.end]
+	}
+	return m.title
+}
+
+func equalFoldASCII(a, b string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range len(a) {
+		if lowerASCII(a[i]) != lowerASCII(b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func lowerASCII(c byte) byte {
+	if 'A' <= c && c <= 'Z' {
+		return c + 'a' - 'A'
+	}
+	return c
+}
+
+// bracketRe matches [bracketed text] on one line: possibly a Markdown link
+// waiting for a reference definition, and not a place for a [[link]].
+var bracketRe = regexp.MustCompile(`\[[^\[\]\n]*\]`)
+
+// protectedBytes marks the bytes of body a mention must not overlap:
+// [[links]], bracketed text, URLs, email addresses and #project tags.
+func protectedBytes(body string) []bool {
+	taken := make([]bool, len(body))
+	mark := func(start, end int) {
+		for i := start; i < end; i++ {
+			taken[i] = true
+		}
+	}
+	for _, re := range []*regexp.Regexp{linkRe, bracketRe, addressRe} {
+		for _, m := range re.FindAllStringIndex(body, -1) {
+			mark(m[0], m[1])
+		}
+	}
+	for _, m := range projectRe.FindAllStringSubmatchIndex(body, -1) {
+		mark(m[4]-1, m[1])
+	}
+	return taken
+}
+
+// mentionAt returns the byte length of the mention of title at body[i:],
+// ending by end, or 0 if there is none. Case is folded rune by rune, so
+// "STRAẞE" matches "Straße" although their byte lengths differ.
+func mentionAt(body string, i, end int, title string) int {
+	j := i
+	for _, r := range title {
+		if j >= end {
+			return 0
+		}
+		got, size := utf8.DecodeRuneInString(body[j:end])
+		if !foldEqual(r, got) {
+			return 0
+		}
+		j += size
+	}
+	first, _ := utf8.DecodeRuneInString(title)
+	lastRune, _ := utf8.DecodeLastRuneInString(title)
+	before, _ := utf8.DecodeLastRuneInString(body[:i])
+	after, _ := utf8.DecodeRuneInString(body[j:])
+	if (isWordRune(first) && isWordRune(before)) || (isWordRune(lastRune) && isWordRune(after)) {
+		return 0
+	}
+	return j - i
+}
+
+// foldEqual reports whether a and b are the same letter under Unicode
+// simple case folding.
+func foldEqual(a, b rune) bool {
+	for r := a; ; {
+		if r == b {
+			return true
+		}
+		if r = unicode.SimpleFold(r); r == a {
+			return false
+		}
+	}
+}
+
+// isWordRune reports whether r can be part of a word. Combining marks
+// count, so "Göteborg" (a decomposed "Göteborg") is one word.
+func isWordRune(r rune) bool {
+	return r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsMark(r)
+}
+
+// mergeSpans joins sorted spans that touch, since Markdown splits one run
+// of text into several nodes at characters such as '['.
+func mergeSpans(spans [][2]int) [][2]int {
+	var out [][2]int
+	for _, s := range spans {
+		if len(out) > 0 && out[len(out)-1][1] == s[0] {
+			out[len(out)-1][1] = s[1]
+			continue
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
+// LinkifyForView rewrites [[Title]] into a Markdown link with the note:///
+// scheme, ready for a Markdown renderer; LinkTitle reads the title back.
+// Only links whose brackets are plain text are rewritten, so code and
+// Markdown links stay intact; what is between the brackets is the title
+// even if Markdown would format it. Used by GUI clients.
+func LinkifyForView(body string) string {
+	plain := make([]bool, len(body))
+	for _, sp := range plainTextSpans(body) {
+		for i := sp[0]; i < sp[1]; i++ {
+			plain[i] = true
+		}
+	}
+	var b strings.Builder
+	last := 0
+	for _, m := range linkRe.FindAllStringSubmatchIndex(body, -1) {
+		if !plain[m[0]] || !plain[m[0]+1] || !plain[m[1]-2] || !plain[m[1]-1] {
+			continue
+		}
+		t := strings.TrimSpace(body[m[2]:m[3]])
+		b.WriteString(body[last:m[0]])
+		b.WriteString("[" + linkTextEscaper.Replace(t) + "](note:///" + url.PathEscape(t) + ")")
+		last = m[1]
+	}
+	b.WriteString(body[last:])
+	return b.String()
+}
+
+// linkTextEscaper writes the characters Markdown would act on in link text
+// as character references, so a title shows as written. Fyne unescapes
+// references in link text; a backslash escape would show.
+var linkTextEscaper = strings.NewReplacer(
+	"&", "&amp;", "<", "&lt;", ">", "&gt;", `\`, "&#92;", "`", "&#96;",
+	"*", "&#42;", "_", "&#95;", "~", "&#126;", "|", "&#124;")
+
+// LinkTitle returns the note title a link made by LinkifyForView points
+// at, and false for any other link.
+func LinkTitle(u *url.URL) (string, bool) {
+	if u == nil || u.Scheme != "note" || u.Host != "" || !strings.HasPrefix(u.Path, "/") {
+		return "", false
+	}
+	return u.Path[1:], true
 }

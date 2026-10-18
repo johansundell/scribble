@@ -2,7 +2,12 @@
 
 package gui
 
-import "golang.design/x/hotkey"
+import (
+	"syscall"
+
+	"fyne.io/fyne/v2/driver"
+	"golang.design/x/hotkey"
+)
 
 const (
 	// ModAlt is the Alt modifier.
@@ -23,3 +28,26 @@ const (
 	Key8 = hotkey.Key8
 	Key9 = hotkey.Key9
 )
+
+var (
+	user32         = syscall.NewLazyDLL("user32.dll")
+	procIsIconic   = user32.NewProc("IsIconic")
+	procShowWindow = user32.NewProc("ShowWindow")
+)
+
+const swRestore = 9
+
+// restoreNativeWindow unminimizes a minimized Win32 window: on Windows,
+// Fyne's Show() and RequestFocus() call ShowWindow(SW_SHOWNA) and
+// SetForegroundWindow, neither of which restores an iconic window.
+func restoreNativeWindow(ctx any) {
+	if r, ok := ctx.(interface{ Restore() }); ok {
+		r.Restore()
+		return
+	}
+	if wc, ok := ctx.(driver.WindowsWindowContext); ok && wc.HWND != 0 {
+		if iconic, _, _ := procIsIconic.Call(wc.HWND); iconic != 0 {
+			procShowWindow.Call(wc.HWND, swRestore)
+		}
+	}
+}

@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/driver"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
@@ -38,9 +39,16 @@ type UI struct {
 	EditToggle *widget.Button // switches between view and edit mode
 	Save       *widget.Button
 	NewNote    *widget.Button
+	Rename     *widget.Button // retitles the open note and the [[links]] to it
 	Delete     *widget.Button
 
+	// Backlinks is the "Linked from" panel: a button per note that links to
+	// the open one, hidden when there are none.
+	Backlinks *fyne.Container
+
 	Status *widget.Label // the last error, empty when all is well
+
+	backlinkButtons *fyne.Container // inside Backlinks
 
 	w        fyne.Window
 	c        *client.Client
@@ -88,14 +96,20 @@ func New(w fyne.Window, c *client.Client) *UI {
 	})
 	ui.Save = widget.NewButton("Save", ui.save)
 	ui.NewNote = widget.NewButton("New", func() { ui.unlessUnsaved(ui.startNote) })
+	ui.Rename = widget.NewButton("Rename", ui.askRename)
 	ui.Delete = widget.NewButton("Delete", ui.confirmDelete)
 	ui.Status = widget.NewLabel("")
 	ui.Status.Wrapping = fyne.TextWrapWord
+	ui.backlinkButtons = container.NewHBox()
+	ui.Backlinks = container.NewVBox(
+		widget.NewLabelWithStyle("Linked from", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		container.NewHScroll(ui.backlinkButtons))
+	ui.Backlinks.Hide()
 
-	toolbar := container.NewHBox(ui.NewNote, ui.EditToggle, ui.Save, layout.NewSpacer(), ui.Delete)
+	toolbar := container.NewHBox(ui.NewNote, ui.EditToggle, ui.Save, layout.NewSpacer(), ui.Rename, ui.Delete)
 	split := container.NewHSplit(
 		container.NewBorder(container.NewVBox(ui.Project, ui.Search), nil, nil, nil, ui.List),
-		container.NewBorder(toolbar, nil, nil, nil,
+		container.NewBorder(toolbar, ui.Backlinks, nil, nil,
 			container.NewStack(container.NewVScroll(ui.Viewer), ui.Editor)),
 	)
 	split.Offset = 0.3
@@ -132,6 +146,9 @@ func (ui *UI) SetupTray(desk desktop.App) {
 
 func (ui *UI) showWindow() {
 	ui.w.Show()
+	if nw, ok := ui.w.(driver.NativeWindow); ok {
+		nw.RunNative(restoreNativeWindow)
+	}
 	ui.w.RequestFocus()
 }
 
@@ -201,6 +218,64 @@ func (ui *UI) open(n notes.Note) {
 	ui.Editor.SetText(n.Body)
 	ui.showView()
 	ui.selectCurrent()
+	ui.loadBacklinks()
+}
+
+// loadBacklinks fills the "Linked from" panel for the open note.
+func (ui *UI) loadBacklinks() {
+	var list []notes.Note
+	if ui.isSaved() {
+		ctx, cancel := requestContext()
+		defer cancel()
+		var err error
+		if list, err = ui.c.Backlinks(ctx, ui.current.ID); ui.report(err) {
+			list = nil
+		}
+	}
+	slices.SortFunc(list, func(a, b notes.Note) int {
+		return strings.Compare(strings.ToLower(a.Title), strings.ToLower(b.Title))
+	})
+	ui.backlinkButtons.RemoveAll()
+	for _, n := range list {
+		b := widget.NewButton(n.Title, func() { ui.unlessUnsaved(func() { ui.load(n.ID) }) })
+		b.Importance = widget.LowImportance
+		ui.backlinkButtons.Add(b)
+	}
+	if len(list) == 0 {
+		ui.Backlinks.Hide()
+	} else {
+		ui.Backlinks.Show()
+	}
+}
+
+// follow opens the note titled title, the target of a [[link]]. If there is
+// none yet it creates it and opens it for editing below the title; inside a
+// project it is tagged #project, so it stays in view like a New note.
+func (ui *UI) follow(title string) {
+	ctx, cancel := requestContext()
+	defer cancel()
+	n, err := ui.c.ByTitle(ctx, title)
+	if !client.IsNotFound(err) {
+		if !ui.report(err) {
+			ui.Status.SetText("")
+			ui.open(*n)
+		}
+		return
+	}
+	body := "# " + title + "\n\n"
+	if p := ui.activeProject(); p != "" {
+		body += "#" + p + "\n"
+	}
+	if n, err = ui.c.Create(ctx, body); ui.report(err) {
+		return
+	}
+	ui.Status.SetText("")
+	ui.reload()
+	ui.open(*n)
+	ui.Editor.CursorRow, ui.Editor.CursorColumn = 1, 0
+	ui.Editor.Refresh()
+	ui.showEdit()
+	ui.w.Canvas().Focus(ui.Editor)
 }
 
 // startNote opens an editor for a new note. Inside a project it starts with
@@ -220,6 +295,7 @@ func (ui *UI) startNote() {
 	ui.showEdit()
 	ui.w.Canvas().Focus(ui.Editor)
 	ui.selectCurrent()
+	ui.loadBacklinks()
 }
 
 // unlessUnsaved runs then, first asking to discard any unsaved changes.
@@ -242,12 +318,15 @@ func (ui *UI) unlessUnsaved(then func()) {
 }
 
 // showView switches to view mode, rendering the editor's text with its
-// #project tags as links that switch the project filter.
+// [[links]] as links that open the note and its #project tags as links that
+// switch the project filter.
 func (ui *UI) showView() {
-	// Parse off-screen and hook the links before the viewer sees the
+	// [[links]] first, or "[[Plan #2]]" would lose its tag to a project
+	// link. Parse off-screen and hook the links before the viewer sees the
 	// segments: hyperlink and table visuals copy OnTapped when created.
-	segs := widget.NewRichTextFromMarkdown(notes.LinkifyProjectsForView(ui.Editor.Text)).Segments
-	ui.hookProjectLinks(segs)
+	md := notes.LinkifyProjectsForView(notes.LinkifyForView(ui.Editor.Text))
+	segs := widget.NewRichTextFromMarkdown(md).Segments
+	ui.hookLinks(segs)
 	ui.Viewer.Segments = segs
 	ui.Viewer.Refresh()
 	ui.Editor.Hide()
@@ -256,30 +335,32 @@ func (ui *UI) showView() {
 	ui.updateButtons()
 }
 
-// hookProjectLinks makes project:// links select their project instead of
-// asking the OS to open the URL. Lists and tables nest their segments, so
-// it recurses.
-func (ui *UI) hookProjectLinks(segs []widget.RichTextSegment) {
+// hookLinks makes note:/// links open their note and project:// links
+// select their project, instead of asking the OS to open the URL. Lists and
+// tables nest their segments, so it recurses.
+func (ui *UI) hookLinks(segs []widget.RichTextSegment) {
 	for _, s := range segs {
 		switch s := s.(type) {
 		case *widget.HyperlinkSegment:
-			if s.URL != nil && s.URL.Scheme == "project" {
+			if title, ok := notes.LinkTitle(s.URL); ok {
+				s.OnTapped = func() { ui.unlessUnsaved(func() { ui.follow(title) }) }
+			} else if s.URL != nil && s.URL.Scheme == "project" {
 				name := s.URL.Host
 				s.OnTapped = func() { ui.selectProject(name) }
 			}
 		case *widget.TableSegment:
 			for _, cell := range s.Headers {
-				ui.hookProjectLinks(cell)
+				ui.hookLinks(cell)
 			}
 			for _, row := range s.Rows {
 				for _, cell := range row {
-					ui.hookProjectLinks(cell)
+					ui.hookLinks(cell)
 				}
 			}
 		case interface {
 			Segments() []widget.RichTextSegment
 		}:
-			ui.hookProjectLinks(s.Segments())
+			ui.hookLinks(s.Segments())
 		}
 	}
 }
@@ -303,6 +384,9 @@ func (ui *UI) showEdit() {
 func (ui *UI) updateButtons() {
 	setEnabled(ui.EditToggle, ui.current != nil)
 	setEnabled(ui.Save, ui.hasUnsavedChanges())
+	// Rename rewrites the note on the server, which would make unsaved
+	// edits stale.
+	setEnabled(ui.Rename, ui.isSaved() && !ui.hasUnsavedChanges())
 	setEnabled(ui.Delete, ui.isSaved())
 }
 
@@ -347,6 +431,39 @@ func (ui *UI) save() {
 	ui.open(*n)
 }
 
+// askRename asks for a new title for the open note. The server rewrites
+// [[links]] to it in other notes as well.
+func (ui *UI) askRename() {
+	if !ui.isSaved() || ui.hasUnsavedChanges() {
+		return
+	}
+	id := ui.current.ID
+	title := widget.NewEntry()
+	title.SetText(ui.current.Title)
+	d := dialog.NewForm("Rename note", "Rename", "Cancel",
+		[]*widget.FormItem{widget.NewFormItem("Title", title)},
+		func(ok bool) {
+			if ok {
+				ui.rename(id, title.Text)
+			}
+		}, ui.w)
+	d.Resize(fyne.NewSize(400, d.MinSize().Height))
+	d.Show()
+	ui.w.Canvas().Focus(title)
+}
+
+func (ui *UI) rename(id int64, title string) {
+	ctx, cancel := requestContext()
+	defer cancel()
+	n, err := ui.c.Rename(ctx, id, title)
+	if ui.report(err) {
+		return
+	}
+	ui.Status.SetText("")
+	ui.reload()
+	ui.open(*n)
+}
+
 // confirmDelete asks before deleting the open note.
 func (ui *UI) confirmDelete() {
 	if !ui.isSaved() {
@@ -375,6 +492,7 @@ func (ui *UI) delete(n notes.Note) {
 		ui.current = nil
 		ui.Editor.SetText("")
 		ui.showView()
+		ui.loadBacklinks()
 	}
 	ui.reload()
 }

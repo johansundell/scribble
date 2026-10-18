@@ -26,3 +26,9 @@ const (
 	Key8
 	Key9
 )
+
+func restoreNativeWindow(ctx any) {
+	if r, ok := ctx.(interface{ Restore() }); ok {
+		r.Restore()
+	}
+}

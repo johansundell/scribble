@@ -1,7 +1,9 @@
 package notes
 
 import (
+	"net/url"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -44,8 +46,51 @@ func TestLinks(t *testing.T) {
 }
 
 func TestLinkifyForView(t *testing.T) {
-	if got := LinkifyForView("go [[My Note]]"); got != "go [My Note](note://My%20Note)" {
-		t.Errorf("got %q", got)
+	cases := map[string]string{
+		"go [[My Note]]":      "go [My Note](note:///My%20Note)",
+		"T\n*see [[ Plan ]]*": "T\n*see [Plan](note:///Plan)*",
+		"T\n| [[a/b (c)]] |":  "T\n| [a/b (c)](note:///a%2Fb%20%28c%29) |",
+		"T\n[[*a* `b`]]":      "T\n[&#42;a&#42; &#96;b&#96;](note:///%2Aa%2A%20%60b%60)",
+	}
+	for in, want := range cases {
+		if got := LinkifyForView(in); got != want {
+			t.Errorf("LinkifyForView(%q)\n got  %q\n want %q", in, got, want)
+		}
+	}
+}
+
+func TestLinkifyForViewLeavesMarkdownIntact(t *testing.T) {
+	unchanged := []string{
+		"`[[code]]`",
+		"``` go\n[[fenced]]\n```",
+		"    [[indented]]",
+		"[see [[x]]](https://example.com)",
+		"- [ ] [[task]]", // see TestLinkifyProjectsForViewLeavesMarkdownIntact
+	}
+	for _, md := range unchanged {
+		body := "T\n\n" + md + "\n\n[[b]]"
+		want := "T\n\n" + md + "\n\n[b](note:///b)"
+		if got := LinkifyForView(body); got != want {
+			t.Errorf("LinkifyForView(%q)\n got  %q\n want %q", body, got, want)
+		}
+	}
+}
+
+func TestLinkTitleReadsBackLinkifiedTitles(t *testing.T) {
+	for _, title := range []string{"Plan", "My Note", "a/b (c)", "50% #off?", "Göteborg & co"} {
+		md := LinkifyForView("[[" + title + "]]")
+		dest := md[strings.Index(md, "](")+2 : len(md)-1]
+		u, err := url.Parse(dest)
+		if err != nil {
+			t.Fatalf("%q: link %q does not parse: %v", title, dest, err)
+		}
+		if got, ok := LinkTitle(u); !ok || got != title {
+			t.Errorf("LinkTitle(%q) = %q, %v; want %q", dest, got, ok, title)
+		}
+	}
+	u, _ := url.Parse("project://home")
+	if _, ok := LinkTitle(u); ok {
+		t.Error("LinkTitle accepted a project:// link")
 	}
 }
 
@@ -151,6 +196,99 @@ func TestLinkifyProjectsForViewLinksTagsInPlainText(t *testing.T) {
 	for in, want := range cases {
 		if got := LinkifyProjectsForView(in); got != want {
 			t.Errorf("LinkifyProjectsForView(%q)\n got  %q\n want %q", in, got, want)
+		}
+	}
+}
+
+func TestAutoLink(t *testing.T) {
+	titles := []string{"Go", "Go Tips", "Shopping", "C++", "Self"}
+	cases := map[string]struct{ in, want string }{
+		"plain mention":       {"# T\nbuy from Shopping list", "# T\nbuy from [[Shopping]] list"},
+		"longest match wins":  {"# T\nread Go Tips now", "# T\nread [[Go Tips]] now"},
+		"falls back to short": {"# T\nGo Tipsy", "# T\n[[Go]] Tipsy"},
+		"case-insensitive":    {"# T\nsee go tips and SHOPPING", "# T\nsee [[go tips]] and [[SHOPPING]]"},
+		"word boundaries":     {"# T\nGoogle, Gopher, ago, Go_x, Go2", "# T\nGoogle, Gopher, ago, Go_x, Go2"},
+		"unicode boundary":    {"# T\nGoä and Go!", "# T\nGoä and [[Go]]!"},
+		"punctuated title":    {"# T\nI like C++.", "# T\nI like [[C++]]."},
+		"every mention":       {"# T\nGo, then Go", "# T\n[[Go]], then [[Go]]"},
+		"existing links":      {"# T\n[[Go Tips]] and [[go]] and [[Shopping list]]", "# T\n[[Go Tips]] and [[go]] and [[Shopping list]]"},
+		"self link":           {"# Self\nSelf reference to Go", "# Self\nSelf reference to [[Go]]"},
+		"title line":          {"# Go Tips\nnothing", "# Go Tips\nnothing"},
+		"urls":                {"# T\nhttps://example.com/Go and www.go.dev/Go", "# T\nhttps://example.com/Go and www.go.dev/Go"},
+		"code":                {"# T\n`Go` and\n\n```\nGo\n```\n", "# T\n`Go` and\n\n```\nGo\n```\n"},
+		"markdown links":      {"# T\n[Go](http://x) and <http://go>", "# T\n[Go](http://x) and <http://go>"},
+		"emphasis":            {"# T\n*Go* and **Shopping**", "# T\n*[[Go]]* and **[[Shopping]]**"},
+		// Fyne cannot render a link in a task item (see plainTextSpans).
+		"task item":       {"# T\n- [ ] Shopping\n- Shopping", "# T\n- [ ] Shopping\n- [[Shopping]]"},
+		"project tag":     {"# T\n#go and #shopping-list", "# T\n#go and #shopping-list"},
+		"email":           {"# T\nmail go@example.com or me@go.dev", "# T\nmail go@example.com or me@go.dev"},
+		"bracketed":       {"# T\n[Go] and [Shopping]: x", "# T\n[Go] and [Shopping]: x"},
+		"inside brackets": {"# T\n[Learn Go today] then Go", "# T\n[Learn Go today] then [[Go]]"},
+		"combining mark":  {"# T\nGöteborg", "# T\nGöteborg"},
+		"html text":       {"# T\n<b>Go</b>", "# T\n<b>[[Go]]</b>"},
+		"heading & table": {"# T\n## Go\n| Go |\n| - |", "# T\n## [[Go]]\n| [[Go]] |\n| - |"},
+	}
+	for name, tc := range cases {
+		if got, _ := AutoLink(tc.in, titles); got != tc.want {
+			t.Errorf("%s: AutoLink(%q)\n got  %q\n want %q", name, tc.in, got, tc.want)
+		}
+	}
+	if got, n := AutoLink("# T\nGo", nil); got != "# T\nGo" || n != 0 {
+		t.Errorf("no titles: got %q, %d", got, n)
+	}
+}
+
+func TestAutoLinkOverlaps(t *testing.T) {
+	cases := []struct {
+		titles   []string
+		in, want string
+		n        int
+	}{
+		// The longest title wins even when a shorter one starts earlier.
+		{[]string{"New York", "York City Hall"}, "T\nNew York City Hall", "T\nNew [[York City Hall]]", 1},
+		{[]string{"A B", "B C D"}, "T\nA B C D", "T\nA [[B C D]]", 1},
+		// Equal lengths: the earlier one wins; what is left can still match.
+		{[]string{"A B", "B C", "C"}, "T\nA B C", "T\n[[A B]] [[C]]", 2},
+		// Length is counted in characters: the Kelvin sign is 3 bytes.
+		{[]string{"K A", "A BC"}, "T\nK A BC", "T\nK [[A BC]]", 1},
+	}
+	for _, tc := range cases {
+		got, n := AutoLink(tc.in, tc.titles)
+		if got != tc.want || n != tc.n {
+			t.Errorf("AutoLink(%q, %q) = %q, %d; want %q, %d", tc.in, tc.titles, got, n, tc.want, tc.n)
+		}
+	}
+}
+
+func TestAutoLinkFoldsCase(t *testing.T) {
+	// The store folds only ASCII case when it resolves a link, so a mention
+	// that differs from the title in any other way links the title's spelling.
+	cases := map[string]struct{ title, in, want string }{
+		"ascii case":   {"Straße", "T\nSTRAßE", "T\n[[STRAßE]]"},
+		"sharp s":      {"Straße", "T\nSTRAẞE", "T\n[[Straße]]"},
+		"kelvin sign":  {"kilo", "T\nKilo", "T\n[[kilo]]"},
+		"accents":      {"École", "T\nécole", "T\n[[École]]"},
+		"bad title":    {"a]]b", "T\na]]b", "T\na]]b"},
+		"newline only": {"\n", "T\nx", "T\nx"},
+	}
+	for name, tc := range cases {
+		if got, _ := AutoLink(tc.in, []string{tc.title}); got != tc.want {
+			t.Errorf("%s: got %q, want %q", name, got, tc.want)
+		}
+	}
+}
+
+func TestAutoLinkPrefersTitleAsWritten(t *testing.T) {
+	// "École" and "école" can both exist, since the store folds only ASCII
+	// case. A mention links the one it spells, whatever the title order.
+	for _, titles := range [][]string{{"École", "école"}, {"école", "École"}} {
+		for in, want := range map[string]string{
+			"T\nécole": "T\n[[école]]",
+			"T\nÉCOLE": "T\n[[ÉCOLE]]",
+		} {
+			if got, _ := AutoLink(in, titles); got != want {
+				t.Errorf("AutoLink(%q, %q) = %q, want %q", in, titles, got, want)
+			}
 		}
 	}
 }
