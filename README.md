@@ -9,7 +9,8 @@ create and update notes over an HTTP API.
   Runs as a system service or in Docker.
 - **CLI** (`cmd/scribble`): `scribble new / show / edit / append / ls / search / ...`
 - **Desktop GUI** (`cmd/scribble-gui`): Fyne app to browse, search, view
-  (rendered Markdown), edit, create and delete notes.
+  (rendered Markdown), edit, create, rename and delete notes. `[[links]]` are
+  clickable, and each note shows the notes that link to it.
 - **Client library** (`client/`): Go API client shared by the CLI and the GUI.
 
 ## Notes model
@@ -116,8 +117,8 @@ also against a real server.
       project filter with clickable tags in the GUI
 - [x] Opt-in auto-linking: `scribble autolink <title>` turns mentions of
       other notes' titles into `[[links]]` (`notes.AutoLink`)
-- [ ] GUI: clickable `[[links]]` (`notes.LinkifyForView` already turns them
-      into `note://` links for Fyne's Markdown renderer) and a backlinks panel
+- [x] GUI: clickable `[[links]]` (a link to a missing note creates it), a
+      "Linked from" backlinks panel, and rename that rewrites incoming links
 - [ ] GUI: conflict resolution, and a local cache synced through `/changes`
 - [ ] Global hotkey / tray icon for "instant new note"
 - [ ] Import from Tomboy `.note` XML

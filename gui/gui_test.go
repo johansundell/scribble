@@ -699,3 +699,269 @@ func TestDeleteNoteAfterConfirming(t *testing.T) {
 		t.Error("viewer still shows the deleted note")
 	}
 }
+
+func TestTappingWikiLinkOpensNote(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Groceries\nmilk")
+	create(t, c, "# Plans\nbuy from [[groceries]] and `[[code]]`\n\n| see |\n| --- |\n| [[Groceries]] |")
+
+	ui, _ := open(t, c)
+	ui.List.Select(0) // Plans
+	if segment(ui, "[[code]]") == nil {
+		t.Error("a [[link]] in code must stay code")
+	}
+
+	tapLink(t, ui, "groceries")
+	if segment(ui, "milk") == nil {
+		t.Fatalf("viewer should show Groceries, segments %#v", ui.Viewer.Segments)
+	}
+	assertTitles(t, ui, "Plans", "Groceries")
+
+	ui.List.Select(0)
+	tapLink(t, ui, "Groceries") // inside a table cell
+	if segment(ui, "milk") == nil {
+		t.Fatal("a link in a table cell should open Groceries")
+	}
+}
+
+func TestWikiLinksShowTitlesLiterally(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Plans\n[[C:\\temp\\]] [[*star*]] [[snake_case_]] [[<b>x</b>]] [[Plan #home]] [[a & b]]")
+
+	ui, _ := open(t, c)
+	ui.List.Select(0)
+	for _, title := range []string{`C:\temp\`, "*star*", "snake_case_", "<b>x</b>", "Plan #home", "a & b"} {
+		l := link(ui, title)
+		if l == nil {
+			t.Errorf("no link %q, segments %#v", title, ui.Viewer.Segments)
+			continue
+		}
+		if got, ok := notes.LinkTitle(l.URL); !ok || got != title {
+			t.Errorf("link %q points at %q", title, got)
+		}
+	}
+}
+
+func TestTappingWikiLinkToMissingNoteCreatesIt(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Plans\nsee [[Packing List]]")
+
+	ui, w := open(t, c)
+	ui.List.Select(0)
+	tapLink(t, ui, "Packing List")
+
+	n := byTitle(t, c, "Packing List")
+	assertTitles(t, ui, "Packing List", "Plans")
+	if !ui.Editor.Visible() || ui.Editor.Text != n.Body {
+		t.Fatalf("want the new note open for editing, editor visible %v with %q", ui.Editor.Visible(), ui.Editor.Text)
+	}
+	if w.Canvas().Focused() != ui.Editor {
+		t.Fatalf("the editor should have keyboard focus, %v has", w.Canvas().Focused())
+	}
+	test.Type(w.Canvas().Focused(), "socks") // where the keyboard goes
+	test.Tap(ui.Save)
+	if got := byTitle(t, c, "Packing List").Body; !strings.HasPrefix(got, "# Packing List\nsocks") {
+		t.Fatalf("typing should continue below the title, saved %q", got)
+	}
+}
+
+func TestWikiLinkCreatesNoteInActiveProject(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Plans\nsee [[Packing List]]\n#trip")
+
+	ui, _ := open(t, c)
+	ui.Project.SetSelected("trip")
+	ui.List.Select(0)
+	tapLink(t, ui, "Packing List")
+
+	if n := byTitle(t, c, "Packing List"); !notes.HasProject(n.Body, "trip") {
+		t.Fatalf("new note should be tagged #trip, has %q", n.Body)
+	}
+	assertTitles(t, ui, "Packing List", "Plans")
+}
+
+func TestFollowingWikiLinkClearsOldError(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Groceries\nmilk")
+	create(t, c, "# Plans\nsee [[Groceries]]")
+
+	ui, w := open(t, c)
+	ui.List.Select(1) // Groceries
+	renameTo(t, ui, w, "Plans", "Rename")
+	if ui.Status.Text == "" {
+		t.Fatal("renaming to a taken title should report an error")
+	}
+	ui.List.Select(0) // Plans
+	tapLink(t, ui, "Groceries")
+	if ui.Status.Text != "" {
+		t.Fatalf("status still says %q", ui.Status.Text)
+	}
+}
+
+func TestTappingWikiLinkAsksBeforeDiscardingEdits(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Groceries\nmilk")
+	create(t, c, "# Plans\nsee [[Groceries]]")
+
+	ui, w := open(t, c)
+	ui.List.Select(0)
+	test.Tap(ui.EditToggle)
+	test.Type(ui.Editor, "draft ")
+	test.Tap(ui.EditToggle) // preview the unsaved edit
+
+	tapLink(t, ui, "Groceries")
+	tapDialogButton(t, w, "Cancel")
+	if !strings.HasPrefix(ui.Editor.Text, "draft ") {
+		t.Fatalf("cancelling should keep the edit, editor has %q", ui.Editor.Text)
+	}
+
+	tapLink(t, ui, "Groceries")
+	tapDialogButton(t, w, "Discard")
+	if segment(ui, "milk") == nil {
+		t.Fatal("discarding should open Groceries")
+	}
+}
+
+// backlinks returns the titles the "Linked from" panel shows, or nil when it
+// is hidden.
+func backlinks(ui *gui.UI) []string {
+	if !ui.Backlinks.Visible() {
+		return nil
+	}
+	var out []string
+	for _, o := range test.LaidOutObjects(ui.Backlinks) {
+		if b, ok := o.(*widget.Button); ok {
+			out = append(out, b.Text)
+		}
+	}
+	return out
+}
+
+func tapBacklink(t *testing.T, ui *gui.UI, title string) {
+	t.Helper()
+	for _, o := range test.LaidOutObjects(ui.Backlinks) {
+		if b, ok := o.(*widget.Button); ok && b.Text == title {
+			test.Tap(b)
+			return
+		}
+	}
+	t.Fatalf("no backlink %q, panel shows %q", title, backlinks(ui))
+}
+
+func TestBacklinksPanelListsLinkingNotes(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Groceries\nmilk")
+	create(t, c, "# Plans\nsee [[Groceries]]")
+	create(t, c, "# Recipes\nfrom [[groceries]]")
+	create(t, c, "# Ideas\nfly")
+
+	ui, _ := open(t, c)
+	if got := backlinks(ui); got != nil {
+		t.Fatalf("with no note open the panel shows %q", got)
+	}
+	ui.List.Select(3) // Groceries
+	if got := backlinks(ui); !slices.Equal(got, []string{"Plans", "Recipes"}) {
+		t.Fatalf("panel shows %q, want Plans and Recipes", got)
+	}
+
+	tapBacklink(t, ui, "Recipes")
+	if segment(ui, "from ") == nil {
+		t.Fatalf("tapping a backlink should open Recipes, segments %#v", ui.Viewer.Segments)
+	}
+	if got := backlinks(ui); got != nil {
+		t.Fatalf("nothing links to Recipes, panel shows %q", got)
+	}
+}
+
+func TestBacklinksFollowSavedEdits(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Groceries\nmilk")
+	create(t, c, "# Plans\nnothing yet")
+
+	ui, _ := open(t, c)
+	ui.List.Select(0) // Plans
+	test.Tap(ui.EditToggle)
+	ui.Editor.SetText("# Plans\nsee [[Groceries]]")
+	test.Tap(ui.Save)
+
+	tapLink(t, ui, "Groceries")
+	if got := backlinks(ui); !slices.Equal(got, []string{"Plans"}) {
+		t.Fatalf("panel shows %q, want Plans", got)
+	}
+}
+
+// renameTo taps Rename and enters title in the dialog, then taps button.
+func renameTo(t *testing.T, ui *gui.UI, w fyne.Window, title, button string) {
+	t.Helper()
+	test.Tap(ui.Rename)
+	top := w.Canvas().Overlays().Top()
+	if top == nil {
+		t.Fatal("Rename showed no dialog")
+	}
+	for _, o := range test.LaidOutObjects(top) {
+		if e, ok := o.(*widget.Entry); ok {
+			e.SetText(title)
+			tapDialogButton(t, w, button)
+			return
+		}
+	}
+	t.Fatal("the rename dialog has no entry")
+}
+
+func TestRenameNoteRewritesLinks(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Groceries\nmilk")
+	create(t, c, "# Plans\nsee [[groceries]]")
+
+	ui, w := open(t, c)
+	ui.List.Select(1) // Groceries
+
+	renameTo(t, ui, w, "Food", "Cancel")
+	byTitle(t, c, "Groceries")
+
+	renameTo(t, ui, w, "Food", "Rename")
+	if got := byTitle(t, c, "Plans").Body; got != "# Plans\nsee [[Food]]" {
+		t.Fatalf("Plans now reads %q", got)
+	}
+	assertTitles(t, ui, "Plans", "Food") // both just changed; newest id first
+	if segment(ui, "Food") == nil || segment(ui, "milk") == nil {
+		t.Fatalf("viewer should show the renamed note, segments %#v", ui.Viewer.Segments)
+	}
+	if got := backlinks(ui); !slices.Equal(got, []string{"Plans"}) {
+		t.Fatalf("panel shows %q, want Plans", got)
+	}
+}
+
+func TestRenameToTakenTitleIsRefused(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Groceries\nmilk")
+	create(t, c, "# Plans\nfly")
+
+	ui, w := open(t, c)
+	ui.List.Select(1) // Groceries
+	renameTo(t, ui, w, "plans", "Rename")
+
+	if ui.Status.Text != "Another note already has that title." {
+		t.Fatalf("status is %q", ui.Status.Text)
+	}
+	byTitle(t, c, "Groceries")
+}
+
+func TestRenameNeedsSavedNoteWithoutEdits(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Groceries\nmilk")
+
+	ui, _ := open(t, c)
+	if !ui.Rename.Disabled() {
+		t.Error("Rename enabled with no note open")
+	}
+	ui.List.Select(0)
+	if ui.Rename.Disabled() {
+		t.Fatal("Rename disabled on a saved note")
+	}
+	test.Tap(ui.EditToggle)
+	test.Type(ui.Editor, "x")
+	if !ui.Rename.Disabled() {
+		t.Error("Rename enabled with unsaved edits; save them first")
+	}
+}
