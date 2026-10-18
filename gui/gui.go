@@ -303,7 +303,9 @@ func (ui *UI) follow(title string) {
 		body += "#" + p + "\n"
 	}
 	n, ok := ui.write(0, body, 0)
-	if !ok {
+	if !ok || ui.hasUnsavedChanges() {
+		// Or the sync brought a refused edit of the open note back into
+		// the editor: that stays, and the new note waits in the list.
 		return
 	}
 	ui.open(n)
@@ -509,6 +511,11 @@ func (ui *UI) rename(id int64, title string) {
 		return
 	}
 	ui.Status.SetText("")
+	// Kept even if the sync below fails; the sync picks up the links the
+	// rename rewrote in other notes.
+	if ui.report(ui.store.Put(*n)) {
+		return
+	}
 	ui.Sync()
 	if cached, ok := ui.store.Get(n.ID); ok {
 		*n = cached
@@ -545,8 +552,13 @@ func (ui *UI) delete(n notes.Note) {
 			return
 		}
 	}
-	// A queued edit of the note has nothing left to change.
-	if ui.report(ui.store.Drop(id)) {
+	// Gone from the copy even if the sync below fails. A queued edit of
+	// the note has nothing left to change.
+	forget := ui.store.Drop
+	if id > 0 {
+		forget = ui.store.Remove
+	}
+	if ui.report(forget(id)) {
 		return
 	}
 	ui.Status.SetText("")

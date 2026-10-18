@@ -197,6 +197,7 @@ func (s *Store) Queue(id int64, body string, baseRevision int64) (notes.Note, er
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	edits, localID := slices.Clone(s.edits), s.localID
 	if sid, ok := s.sent[id]; ok {
 		// Created offline and sent meanwhile: the editor's revision 0 is
 		// the one we created it from.
@@ -216,7 +217,12 @@ func (s *Store) Queue(id int64, body string, baseRevision int64) (notes.Note, er
 		s.edits = append(s.edits, e)
 	}
 	n, _ := s.get(id)
-	return n, s.save()
+	if err := s.save(); err != nil {
+		// Not on disk, so not queued: it must not be sent later.
+		s.edits, s.localID = edits, localID
+		return notes.Note{}, err
+	}
+	return n, nil
 }
 
 // rebase moves revision base of note id past our own edits the server has
@@ -238,10 +244,15 @@ func (s *Store) ack(id, from, to int64) {
 	s.acked[id][from] = to
 }
 
-// retryable reports whether the server's answer is a passing trouble
-// rather than a refusal of the edit itself.
+// retryable reports whether the server's answer is a passing trouble, or
+// about the token rather than the edit itself, so the edit is worth
+// sending again.
 func retryable(e *client.Error) bool {
-	return e.Status == http.StatusRequestTimeout || e.Status == http.StatusTooManyRequests || e.Status >= 500
+	switch e.Status {
+	case http.StatusUnauthorized, http.StatusForbidden, http.StatusRequestTimeout, http.StatusTooManyRequests:
+		return true
+	}
+	return e.Status >= 500
 }
 
 // Drop throws away the queued edit of note id, if any.
@@ -249,10 +260,39 @@ func (s *Store) Drop(id int64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if i := s.editIndex(id); i >= 0 {
+		e := s.edits[i]
 		s.edits = slices.Delete(s.edits, i, i+1)
-		return s.save()
+		if err := s.save(); err != nil {
+			s.edits = slices.Insert(s.edits, i, e)
+			return err
+		}
 	}
 	return nil
+}
+
+// Put records note n as the server just returned it, unless the copy
+// already holds a newer version. It lets the GUI show the result of a
+// rename at once, whether or not the sync after it gets through.
+func (s *Store) Put(n notes.Note) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if old, ok := s.notes[n.ID]; ok && old.Seq > n.Seq {
+		return nil
+	}
+	s.notes[n.ID] = n
+	return s.save()
+}
+
+// Remove forgets note id and any queued edit of it, once the server has
+// deleted it.
+func (s *Store) Remove(id int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.notes, id)
+	if i := s.editIndex(id); i >= 0 {
+		s.edits = slices.Delete(s.edits, i, i+1)
+	}
+	return s.save()
 }
 
 // Pending returns the queued edit of note id.

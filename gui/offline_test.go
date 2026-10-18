@@ -19,9 +19,9 @@ import (
 // cable fails every request while unplugged, like an unreachable server.
 type cable struct {
 	unplugged atomic.Bool
-	// afterCreate, if set, runs once a note has been created through the
-	// cable, before the client sees the answer.
-	afterCreate func()
+	// after, if set, runs once a request has been answered, before the
+	// client sees the answer.
+	after func(*http.Request)
 }
 
 func (c *cable) RoundTrip(r *http.Request) (*http.Response, error) {
@@ -29,8 +29,8 @@ func (c *cable) RoundTrip(r *http.Request) (*http.Response, error) {
 		return nil, errors.New("network is down")
 	}
 	resp, err := http.DefaultTransport.RoundTrip(r)
-	if err == nil && r.Method == "POST" && r.URL.Path == "/notes" && c.afterCreate != nil {
-		c.afterCreate()
+	if err == nil && c.after != nil {
+		c.after(r)
 	}
 	return resp, err
 }
@@ -295,8 +295,11 @@ func TestDraftOfNoteCreatedOfflineStaysStaleAgainstOtherWriters(t *testing.T) {
 	ui.Editor.SetText("# Ideas\nmine")
 
 	other := client.New(c.BaseURL, c.Token)
-	cb.afterCreate = func() {
-		cb.afterCreate = nil
+	cb.after = func(r *http.Request) {
+		if r.Method != "POST" || r.URL.Path != "/notes" {
+			return
+		}
+		cb.after = nil
 		n := byTitle(t, other, "Ideas")
 		if _, err := other.Update(t.Context(), n.ID, "# Ideas\ntheirs", n.Revision); err != nil {
 			t.Error(err)
@@ -311,5 +314,82 @@ func TestDraftOfNoteCreatedOfflineStaysStaleAgainstOtherWriters(t *testing.T) {
 	}
 	if !strings.Contains(ui.Status.Text, "changed elsewhere") {
 		t.Errorf("status says %q", ui.Status.Text)
+	}
+}
+
+// unplugAfter unplugs the cable once a request with this method and path
+// suffix has been answered.
+func unplugAfter(cb *cable, method, suffix string) {
+	cb.after = func(r *http.Request) {
+		if r.Method == method && strings.HasSuffix(r.URL.Path, suffix) {
+			cb.unplugged.Store(true)
+		}
+	}
+}
+
+func TestRenameShowsEvenIfTheSyncAfterItFails(t *testing.T) {
+	c := newServer(t)
+	cb := plug(c)
+	create(t, c, "# Groceries\nmilk")
+	ui, w := openCached(t, c, "")
+	ui.List.Select(0)
+
+	unplugAfter(cb, "POST", "/rename")
+	renameTo(t, ui, w, "Food", "Rename")
+
+	assertTitles(t, ui, "Food")
+	if segment(ui, "Food") == nil {
+		t.Fatalf("viewer shows %#v", ui.Viewer.Segments)
+	}
+
+	cb.after = nil
+	cb.unplugged.Store(false)
+	test.Tap(ui.EditToggle)
+	ui.Editor.SetText("# Food\nmilk and eggs")
+	test.Tap(ui.Save)
+	if got := byTitle(t, c, "Food").Body; got != "# Food\nmilk and eggs" {
+		t.Fatalf("save after rename: server holds %q, status %q", got, ui.Status.Text)
+	}
+}
+
+func TestDeleteShowsEvenIfTheSyncAfterItFails(t *testing.T) {
+	c := newServer(t)
+	cb := plug(c)
+	create(t, c, "# Groceries\nmilk")
+	create(t, c, "# Ideas\nfly")
+	path := filepath.Join(t.TempDir(), "cache.json")
+	ui, w := openCached(t, c, path)
+	ui.List.Select(0) // Ideas
+
+	unplugAfter(cb, "DELETE", "")
+	test.Tap(ui.Delete)
+	tapDialogButton(t, w, "Delete")
+
+	assertTitles(t, ui, "Groceries")
+	ui, _ = openCached(t, c, path) // restarted, still offline
+	assertTitles(t, ui, "Groceries")
+}
+
+func TestFollowingMissingLinkKeepsARefusedEditOfTheOpenNote(t *testing.T) {
+	c := newServer(t)
+	cb := plug(c)
+	create(t, c, "# Plans\nsee [[Trip]]")
+	ui, _ := openCached(t, c, "")
+
+	cb.unplugged.Store(true)
+	ui.List.Select(0)
+	test.Tap(ui.EditToggle)
+	ui.Editor.SetText("# Plans\nmine, see [[Trip]]")
+	test.Tap(ui.Save)
+	cb.unplugged.Store(false)
+	n := byTitle(t, c, "Plans")
+	if _, err := c.Update(t.Context(), n.ID, "# Plans\ntheirs, see [[Trip]]", n.Revision); err != nil {
+		t.Fatal(err)
+	}
+
+	tapLink(t, ui, "Trip") // creating Trip syncs, and the Plans edit is refused
+
+	if !ui.Editor.Visible() || ui.Editor.Text != "# Plans\nmine, see [[Trip]]" {
+		t.Fatalf("editor visible %v with %q, want the refused Plans edit", ui.Editor.Visible(), ui.Editor.Text)
 	}
 }

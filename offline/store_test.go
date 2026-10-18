@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -474,5 +475,43 @@ func TestDefaultPathOfIPv6ServerIsAPortableFileName(t *testing.T) {
 	}
 	if name := filepath.Base(p); strings.ContainsAny(name, `:<>"/\\|?*`) {
 		t.Fatalf("file name %q is not valid on Windows", name)
+	}
+}
+
+func TestQueueThatCannotBeSavedLeavesNothingQueued(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root writes to read-only directories")
+	}
+	dir := t.TempDir()
+	s := open(t, filepath.Join(dir, "cache.json"))
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o700) })
+
+	local, err := s.Queue(0, "# Ideas\nfly", 0)
+	if err == nil {
+		t.Fatal("Queue into a read-only directory did not fail")
+	}
+	if _, ok := s.Pending(local.ID); ok || len(s.List("", "")) != 0 {
+		t.Fatalf("the failed edit is still queued: %q", titles(s.List("", "")))
+	}
+}
+
+func TestRejectedTokenKeepsTheEditQueued(t *testing.T) {
+	c, net := newServer(t)
+	g := create(t, c, "# Groceries\nmilk")
+	s := open(t, "")
+	syncNow(t, s, c)
+	if _, err := s.Queue(g.ID, "# Groceries\nmilk and eggs", g.Revision); err != nil {
+		t.Fatal(err)
+	}
+
+	net.status.Store(http.StatusUnauthorized)
+	if _, err := s.Sync(context.Background(), c); !client.IsUnauthorized(err) {
+		t.Fatalf("sync with a bad token returned %v", err)
+	}
+	if e, ok := s.Pending(g.ID); !ok || e.Err != nil {
+		t.Fatalf("pending %+v, %v; want it queued for retry", e, ok)
 	}
 }
