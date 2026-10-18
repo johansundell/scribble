@@ -190,19 +190,7 @@ func TestEditAndSaveNote(t *testing.T) {
 }
 
 func TestSaveRefusedWhenNoteChangedElsewhere(t *testing.T) {
-	c := newServer(t)
-	create(t, c, "# Ideas\nfly")
-
-	ui, _ := open(t, c)
-	ui.List.Select(0)
-	test.Tap(ui.EditToggle)
-	ui.Editor.SetText("# Ideas\nmine")
-
-	theirs := byTitle(t, c, "Ideas")
-	if _, err := c.Update(context.Background(), theirs.ID, "# Ideas\ntheirs", theirs.Revision); err != nil {
-		t.Fatal(err)
-	}
-	test.Tap(ui.Save)
+	c, ui, w := staleSave(t)
 
 	if got := byTitle(t, c, "Ideas").Body; got != "# Ideas\ntheirs" {
 		t.Fatalf("server holds %q; the other edit was overwritten", got)
@@ -212,6 +200,97 @@ func TestSaveRefusedWhenNoteChangedElsewhere(t *testing.T) {
 	}
 	if !strings.Contains(ui.Status.Text, "changed elsewhere") {
 		t.Errorf("status says %q", ui.Status.Text)
+	}
+	if w.Canvas().Overlays().Top() == nil {
+		t.Error("no dialog asks how to resolve the conflict")
+	}
+}
+
+// staleSave opens Ideas, edits it to "mine", has someone else save
+// "theirs", then taps Save, which the server refuses.
+func staleSave(t *testing.T) (*client.Client, *gui.UI, fyne.Window) {
+	t.Helper()
+	c := newServer(t)
+	create(t, c, "# Ideas\nfly")
+	ui, w := open(t, c)
+	ui.List.Select(0)
+	test.Tap(ui.EditToggle)
+	ui.Editor.SetText("# Ideas\nmine")
+	theirs := byTitle(t, c, "Ideas")
+	if _, err := c.Update(context.Background(), theirs.ID, "# Ideas\ntheirs", theirs.Revision); err != nil {
+		t.Fatal(err)
+	}
+	test.Tap(ui.Save)
+	return c, ui, w
+}
+
+func TestStaleSaveKeepEditingLeavesTheDraftOpen(t *testing.T) {
+	c, ui, w := staleSave(t)
+
+	tapDialogButton(t, w, "Keep editing")
+
+	if w.Canvas().Overlays().Top() != nil {
+		t.Fatal("the conflict dialog is still open")
+	}
+	if byTitle(t, c, "Ideas").Body != "# Ideas\ntheirs" {
+		t.Fatal("keep editing saved the draft")
+	}
+	if !ui.Editor.Visible() || ui.Editor.Text != "# Ideas\nmine" {
+		t.Fatalf("editor visible %v with %q, want the draft", ui.Editor.Visible(), ui.Editor.Text)
+	}
+}
+
+func TestStaleSaveOverwriteReplacesTheirVersion(t *testing.T) {
+	c, ui, w := staleSave(t)
+
+	tapDialogButton(t, w, "Overwrite")
+
+	if got := byTitle(t, c, "Ideas").Body; got != "# Ideas\nmine" {
+		t.Fatalf("server holds %q; status %q", got, ui.Status.Text)
+	}
+	if ui.Editor.Visible() || segment(ui, "mine") == nil {
+		t.Error("overwriting should show the saved note in view mode")
+	}
+	if ui.Status.Text != "" {
+		t.Errorf("status says %q", ui.Status.Text)
+	}
+
+	// The open note now has the overwritten revision: the next save is not stale.
+	test.Tap(ui.EditToggle)
+	ui.Editor.SetText("# Ideas\nmine again")
+	test.Tap(ui.Save)
+	if got := byTitle(t, c, "Ideas").Body; got != "# Ideas\nmine again" {
+		t.Fatalf("save after overwrite: server holds %q, status %q", got, ui.Status.Text)
+	}
+	if w.Canvas().Overlays().Top() != nil {
+		t.Fatal("the save after overwrite asked about a conflict")
+	}
+}
+
+func TestStaleSaveReloadShowsTheirVersionAndKeepsTheDraftOnTheClipboard(t *testing.T) {
+	c, ui, w := staleSave(t)
+
+	tapDialogButton(t, w, "Reload")
+
+	if byTitle(t, c, "Ideas").Body != "# Ideas\ntheirs" {
+		t.Fatal("reload saved the draft")
+	}
+	if ui.Editor.Visible() || segment(ui, "theirs") == nil {
+		t.Fatalf("reload should show the latest version, got %#v", ui.Viewer.Segments)
+	}
+	if got := fyne.CurrentApp().Clipboard().Content(); got != "# Ideas\nmine" {
+		t.Fatalf("clipboard holds %q, want the draft", got)
+	}
+	if want := "Loaded the latest version. Your edit is on the clipboard."; ui.Status.Text != want {
+		t.Errorf("status says %q, want %q", ui.Status.Text, want)
+	}
+
+	// Editing the reloaded version saves without a conflict.
+	test.Tap(ui.EditToggle)
+	ui.Editor.SetText("# Ideas\ntheirs and mine")
+	test.Tap(ui.Save)
+	if got := byTitle(t, c, "Ideas").Body; got != "# Ideas\ntheirs and mine" {
+		t.Fatalf("save after reload: server holds %q, status %q", got, ui.Status.Text)
 	}
 }
 

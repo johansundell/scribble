@@ -302,8 +302,8 @@ func (ui *UI) follow(title string) {
 	if p := ui.activeProject(); p != "" {
 		body += "#" + p + "\n"
 	}
-	n, ok := ui.write(0, body, 0)
-	if !ok || ui.hasUnsavedChanges() {
+	n, err := ui.write(0, body, 0)
+	if ui.report(err) || ui.hasUnsavedChanges() {
 		// Or the sync brought a refused edit of the open note back into
 		// the editor: that stays, and the new note waits in the list.
 		return
@@ -438,7 +438,8 @@ func setEnabled(b *widget.Button, on bool) {
 // save writes the editor to the server and returns to view mode. The server
 // takes the title from the first non-empty line. An update carries the
 // revision the edit started from, so the server refuses it if someone else
-// saved in between; the edit then stays open.
+// saved in between; the edit then stays open and askConflict asks what to
+// do about it.
 func (ui *UI) save() {
 	if ui.current == nil {
 		return
@@ -451,20 +452,90 @@ func (ui *UI) save() {
 		ui.Status.SetText("Type a title on the first line, above the #tag.")
 		return
 	}
-	if n, ok := ui.write(ui.current.ID, ui.Editor.Text, ui.current.Revision); ok {
+	n, err := ui.write(ui.current.ID, ui.Editor.Text, ui.current.Revision)
+	switch {
+	case client.IsStale(err):
+		ui.report(err)
+		ui.askConflict()
+	case !ui.report(err):
 		ui.open(n)
 	}
+}
+
+// askConflict asks what to do with an edit the server refused because the
+// note was changed elsewhere: overwrite that version, reload it, or keep
+// editing.
+func (ui *UI) askConflict() {
+	var d *dialog.CustomDialog
+	button := func(label string, then func()) *widget.Button {
+		return widget.NewButton(label, func() {
+			d.Hide()
+			then()
+		})
+	}
+	overwrite := button("Overwrite", ui.overwrite)
+	overwrite.Importance = widget.DangerImportance
+	msg := widget.NewLabel("This note was changed elsewhere since you started editing.\n\n" +
+		"Overwrite replaces that version with yours. Reload shows that version instead and copies your edit to the clipboard.")
+	msg.Wrapping = fyne.TextWrapWord
+	d = dialog.NewCustomWithoutButtons("Note changed elsewhere", msg, ui.w)
+	d.SetButtons([]fyne.CanvasObject{button("Keep editing", func() {}), button("Reload", ui.reloadLatest), overwrite})
+	d.Resize(fyne.NewSize(460, d.MinSize().Height))
+	d.Show()
+}
+
+// overwrite saves the editor over whatever the server now holds.
+func (ui *UI) overwrite() {
+	if ui.current == nil {
+		return
+	}
+	// The server ID, and revision 0: Queue would otherwise rebase a note
+	// created offline onto the revision it was created at.
+	n, err := ui.write(ui.store.ServerID(ui.current.ID), ui.Editor.Text, 0)
+	if !ui.report(err) {
+		ui.open(n)
+	}
+}
+
+// reloadLatest fetches the open note's latest version and shows it in
+// place of the user's edit, which it leaves on the clipboard. If the sync
+// fails the edit stays open instead: the local copy may be the version it
+// conflicted with.
+func (ui *UI) reloadLatest() {
+	if ui.current == nil {
+		return
+	}
+	draft := ui.Editor.Text
+	id := ui.store.ServerID(ui.current.ID)
+	ui.Status.SetText("")
+	ctx, cancel := requestContext()
+	defer cancel()
+	r, err := ui.store.Sync(ctx, ui.c)
+	ui.synced(r, err)
+	if err != nil {
+		ui.Status.SetText(ui.Status.Text + " Your edit is still open.")
+		return
+	}
+	fyne.CurrentApp().Clipboard().SetContent(draft)
+	n, ok := ui.store.Get(id)
+	if !ok {
+		ui.closeNote()
+		ui.Status.SetText("The note was deleted elsewhere. Your edit is on the clipboard.")
+		return
+	}
+	ui.open(n)
+	ui.Status.SetText("Loaded the latest version. Your edit is on the clipboard.")
 }
 
 // write saves body as note id's text (id 0 for a new note), edited from
 // revision base, and syncs. It returns the note as saved: on the server,
 // or only on this computer while the server is unreachable. If the server
-// refuses the edit, it reports why and returns false; the text then stays
-// only in the editor.
-func (ui *UI) write(id int64, body string, base int64) (notes.Note, bool) {
+// refuses the edit, it returns why; the text then stays only in the
+// editor.
+func (ui *UI) write(id int64, body string, base int64) (notes.Note, error) {
 	n, err := ui.store.Queue(id, body, base)
-	if ui.report(err) {
-		return n, false
+	if err != nil {
+		return n, err
 	}
 	ctx, cancel := requestContext()
 	defer cancel()
@@ -472,14 +543,13 @@ func (ui *UI) write(id int64, body string, base int64) (notes.Note, bool) {
 	key := ui.store.ServerID(n.ID)
 	if e, ok := ui.store.Pending(key); ok && e.Err != nil {
 		ui.report(ui.store.Drop(key))
-		ui.report(e.Err)
-		return n, false
+		return n, e.Err
 	}
 	r.Failed = slices.DeleteFunc(r.Failed, func(id int64) bool { return id == key })
 	ui.Status.SetText("")
 	ui.synced(r, err)
 	n, _ = ui.store.Get(key)
-	return n, true
+	return n, nil
 }
 
 // askRename asks for a new title for the open note. The server rewrites
@@ -736,7 +806,7 @@ func (ui *UI) report(err error) bool {
 func explain(err error) string {
 	switch {
 	case client.IsStale(err):
-		return "The note was changed elsewhere since you started editing. Your edit is still open: copy it, then open the note again to load the latest version."
+		return "The note was changed elsewhere since you started editing. Your edit is still open: save it again to choose between overwriting that version and reloading it."
 	case client.IsTitleTaken(err):
 		return "Another note already has that title."
 	case client.IsUnauthorized(err):
