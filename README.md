@@ -46,7 +46,8 @@ git log --oneline -5 | ./scribble append "Work log"
 ./scribble edit Ideas
 ./scribble projects            # every #project; `projects <name>` lists its notes
 
-# GUI (same SCRIBBLE_URL / SCRIBBLE_TOKEN; optional SCRIBBLE_HOTKEY, default Ctrl+Alt+N)
+# GUI (same SCRIBBLE_URL / SCRIBBLE_TOKEN; optional SCRIBBLE_HOTKEY, default Ctrl+Alt+N).
+# Also read from a .env next to the scribble-gui binary; the environment wins.
 make build-gui
 ./scribble-gui
 ```
