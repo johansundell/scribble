@@ -85,9 +85,9 @@ func main() {
 
 // newApp loads the .env file, then creates the app, so variables Fyne reads
 // while starting up (such as FYNE_THEME) can be set there too. An error from
-// loadEnv is returned with the app, for the window to show.
-func newApp(loadEnv func() error, create func() fyne.App) (fyne.App, error) {
-	err := loadEnv()
+// readEnv is returned with the app, for the window to show.
+func newApp(readEnv func() error, create func() fyne.App) (fyne.App, error) {
+	err := readEnv()
 	return create(), err
 }
 
