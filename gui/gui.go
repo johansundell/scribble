@@ -139,12 +139,18 @@ func (ui *UI) showWindow() {
 // ready for typing, asking first if there are unsaved changes.
 func (ui *UI) OpenNewNote() {
 	ui.showWindow()
+	if ui.w.Canvas().Overlays().Top() != nil {
+		return
+	}
 	ui.unlessUnsaved(ui.startNote)
 }
 
 func (ui *UI) quit() {
 	if ui.hasUnsavedChanges() {
 		ui.showWindow()
+	}
+	if ui.w.Canvas().Overlays().Top() != nil {
+		return
 	}
 	ui.unlessUnsaved(func() {
 		ui.w.Close()

@@ -875,8 +875,14 @@ func TestOpenNewNoteFromTrayOrHotkey(t *testing.T) {
 		t.Fatalf("cancelling should keep the draft, got %q", ui.Editor.Text)
 	}
 
+	// Pressing the global hotkey (OpenNewNote) repeatedly while a discard prompt
+	// is already open must not stack a second prompt over the new editor.
+	ui.OpenNewNote()
 	ui.OpenNewNote()
 	tapDialogButton(t, w, "Discard")
+	if w.Canvas().Overlays().Top() != nil {
+		t.Fatal("a stale discard dialog remained open after confirming Discard")
+	}
 	if ui.Editor.Text != "" || w.Canvas().Focused() != ui.Editor {
 		t.Fatalf("discarding should open a fresh focused editor, got %q", ui.Editor.Text)
 	}
@@ -905,6 +911,18 @@ func TestParseHotkey(t *testing.T) {
 	}
 	if !slices.Equal(mods, []hotkey.Modifier{gui.ModAlt, gui.ModSuper}) || key != hotkey.KeySpace {
 		t.Fatalf("got (%v, %v), want Alt+Super+Space", mods, key)
+	}
+
+	_, key0, err := gui.ParseHotkey("Ctrl+Alt+0")
+	if err != nil {
+		t.Fatalf("Ctrl+Alt+0 failed: %v", err)
+	}
+	_, key1, err := gui.ParseHotkey("Ctrl+Alt+1")
+	if err != nil {
+		t.Fatalf("Ctrl+Alt+1 failed: %v", err)
+	}
+	if key0 != gui.Key0 || key1 != gui.Key1 || key0 == key1 {
+		t.Fatalf("digit keys = (0:%#x, 1:%#x), want (%#x, %#x)", key0, key1, gui.Key0, gui.Key1)
 	}
 
 	for _, disabled := range []string{"none", "OFF"} {
