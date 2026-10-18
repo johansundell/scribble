@@ -484,17 +484,20 @@ func (ui *UI) askConflict() {
 	d.Show()
 }
 
-// overwrite saves the editor over whatever the server now holds.
+// overwrite saves the editor over whatever the server now holds. It needs
+// the server: queued, revision 0 would stay the open note's revision and
+// make the next ordinary save overwrite too.
 func (ui *UI) overwrite() {
 	if ui.current == nil {
 		return
 	}
-	// The server ID, and revision 0: Queue would otherwise rebase a note
-	// created offline onto the revision it was created at.
-	n, err := ui.write(ui.store.ServerID(ui.current.ID), ui.Editor.Text, 0)
-	if !ui.report(err) {
-		ui.open(n)
+	ctx, cancel := requestContext()
+	defer cancel()
+	n, err := ui.c.Update(ctx, ui.store.ServerID(ui.current.ID), ui.Editor.Text, 0)
+	if ui.reportOnline(err) {
+		return
 	}
+	ui.openFromServer(*n)
 }
 
 // reloadLatest fetches the open note's latest version and shows it in
@@ -580,17 +583,22 @@ func (ui *UI) rename(id int64, title string) {
 	if ui.reportOnline(err) {
 		return
 	}
+	// The sync picks up the links the rename rewrote in other notes.
+	ui.openFromServer(*n)
+}
+
+// openFromServer records note n as the server just returned it, syncs and
+// opens it. n is kept and shown even if the sync fails.
+func (ui *UI) openFromServer(n notes.Note) {
 	ui.Status.SetText("")
-	// Kept even if the sync below fails; the sync picks up the links the
-	// rename rewrote in other notes.
-	if ui.report(ui.store.Put(*n)) {
+	if ui.report(ui.store.Put(n)) {
 		return
 	}
 	ui.Sync()
 	if cached, ok := ui.store.Get(n.ID); ok {
-		*n = cached
+		n = cached
 	}
-	ui.open(*n)
+	ui.open(n)
 }
 
 // confirmDelete asks before deleting the open note.
@@ -788,7 +796,7 @@ func (ui *UI) selectCurrent() {
 // reportOnline is report for an action only the server can do.
 func (ui *UI) reportOnline(err error) bool {
 	if client.IsUnreachable(err) {
-		ui.Status.SetText("The server is unreachable. Renaming and deleting a note need it; try again when it is back.")
+		ui.Status.SetText("The server is unreachable. Renaming, deleting and overwriting a note need it; try again when it is back.")
 		return true
 	}
 	return ui.report(err)
