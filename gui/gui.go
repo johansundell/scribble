@@ -36,10 +36,10 @@ const allNotes = "All notes"
 // drive the window the way a user does.
 type UI struct {
 	Project *widget.Select // allNotes or a #project the list is narrowed to
-	Search  *widget.Entry
+	Search  *TextField
 	List    *NoteList
 	Viewer  *widget.RichText // view mode: the open note rendered as Markdown
-	Editor  *widget.Entry    // edit mode: the open note's raw Markdown
+	Editor  *TextField       // edit mode: the open note's raw Markdown
 
 	EditToggle *widget.Button // switches between view and edit mode
 	Save       *widget.Button
@@ -57,6 +57,7 @@ type UI struct {
 
 	menu                               *fyne.MainMenu
 	renameItem, deleteItem, toggleItem *fyne.MenuItem // greyed out like their toolbar buttons
+	lastField                          *TextField     // the text field that had focus last, nil if another widget did
 
 	w        fyne.Window
 	c        *client.Client
@@ -93,12 +94,13 @@ func New(w fyne.Window, c *client.Client, store *offline.Store) *UI {
 	}
 	ui.Project = widget.NewSelect([]string{allNotes}, func(string) { ui.refresh() })
 	ui.Project.Selected = allNotes
-	ui.Search = widget.NewEntry()
+	ui.Search = newTextField(ui)
 	ui.Search.SetPlaceHolder("Search")
 	ui.Search.OnChanged = func(string) { ui.refresh() }
 	ui.Viewer = widget.NewRichText()
 	ui.Viewer.Wrapping = fyne.TextWrapWord
-	ui.Editor = widget.NewMultiLineEntry()
+	ui.Editor = newTextField(ui)
+	ui.Editor.MultiLine = true
 	ui.Editor.Wrapping = fyne.TextWrapWord
 	ui.Editor.OnChanged = func(string) { ui.updateButtons() }
 	ui.EditToggle = widget.NewButton("Edit", ui.toggleMode)
@@ -365,6 +367,11 @@ func (ui *UI) showView() {
 	ui.hookLinks(segs)
 	ui.Viewer.Segments = segs
 	ui.Viewer.Refresh()
+	if ui.w.Canvas().Focused() == ui.Editor {
+		// A shortcut leaves the focus where it was, and the editor
+		// would go on taking keys while hidden.
+		ui.w.Canvas().Unfocus()
+	}
 	ui.Editor.Hide()
 	ui.Viewer.Show()
 	ui.EditToggle.SetText("Edit")

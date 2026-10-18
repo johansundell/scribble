@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
+	"github.com/johansundell/scribble/gui"
 )
 
 // menuItem returns the main menu's item labelled label in the menu labelled
@@ -324,12 +325,93 @@ func TestEditMenuActsOnTheFocusedField(t *testing.T) {
 		t.Fatalf("Paste put %q in the search box", ui.Search.Text)
 	}
 
-	w.Canvas().Unfocus()
 	for _, label := range []string{"Undo", "Redo", "Cut", "Copy", "Paste", "Select all"} {
 		if menuItem(t, w, "Edit", label).Disabled {
 			t.Errorf("Edit > %s is disabled", label)
 		}
-		menuItem(t, w, "Edit", label).Action() // nothing focused: nothing happens
+	}
+}
+
+// clickNote clicks the first note in the list, which focuses the list.
+func clickNote(t *testing.T, ui *gui.UI) {
+	t.Helper()
+	for _, o := range test.LaidOutObjects(ui.List) {
+		if item, ok := o.(fyne.Tappable); ok && o != fyne.CanvasObject(ui.List) {
+			item.Tapped(&fyne.PointEvent{})
+			return
+		}
+	}
+	t.Fatal("the list shows no note to click")
+}
+
+func TestClickedEditMenuReachesTheFieldThatHadFocus(t *testing.T) {
+	// Clicking the menu bar takes the focus away before the item runs;
+	// Unfocus stands in for that click.
+	c := newServer(t)
+	create(t, c, "# Ideas\nfly")
+	ui, w := open(t, c)
+	clipboard := fyne.CurrentApp().Clipboard()
+
+	ui.List.Select(0)
+	test.Tap(ui.EditToggle)
+	w.Canvas().Focus(ui.Editor)
+	w.Canvas().Unfocus()
+	menuItem(t, w, "Edit", "Select all").Action()
+	menuItem(t, w, "Edit", "Copy").Action()
+	if got := clipboard.Content(); got != "# Ideas\nfly" {
+		t.Fatalf("clicked Copy put %q on the clipboard", got)
+	}
+
+	clipboard.SetContent("fly")
+	w.Canvas().Focus(ui.Search)
+	w.Canvas().Unfocus()
+	menuItem(t, w, "Edit", "Paste").Action()
+	if ui.Search.Text != "fly" {
+		t.Fatalf("clicked Paste put %q in the search box", ui.Search.Text)
+	}
+
+	// The list had focus last, not a text field.
+	ui.Search.SetText("")
+	clickNote(t, ui)
+	w.Canvas().Unfocus()
+	menuItem(t, w, "Edit", "Paste").Action()
+	if ui.Search.Text != "" || ui.Editor.Text != "# Ideas\nfly" {
+		t.Fatalf("Paste after clicking the list changed a text field: search %q, editor %q", ui.Search.Text, ui.Editor.Text)
+	}
+}
+
+func TestEditMenuLeavesTheFieldBehindADialogAlone(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Ideas\nfly")
+	ui, w := open(t, c)
+	fyne.CurrentApp().Clipboard().SetContent("pasted")
+
+	ui.List.Select(0)
+	test.Tap(ui.EditToggle)
+	w.Canvas().Focus(ui.Editor)
+	test.Tap(ui.Delete) // the dialog takes the focus
+	menuItem(t, w, "Edit", "Paste").Action()
+	if ui.Editor.Text != "# Ideas\nfly" {
+		t.Fatalf("Paste reached the editor behind the dialog: %q", ui.Editor.Text)
+	}
+}
+
+func TestViewNoteShortcutTakesFocusFromTheEditor(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Ideas\nfly")
+	ui, w := open(t, c)
+	fyne.CurrentApp().Clipboard().SetContent("pasted")
+
+	ui.List.Select(0)
+	test.Tap(ui.EditToggle)
+	w.Canvas().Focus(ui.Editor)
+	menuItem(t, w, "View", "View note").Action()
+	if w.Canvas().Focused() == ui.Editor {
+		t.Fatal("the hidden editor still has focus")
+	}
+	menuItem(t, w, "Edit", "Paste").Action()
+	if ui.Editor.Text != "# Ideas\nfly" {
+		t.Fatalf("Paste changed the hidden editor: %q", ui.Editor.Text)
 	}
 }
 
