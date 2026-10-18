@@ -1,15 +1,24 @@
 package gui
 
 import (
+	"net/url"
 	"runtime"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/widget"
 )
 
-// setupMenu gives the window its File, Edit and View menus. The window runs
-// a menu item's shortcut before the focused widget sees the key, and even
+// Version is the application version shown in Help > About Scribble. When it
+// is "dev" or empty, the dialog falls back to the Fyne app metadata version.
+var Version = "dev"
+
+const repoURL = "https://github.com/johansundell/scribble"
+
+// setupMenu gives the window its File, Edit, View and Help menus. The window
+// runs a menu item's shortcut before the focused widget sees the key, and even
 // while a dialog is open, so each action checks for that itself.
 func (ui *UI) setupMenu() {
 	ui.saveItem = menuItem("Save", ctrl(fyne.KeyS), ui.whenEnabled(ui.Save, ui.saveAndKeepEditing))
@@ -47,6 +56,9 @@ func (ui *UI) setupMenu() {
 			menuItem("Find", ctrl(fyne.KeyF), ui.unlessDialog(func() { ui.w.Canvas().Focus(ui.Search) })),
 		),
 		fyne.NewMenu("View", ui.toggleItem),
+		fyne.NewMenu("Help",
+			menuItem("About Scribble", nil, ui.unlessDialog(ui.showAbout)),
+		),
 	)
 	ui.w.SetMainMenu(ui.menu)
 	// The window only runs menu shortcuts with a modifier, so F2 is caught
@@ -120,6 +132,29 @@ func (ui *UI) typedKey(e *fyne.KeyEvent) bool {
 	}
 	ui.renameItem.Action()
 	return true
+}
+
+// showAbout opens the About Scribble dialog.
+func (ui *UI) showAbout() {
+	u, _ := url.Parse(repoURL)
+	content := container.NewVBox(
+		widget.NewLabelWithStyle("Scribble "+appVersion(), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewLabel("Tomboy-inspired Markdown notes"),
+		widget.NewLabel("Johan Sundell · MPL-2.0"),
+		widget.NewHyperlink(repoURL, u),
+		widget.NewLabel(ui.c.BaseURL),
+	)
+	dialog.NewCustom("About Scribble", "Close", content, ui.w).Show()
+}
+
+func appVersion() string {
+	if (Version == "" || Version == "dev") && fyne.CurrentApp() != nil && fyne.CurrentApp().Metadata().Version != "" {
+		return "v" + fyne.CurrentApp().Metadata().Version
+	}
+	if Version == "" {
+		return "dev"
+	}
+	return Version
 }
 
 // updateMenu greys out and labels the menu items like their toolbar

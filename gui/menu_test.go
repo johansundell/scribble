@@ -2,6 +2,7 @@ package gui_test
 
 import (
 	"runtime"
+	"slices"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -46,8 +47,8 @@ func TestMainMenuHasItemsWithShortcuts(t *testing.T) {
 	for _, m := range w.MainMenu().Items {
 		labels = append(labels, m.Label)
 	}
-	if len(labels) != 3 || labels[0] != "File" || labels[1] != "Edit" || labels[2] != "View" {
-		t.Fatalf("menus are %q, want File, Edit, View", labels)
+	if len(labels) != 4 || labels[0] != "File" || labels[1] != "Edit" || labels[2] != "View" || labels[3] != "Help" {
+		t.Fatalf("menus are %q, want File, Edit, View, Help", labels)
 	}
 
 	redo := fyne.Shortcut(&fyne.ShortcutRedo{})
@@ -71,6 +72,7 @@ func TestMainMenuHasItemsWithShortcuts(t *testing.T) {
 		{"Edit", "Select all", &fyne.ShortcutSelectAll{}},
 		{"Edit", "Find", ctrl(fyne.KeyF)},
 		{"View", "Edit note", ctrl(fyne.KeyE)},
+		{"Help", "About Scribble", nil},
 	} {
 		item := menuItem(t, w, c.menu, c.label)
 		if item.Action == nil {
@@ -244,7 +246,7 @@ func TestMenuActionsDoNothingWhileADialogIsOpen(t *testing.T) {
 	dialog := w.Canvas().Overlays().Top()
 	for _, item := range []struct{ menu, label string }{
 		{"File", "New note"}, {"File", "Rename…"}, {"File", "Delete…"}, {"File", "Quit"},
-		{"Edit", "Find"}, {"View", "Edit note"},
+		{"Edit", "Find"}, {"View", "Edit note"}, {"Help", "About Scribble"},
 	} {
 		menuItem(t, w, item.menu, item.label).Action()
 		if top := w.Canvas().Overlays().Top(); top != dialog || len(w.Canvas().Overlays().List()) != 1 {
@@ -434,3 +436,86 @@ func TestFindFocusesSearchKeepingTheDraft(t *testing.T) {
 		t.Fatal("Find should leave the draft open without asking")
 	}
 }
+
+func dialogTexts(t *testing.T, w fyne.Window) []string {
+	t.Helper()
+	top := w.Canvas().Overlays().Top()
+	if top == nil {
+		t.Fatal("no dialog is showing")
+	}
+	var out []string
+	for _, o := range test.LaidOutObjects(top) {
+		if l, ok := o.(*widget.Label); ok && l.Visible() && l.Text != "" {
+			out = append(out, l.Text)
+		}
+	}
+	return out
+}
+
+type appWithVersion struct {
+	fyne.App
+	version string
+}
+
+func (a *appWithVersion) Metadata() fyne.AppMetadata {
+	return fyne.AppMetadata{Version: a.version}
+}
+
+func TestAboutDialogShowsAppAndServerDetails(t *testing.T) {
+	c := newServer(t)
+	_, w := open(t, c)
+
+	origVersion := gui.Version
+	origApp := fyne.CurrentApp()
+	t.Cleanup(func() {
+		gui.Version = origVersion
+		fyne.SetCurrentApp(origApp)
+	})
+
+	checkDialog := func(wantTitle string) {
+		t.Helper()
+		menuItem(t, w, "Help", "About Scribble").Action()
+		texts := dialogTexts(t, w)
+		for _, want := range []string{
+			wantTitle,
+			"Tomboy-inspired Markdown notes",
+			"Johan Sundell · MPL-2.0",
+			c.BaseURL,
+		} {
+			if !slices.Contains(texts, want) {
+				t.Errorf("About dialog labels %q do not contain %q", texts, want)
+			}
+		}
+
+		const repo = "https://github.com/johansundell/scribble"
+		var link *widget.Hyperlink
+		for _, o := range test.LaidOutObjects(w.Canvas().Overlays().Top()) {
+			if h, ok := o.(*widget.Hyperlink); ok && h.Visible() {
+				link = h
+				break
+			}
+		}
+		if link == nil || link.Text != repo || link.URL == nil || link.URL.String() != repo {
+			t.Fatalf("About dialog hyperlink = %+v, want %s", link, repo)
+		}
+		tapDialogButton(t, w, "Close")
+		if w.Canvas().Overlays().Top() != nil {
+			t.Fatal("Close did not dismiss the About dialog")
+		}
+	}
+
+	// Default gui.Version ("dev") with no app metadata.
+	gui.Version = "dev"
+	checkDialog("Scribble dev")
+
+	// Fallback to fyne.CurrentApp().Metadata().Version when gui.Version is "dev" or empty.
+	fyne.SetCurrentApp(&appWithVersion{App: origApp, version: "0.0.8"})
+	checkDialog("Scribble v0.0.8")
+	gui.Version = ""
+	checkDialog("Scribble v0.0.8")
+
+	// Explicit gui.Version wins.
+	gui.Version = "v1.2.3"
+	checkDialog("Scribble v1.2.3")
+}
+

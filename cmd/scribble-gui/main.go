@@ -39,6 +39,7 @@ func main() {
 	if (ver == "" || ver == "dev") && a.Metadata().Version != "" {
 		ver = "v" + a.Metadata().Version
 	}
+	gui.Version = ver
 	w := a.NewWindow("Scribble " + ver)
 	w.Resize(fyne.NewSize(1000, 700))
 

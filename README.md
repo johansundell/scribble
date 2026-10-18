@@ -71,6 +71,7 @@ The window has a menu bar (on macOS, the system menu bar; there Ctrl is Cmd):
 | Edit | Cut / Copy / Paste / Select all | `Ctrl+X` / `Ctrl+C` / `Ctrl+V` / `Ctrl+A` |
 | Edit | Find (focus the search box) | `Ctrl+F` |
 | View | Edit note / View note | `Ctrl+E` |
+| Help | About Scribble | none |
 
 `scribble-gui` keeps its copy of the notes in the user config directory
 (`scribble/<host>-<hash of the server URL>.json`) and syncs every 30 seconds through
