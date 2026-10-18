@@ -13,6 +13,11 @@ build:
 build-cli:
 	go build -ldflags "-X 'main.Version=$(VERSION)'" -o scribble ./cmd/scribble
 
+# The Fyne desktop client. Needs CGO and a C compiler; on Linux also the
+# GL, X11, Wayland and xkbcommon development headers (see README).
+build-gui:
+	go build -ldflags "-X 'main.Version=$(VERSION)'" -o scribble-gui ./cmd/scribble-gui
+
 compile:
 	@rm -rf build/
 	@gox -ldflags "-X 'main.Version=$(VERSION)'" \
@@ -68,4 +73,4 @@ release: dist docker-push
 	github-release $(GHACCOUNT)/$(NAME) $(VERSION) "$$(git rev-parse --abbrev-ref HEAD)" "**Changelog**<br/>$$changelog" 'dist/*'; \
 	git pull
 
-.PHONY: build build-cli compile install deps dist release docker docker-push docker-run
+.PHONY: build build-cli build-gui compile install deps dist release docker docker-push docker-run
