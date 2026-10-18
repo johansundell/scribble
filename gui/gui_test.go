@@ -746,7 +746,7 @@ func TestTappingWikiLinkToMissingNoteCreatesIt(t *testing.T) {
 	c := newServer(t)
 	create(t, c, "# Plans\nsee [[Packing List]]")
 
-	ui, _ := open(t, c)
+	ui, w := open(t, c)
 	ui.List.Select(0)
 	tapLink(t, ui, "Packing List")
 
@@ -755,7 +755,10 @@ func TestTappingWikiLinkToMissingNoteCreatesIt(t *testing.T) {
 	if !ui.Editor.Visible() || ui.Editor.Text != n.Body {
 		t.Fatalf("want the new note open for editing, editor visible %v with %q", ui.Editor.Visible(), ui.Editor.Text)
 	}
-	test.Type(ui.Editor, "socks")
+	if w.Canvas().Focused() != ui.Editor {
+		t.Fatalf("the editor should have keyboard focus, %v has", w.Canvas().Focused())
+	}
+	test.Type(w.Canvas().Focused(), "socks") // where the keyboard goes
 	test.Tap(ui.Save)
 	if got := byTitle(t, c, "Packing List").Body; !strings.HasPrefix(got, "# Packing List\nsocks") {
 		t.Fatalf("typing should continue below the title, saved %q", got)

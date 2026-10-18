@@ -209,6 +209,7 @@ func (ui *UI) follow(title string) {
 	ui.Editor.CursorRow, ui.Editor.CursorColumn = 1, 0
 	ui.Editor.Refresh()
 	ui.showEdit()
+	ui.w.Canvas().Focus(ui.Editor)
 }
 
 // startNote opens an editor for a new note. Inside a project it starts with
