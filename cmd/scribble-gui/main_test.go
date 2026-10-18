@@ -6,8 +6,52 @@ import (
 	"path/filepath"
 	"testing"
 
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/test"
 	"github.com/johansundell/scribble/offline"
 )
+
+func TestNewAppLoadsDotEnvBeforeCreatingTheApp(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte("FYNE_THEME=dark\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("FYNE_THEME", "")
+	os.Unsetenv("FYNE_THEME")
+
+	var themeAtCreate string
+	a, envErr := newApp(func() error { return loadEnv(dir) }, func() fyne.App {
+		themeAtCreate = os.Getenv("FYNE_THEME")
+		return test.NewTempApp(t)
+	})
+	if envErr != nil {
+		t.Fatal(envErr)
+	}
+	if a == nil {
+		t.Fatal("newApp returned no app")
+	}
+	if themeAtCreate != "dark" {
+		t.Errorf("FYNE_THEME when the app was created = %q, want %q", themeAtCreate, "dark")
+	}
+}
+
+func TestNewAppStillCreatesTheAppWhenDotEnvIsUnreadable(t *testing.T) {
+	dir := t.TempDir()
+	// A directory named .env cannot be read as a file.
+	if err := os.Mkdir(filepath.Join(dir, ".env"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	a, envErr := newApp(func() error { return loadEnv(dir) }, func() fyne.App {
+		return test.NewTempApp(t)
+	})
+	if envErr == nil {
+		t.Error("unreadable .env: got no error")
+	}
+	if a == nil {
+		t.Fatal("newApp returned no app; the error could not be shown")
+	}
+}
 
 func TestLoadEnvReadsDotEnvInDir(t *testing.T) {
 	dir := t.TempDir()
