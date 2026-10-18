@@ -62,8 +62,15 @@ func create(t *testing.T, c *client.Client, body string) {
 // open shows the GUI in a headless test window.
 func open(t *testing.T, c *client.Client) (*gui.UI, fyne.Window) {
 	t.Helper()
-	test.NewTempApp(t)
-	w := test.NewTempWindow(t, nil)
+	a := test.NewTempApp(t)
+	w := test.NewWindow(nil)
+	// Some tests close the window themselves; the test driver panics if it
+	// is closed twice.
+	t.Cleanup(func() {
+		if slices.Contains(a.Driver().AllWindows(), w) {
+			w.Close()
+		}
+	})
 	ui := gui.New(w, c)
 	w.Resize(fyne.NewSize(900, 600))
 	return ui, w
@@ -329,6 +336,76 @@ func TestSwitchingNotesAsksBeforeDiscardingEdits(t *testing.T) {
 	}
 	if byTitle(t, c, "Ideas").Body != "# Ideas\nfly" {
 		t.Error("discarding should not save")
+	}
+}
+
+func TestReopeningAfterConflictLoadsLatestVersion(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Groceries\nmilk")
+	create(t, c, "# Ideas\nfly")
+
+	ui, w := open(t, c)
+	ui.List.Select(0)
+	test.Tap(ui.EditToggle)
+	ui.Editor.SetText("# Ideas\nmine")
+	theirs := byTitle(t, c, "Ideas")
+	if _, err := c.Update(context.Background(), theirs.ID, "# Ideas\ntheirs", theirs.Revision); err != nil {
+		t.Fatal(err)
+	}
+	test.Tap(ui.Save) // refused: 412
+
+	ui.List.Select(1)
+	tapDialogButton(t, w, "Discard")
+	ui.List.Select(0)
+	if s := segment(ui, "theirs"); s == nil {
+		t.Fatalf("reopening should show the latest version, got %#v", ui.Viewer.Segments)
+	}
+
+	test.Tap(ui.EditToggle)
+	ui.Editor.SetText("# Ideas\ntheirs and mine")
+	test.Tap(ui.Save)
+	if got := byTitle(t, c, "Ideas").Body; got != "# Ideas\ntheirs and mine" {
+		t.Fatalf("save after reopening failed: server holds %q, status %q", got, ui.Status.Text)
+	}
+}
+
+func TestClosingAsksBeforeDiscardingEdits(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Ideas\nfly")
+
+	ui, w := open(t, c)
+	closed := false
+	w.SetOnClosed(func() { closed = true })
+
+	ui.List.Select(0)
+	test.Tap(ui.EditToggle)
+	ui.Editor.SetText("# Ideas\nunsaved")
+
+	ui.Close()
+	tapDialogButton(t, w, "Cancel")
+	if closed || ui.Editor.Text != "# Ideas\nunsaved" {
+		t.Fatal("cancelling should keep the window and the edit open")
+	}
+
+	ui.Close()
+	tapDialogButton(t, w, "Discard")
+	if !closed {
+		t.Fatal("discarding should close the window")
+	}
+}
+
+func TestClosingWithoutChangesClosesStraightAway(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Ideas\nfly")
+
+	ui, w := open(t, c)
+	closed := false
+	w.SetOnClosed(func() { closed = true })
+	ui.List.Select(0)
+
+	ui.Close()
+	if !closed {
+		t.Fatal("the window should close without asking")
 	}
 }
 

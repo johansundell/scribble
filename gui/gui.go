@@ -51,9 +51,9 @@ func New(w fyne.Window, c *client.Client) *UI {
 		func(i widget.ListItemID, o fyne.CanvasObject) { o.(*widget.Label).SetText(ui.notes[i].Title) },
 	)
 	ui.List.OnSelected = func(i widget.ListItemID) {
-		n := ui.notes[i]
-		if ui.current == nil || ui.current.ID != n.ID {
-			ui.unlessUnsaved(func() { ui.open(n) })
+		id := ui.notes[i].ID
+		if ui.current == nil || ui.current.ID != id {
+			ui.unlessUnsaved(func() { ui.load(id) })
 		}
 	}
 	ui.Search = widget.NewEntry()
@@ -85,10 +85,15 @@ func New(w fyne.Window, c *client.Client) *UI {
 	)
 	split.Offset = 0.3
 	w.SetContent(container.NewBorder(nil, ui.Status, nil, nil, split))
+	w.SetCloseIntercept(ui.Close)
 	ui.showView()
 	ui.refresh()
 	return ui
 }
+
+// Close closes the window, first asking to discard any unsaved changes. The
+// window's close button calls it.
+func (ui *UI) Close() { ui.unlessUnsaved(ui.w.Close) }
 
 func requestContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), requestTimeout)
@@ -101,6 +106,19 @@ func (ui *UI) isSaved() bool { return ui.current != nil && ui.current.ID != 0 }
 // the server.
 func (ui *UI) hasUnsavedChanges() bool {
 	return ui.current != nil && (ui.current.ID == 0 || ui.Editor.Text != ui.current.Body)
+}
+
+// load fetches the latest version of note id from the server and opens it.
+// If that fails, whatever was open stays open.
+func (ui *UI) load(id int64) {
+	ctx, cancel := requestContext()
+	defer cancel()
+	n, err := ui.c.Get(ctx, id)
+	if ui.report(err) {
+		ui.selectCurrent()
+		return
+	}
+	ui.open(*n)
 }
 
 // open shows note n in view mode.
