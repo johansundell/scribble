@@ -17,6 +17,7 @@ import (
 	"github.com/johansundell/scribble/gui"
 	"github.com/johansundell/scribble/handlers"
 	"github.com/johansundell/scribble/notes"
+	"github.com/johansundell/scribble/offline"
 	"github.com/johansundell/scribble/router"
 	"github.com/johansundell/scribble/store"
 	"github.com/johansundell/scribble/types"
@@ -1021,7 +1022,12 @@ func openWithSpy(t *testing.T, c *client.Client) (*gui.UI, *spyWindow) {
 		}
 	})
 	w := &spyWindow{Window: raw}
-	ui := gui.New(w, c)
+	cache, err := offline.Open("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ui := gui.New(w, c, cache)
+	ui.Sync()
 	w.Resize(fyne.NewSize(900, 600))
 	return ui, w
 }
@@ -1280,4 +1286,3 @@ func TestHotkeyEventOpensFocusedNewNoteEditor(t *testing.T) {
 		t.Fatal("hotkey should open and focus the new-note editor")
 	}
 }
-
