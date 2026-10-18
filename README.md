@@ -127,4 +127,4 @@ also against a real server.
       "Linked from" backlinks panel, and rename that rewrites incoming links
 - [ ] GUI: conflict resolution, and a local cache synced through `/changes`
 - [x] Global hotkey / tray icon for "instant new note"
-- [ ] Import from Tomboy `.note` XML
+- [x] Import from Tomboy `.note` XML (`scribble import <path...>`)
