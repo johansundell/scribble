@@ -50,6 +50,7 @@ func TestLinkifyForView(t *testing.T) {
 		"go [[My Note]]":      "go [My Note](note:///My%20Note)",
 		"T\n*see [[ Plan ]]*": "T\n*see [Plan](note:///Plan)*",
 		"T\n| [[a/b (c)]] |":  "T\n| [a/b (c)](note:///a%2Fb%20%28c%29) |",
+		"T\n[[*a* `b`]]":      "T\n[&#42;a&#42; &#96;b&#96;](note:///%2Aa%2A%20%60b%60)",
 	}
 	for in, want := range cases {
 		if got := LinkifyForView(in); got != want {

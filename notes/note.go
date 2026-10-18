@@ -412,27 +412,37 @@ func mergeSpans(spans [][2]int) [][2]int {
 
 // LinkifyForView rewrites [[Title]] into a Markdown link with the note:///
 // scheme, ready for a Markdown renderer; LinkTitle reads the title back.
-// Only links in plain text are rewritten, so code and Markdown links stay
-// intact. Used by GUI clients.
+// Only links whose brackets are plain text are rewritten, so code and
+// Markdown links stay intact; what is between the brackets is the title
+// even if Markdown would format it. Used by GUI clients.
 func LinkifyForView(body string) string {
-	spans := mergeSpans(plainTextSpans(body))
-	var b strings.Builder
-	last, s := 0, 0
-	for _, m := range linkRe.FindAllStringSubmatchIndex(body, -1) {
-		for s < len(spans) && spans[s][1] <= m[0] {
-			s++
+	plain := make([]bool, len(body))
+	for _, sp := range plainTextSpans(body) {
+		for i := sp[0]; i < sp[1]; i++ {
+			plain[i] = true
 		}
-		if s == len(spans) || m[0] < spans[s][0] || m[1] > spans[s][1] {
+	}
+	var b strings.Builder
+	last := 0
+	for _, m := range linkRe.FindAllStringSubmatchIndex(body, -1) {
+		if !plain[m[0]] || !plain[m[0]+1] || !plain[m[1]-2] || !plain[m[1]-1] {
 			continue
 		}
 		t := strings.TrimSpace(body[m[2]:m[3]])
 		b.WriteString(body[last:m[0]])
-		b.WriteString("[" + t + "](note:///" + url.PathEscape(t) + ")")
+		b.WriteString("[" + linkTextEscaper.Replace(t) + "](note:///" + url.PathEscape(t) + ")")
 		last = m[1]
 	}
 	b.WriteString(body[last:])
 	return b.String()
 }
+
+// linkTextEscaper writes the characters Markdown would act on in link text
+// as character references, so a title shows as written. Fyne unescapes
+// references in link text; a backslash escape would show.
+var linkTextEscaper = strings.NewReplacer(
+	"&", "&amp;", "<", "&lt;", ">", "&gt;", `\`, "&#92;", "`", "&#96;",
+	"*", "&#42;", "_", "&#95;", "~", "&#126;", "|", "&#124;")
 
 // LinkTitle returns the note title a link made by LinkifyForView points
 // at, and false for any other link.

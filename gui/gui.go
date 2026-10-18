@@ -166,7 +166,9 @@ func (ui *UI) loadBacklinks() {
 			list = nil
 		}
 	}
-	slices.SortFunc(list, func(a, b notes.Note) int { return strings.Compare(a.Title, b.Title) })
+	slices.SortFunc(list, func(a, b notes.Note) int {
+		return strings.Compare(strings.ToLower(a.Title), strings.ToLower(b.Title))
+	})
 	ui.backlinkButtons.RemoveAll()
 	for _, n := range list {
 		b := widget.NewButton(n.Title, func() { ui.unlessUnsaved(func() { ui.load(n.ID) }) })
@@ -181,27 +183,32 @@ func (ui *UI) loadBacklinks() {
 }
 
 // follow opens the note titled title, the target of a [[link]]. If there is
-// none yet it creates it and opens it for editing below the title.
+// none yet it creates it and opens it for editing below the title; inside a
+// project it is tagged #project, so it stays in view like a New note.
 func (ui *UI) follow(title string) {
 	ctx, cancel := requestContext()
 	defer cancel()
 	n, err := ui.c.ByTitle(ctx, title)
-	if client.IsNotFound(err) {
-		if n, err = ui.c.Create(ctx, "# "+title+"\n\n"); ui.report(err) {
-			return
+	if !client.IsNotFound(err) {
+		if !ui.report(err) {
+			ui.Status.SetText("")
+			ui.open(*n)
 		}
-		ui.Status.SetText("")
-		ui.reload()
-		ui.open(*n)
-		ui.Editor.CursorRow, ui.Editor.CursorColumn = 2, 0
-		ui.Editor.Refresh()
-		ui.showEdit()
 		return
 	}
-	if ui.report(err) {
+	body := "# " + title + "\n\n"
+	if p := ui.activeProject(); p != "" {
+		body += "#" + p + "\n"
+	}
+	if n, err = ui.c.Create(ctx, body); ui.report(err) {
 		return
 	}
+	ui.Status.SetText("")
+	ui.reload()
 	ui.open(*n)
+	ui.Editor.CursorRow, ui.Editor.CursorColumn = 1, 0
+	ui.Editor.Refresh()
+	ui.showEdit()
 }
 
 // startNote opens an editor for a new note. Inside a project it starts with

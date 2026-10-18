@@ -724,6 +724,24 @@ func TestTappingWikiLinkOpensNote(t *testing.T) {
 	}
 }
 
+func TestWikiLinksShowTitlesLiterally(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Plans\n[[C:\\temp\\]] [[*star*]] [[snake_case_]] [[<b>x</b>]] [[Plan #home]] [[a & b]]")
+
+	ui, _ := open(t, c)
+	ui.List.Select(0)
+	for _, title := range []string{`C:\temp\`, "*star*", "snake_case_", "<b>x</b>", "Plan #home", "a & b"} {
+		l := link(ui, title)
+		if l == nil {
+			t.Errorf("no link %q, segments %#v", title, ui.Viewer.Segments)
+			continue
+		}
+		if got, ok := notes.LinkTitle(l.URL); !ok || got != title {
+			t.Errorf("link %q points at %q", title, got)
+		}
+	}
+}
+
 func TestTappingWikiLinkToMissingNoteCreatesIt(t *testing.T) {
 	c := newServer(t)
 	create(t, c, "# Plans\nsee [[Packing List]]")
@@ -739,8 +757,41 @@ func TestTappingWikiLinkToMissingNoteCreatesIt(t *testing.T) {
 	}
 	test.Type(ui.Editor, "socks")
 	test.Tap(ui.Save)
-	if got := byTitle(t, c, "Packing List").Body; !strings.HasSuffix(got, "socks") {
+	if got := byTitle(t, c, "Packing List").Body; !strings.HasPrefix(got, "# Packing List\nsocks") {
 		t.Fatalf("typing should continue below the title, saved %q", got)
+	}
+}
+
+func TestWikiLinkCreatesNoteInActiveProject(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Plans\nsee [[Packing List]]\n#trip")
+
+	ui, _ := open(t, c)
+	ui.Project.SetSelected("trip")
+	ui.List.Select(0)
+	tapLink(t, ui, "Packing List")
+
+	if n := byTitle(t, c, "Packing List"); !notes.HasProject(n.Body, "trip") {
+		t.Fatalf("new note should be tagged #trip, has %q", n.Body)
+	}
+	assertTitles(t, ui, "Packing List", "Plans")
+}
+
+func TestFollowingWikiLinkClearsOldError(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Groceries\nmilk")
+	create(t, c, "# Plans\nsee [[Groceries]]")
+
+	ui, w := open(t, c)
+	ui.List.Select(1) // Groceries
+	renameTo(t, ui, w, "Plans", "Rename")
+	if ui.Status.Text == "" {
+		t.Fatal("renaming to a taken title should report an error")
+	}
+	ui.List.Select(0) // Plans
+	tapLink(t, ui, "Groceries")
+	if ui.Status.Text != "" {
+		t.Fatalf("status still says %q", ui.Status.Text)
 	}
 }
 
