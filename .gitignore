@@ -19,6 +19,7 @@
 *.db
 /dist
 /build
+/fyne-cross
 .env
 *.db-wal
 *.db-shm

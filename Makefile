@@ -19,7 +19,7 @@ build-gui:
 	go build -ldflags "-X 'main.Version=$(VERSION)'" -o scribble-gui ./cmd/scribble-gui
 
 compile:
-	@rm -rf build/
+	@rm -rf build/ fyne-cross/
 	@gox -ldflags "-X 'main.Version=$(VERSION)'" \
 	-osarch="darwin/amd64" \
 	-osarch="linux/amd64" \
@@ -35,6 +35,27 @@ compile:
 	-osarch="windows/amd64" \
 	-output "build/scribble_$(VERSION)_{{.OS}}_{{.Arch}}/scribble" \
 	./cmd/scribble
+	@fyne-cross linux \
+	-arch=amd64 \
+	-env=GOTOOLCHAIN=auto \
+	-app-id=com.johansundell.scribble \
+	-app-version=$(patsubst v%,%,$(VERSION)) \
+	-icon=assets/img/logo.png \
+	-name=scribble-gui \
+	-ldflags="-X=main.Version=$(VERSION)" \
+	./cmd/scribble-gui
+	@cp fyne-cross/bin/linux-amd64/scribble-gui build/scribble_$(VERSION)_linux_amd64/scribble-gui
+	@fyne-cross windows \
+	-arch=amd64 \
+	-env=GOTOOLCHAIN=auto \
+	-app-id=com.johansundell.scribble \
+	-app-version=$(patsubst v%,%,$(VERSION)) \
+	-icon=assets/img/logo.png \
+	-name=scribble-gui.exe \
+	-ldflags="-X=main.Version=$(VERSION)" \
+	./cmd/scribble-gui
+	@cp fyne-cross/bin/windows-amd64/scribble-gui.exe build/scribble_$(VERSION)_windows_amd64/scribble-gui.exe
+	@rm -rf fyne-cross/
 
 install:
 	go install -ldflags "-X main.Version=$(VERSION)"
@@ -44,6 +65,7 @@ install:
 deps:
 	go install github.com/c4milo/github-release@latest
 	go install github.com/mitchellh/gox@latest
+	go install github.com/fyne-io/fyne-cross@latest
 
 dist: compile
 	$(eval FILES := $(shell ls build))
