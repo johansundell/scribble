@@ -80,6 +80,9 @@ func main() {
 			defer unregister()
 		}
 	}
+	// After start-up, so it overrides the title bar Fyne sets from the
+	// Windows app mode when it creates the window.
+	a.Lifecycle().SetOnStarted(func() { gui.MatchTitleBar(w, a.Settings()) })
 	w.ShowAndRun()
 }
 
