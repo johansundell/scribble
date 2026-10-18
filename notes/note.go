@@ -131,15 +131,28 @@ func NormalizeProject(project string) string {
 	return strings.ToLower(strings.TrimPrefix(strings.TrimSpace(project), "#"))
 }
 
+// tagOnlyRe matches a line that is nothing but one #project tag.
+var tagOnlyRe = regexp.MustCompile(`^#[A-Za-z][A-Za-z0-9_-]*$`)
+
+// TitleIsTag reports whether the title line is nothing but a #project tag,
+// as in a project draft whose title was never typed. Such a tag names the
+// note instead of putting it in the project.
+func TitleIsTag(body string) bool {
+	i := titleEnd(body)
+	return tagOnlyRe.MatchString(strings.TrimSpace(body[strings.LastIndex(body[:i], "\n")+1 : i]))
+}
+
 // verbatimRe matches the Markdown a project link must not be put inside:
-// fenced code blocks, code spans, links and images (text and destination),
-// reference definitions and autolinks.
+// fenced code blocks, code spans, reference definitions, links and images
+// (inline, full, collapsed or shortcut; text and destination) and autolinks.
+// A link's text may wrap lines but not span a blank one. Reference
+// definitions come before links so "[x]: #y" is taken whole.
 var verbatimRe = regexp.MustCompile("(?ms)" +
 	"^ {0,3}```.*?^ {0,3}```" + `|` +
 	"^ {0,3}~~~.*?^ {0,3}~~~" + `|` +
 	"`[^`\n]*`" + `|` +
-	`!?\[[^\]\n]*\](?:\([^)\n]*\)|\[[^\]\n]*\])` + `|` +
 	`^ {0,3}\[[^\]\n]+\]:[^\n]*` + `|` +
+	`!?\[(?:[^\]\n]|\n[^\]\n])*\](?:\([^)\n]*\)|\[[^\]\n]*\])?` + `|` +
 	`<[^>\n]*>`)
 
 // LinkifyProjectsForView rewrites #project tags (outside the title line)
@@ -151,10 +164,14 @@ func LinkifyProjectsForView(body string) string {
 	verbatim := verbatimRe.FindAllStringIndex(rest, -1)
 	var b strings.Builder
 	b.WriteString(body[:i])
-	last := 0
+	last, v := 0, 0
 	for _, m := range projectRe.FindAllStringSubmatchIndex(rest, -1) {
 		hash, end := m[4]-1, m[1]
-		if slices.ContainsFunc(verbatim, func(v []int) bool { return v[0] <= hash && hash < v[1] }) {
+		// Both lists are in order, so one pass over the spans suffices.
+		for v < len(verbatim) && verbatim[v][1] <= hash {
+			v++
+		}
+		if v < len(verbatim) && verbatim[v][0] <= hash {
 			continue
 		}
 		name := rest[m[4]:m[5]]

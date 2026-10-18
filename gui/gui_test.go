@@ -578,6 +578,27 @@ func TestNewNoteInProjectStartsOnTitleLine(t *testing.T) {
 	}
 }
 
+func TestSavingUntitledProjectDraftIsRefused(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Plans\n#scribble")
+
+	ui, _ := open(t, c)
+	ui.Project.SetSelected("scribble")
+	test.Tap(ui.NewNote)
+	ui.Project.SetSelected("All notes") // the check must not rely on the filter
+	test.Tap(ui.Save)
+
+	if _, err := c.ByTitle(context.Background(), "scribble"); !client.IsNotFound(err) {
+		t.Fatalf("the untitled draft was saved as %q: %v", "scribble", err)
+	}
+	if !ui.Editor.Visible() || ui.Editor.Text != "\n\n#scribble\n" {
+		t.Errorf("the draft should stay open, editor holds %q", ui.Editor.Text)
+	}
+	if !strings.Contains(ui.Status.Text, "title") {
+		t.Errorf("status says %q", ui.Status.Text)
+	}
+}
+
 func TestSavingNewTagAddsProject(t *testing.T) {
 	c := newServer(t)
 	create(t, c, "# Plans\nnothing yet")

@@ -253,6 +253,12 @@ func (ui *UI) save() {
 	if ui.current == nil {
 		return
 	}
+	if !ui.isSaved() && notes.TitleIsTag(ui.Editor.Text) {
+		// Saved like this, the tag would become the title and the note
+		// would not be in the project.
+		ui.Status.SetText("Type a title on the first line, above the #tag.")
+		return
+	}
 	ctx, cancel := requestContext()
 	defer cancel()
 	var n *notes.Note

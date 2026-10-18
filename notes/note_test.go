@@ -89,6 +89,23 @@ func TestLinkifyProjectsForView(t *testing.T) {
 	}
 }
 
+func TestTitleIsTag(t *testing.T) {
+	cases := map[string]bool{
+		"\n\n#scribble\n":        true, // the GUI's untouched project draft
+		"  #home-lab  \nbody":    true,
+		"Roadmap\n\n#scribble\n": false,
+		"# Roadmap\n#scribble":   false,
+		"#scribble notes\n":      false,
+		"#42\n":                  false,
+		"":                       false,
+	}
+	for in, want := range cases {
+		if got := TitleIsTag(in); got != want {
+			t.Errorf("TitleIsTag(%q) = %v, want %v", in, got, want)
+		}
+	}
+}
+
 func TestLinkifyProjectsForViewLeavesMarkdownIntact(t *testing.T) {
 	// Tags inside links, link destinations, reference definitions and code
 	// stay as they are; only the plain #b is linked.
@@ -97,6 +114,8 @@ func TestLinkifyProjectsForViewLeavesMarkdownIntact(t *testing.T) {
 		"[docs]( #overview)",
 		"![pic #x](img.png)",
 		"[ref #x][r]",
+		"[See #home]\n\n[See #home]: https://example.com",
+		"[See\n#home](https://example.com)",
 		"[docs]: #overview",
 		"   [docs]: <#overview> \"title\"",
 		"`#code`",
