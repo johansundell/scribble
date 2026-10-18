@@ -534,22 +534,26 @@ func (ui *UI) confirmDelete() {
 }
 
 func (ui *UI) delete(n notes.Note) {
-	if n.ID > 0 {
+	// A note created offline may have reached the server while the
+	// dialog was open. If it is being sent right now, Sync deletes it
+	// once it lands.
+	id := ui.store.ServerID(n.ID)
+	if id > 0 {
 		ctx, cancel := requestContext()
 		defer cancel()
-		if ui.reportOnline(ui.c.Delete(ctx, n.ID)) {
+		if ui.reportOnline(ui.c.Delete(ctx, id)) {
 			return
 		}
 	}
 	// A queued edit of the note has nothing left to change.
-	if ui.report(ui.store.Drop(n.ID)) {
+	if ui.report(ui.store.Drop(id)) {
 		return
 	}
 	ui.Status.SetText("")
-	if ui.current != nil && ui.current.ID == n.ID {
+	if ui.current != nil && (ui.current.ID == n.ID || ui.current.ID == id) {
 		ui.closeNote()
 	}
-	if n.ID > 0 {
+	if id > 0 {
 		ui.Sync()
 	} else {
 		ui.reload()
@@ -602,12 +606,18 @@ func (ui *UI) synced(r offline.Report, err error) {
 	case wasOffline && ui.Status.Text == unreachable:
 		ui.Status.SetText("")
 	}
-	if len(r.Failed) > 0 {
-		id := r.Failed[0]
-		n, _ := ui.store.Get(id)
-		e, _ := ui.store.Pending(id)
-		msg := "\"" + n.Title + "\" could not be synced. " + explain(e.Err) + " Open the note to sort it out."
-		if more := len(r.Failed) - 1; more > 0 {
+	// Opening a note may have taken its refused edit back into the
+	// editor since the sync ran, so look again.
+	var refused []offline.Edit
+	for _, id := range r.Failed {
+		if e, ok := ui.store.Pending(id); ok && e.Err != nil {
+			refused = append(refused, e)
+		}
+	}
+	if len(refused) > 0 {
+		e := refused[0]
+		msg := "\"" + notes.TitleOf(e.Body) + "\" could not be synced. " + explain(e.Err) + " Open the note to sort it out."
+		if more := len(refused) - 1; more > 0 {
 			msg += " " + strconv.Itoa(more) + " more edits could not be synced either."
 		}
 		ui.Status.SetText(msg)
@@ -634,9 +644,10 @@ func (ui *UI) followOpenNote() {
 		if !ui.hasUnsavedChanges() {
 			ui.closeNote() // deleted elsewhere
 		}
-	case ui.Editor.Visible():
-		// Keep the text being edited; a save goes on from the revision
-		// the edit started from, unless the note just got its server ID.
+	case ui.Editor.Visible() || ui.hasUnsavedChanges():
+		// Keep the text being edited or previewed; a save goes on from
+		// the revision the edit started from, unless the note just got
+		// its server ID.
 		if id != ui.current.ID {
 			n.Body = ui.current.Body
 			ui.current = &n

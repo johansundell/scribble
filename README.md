@@ -58,7 +58,7 @@ global hotkey (`Ctrl+Alt+N` by default; override with `SCRIBBLE_HOTKEY`, or set
 anywhere.
 
 `scribble-gui` keeps its copy of the notes in the user config directory
-(`scribble/<server URL>.json`) and syncs every 30 seconds through
+(`scribble/<host>-<hash of the server URL>.json`) and syncs every 30 seconds through
 `/changes?since=N`, so only what changed is downloaded. While the server is
 unreachable you can still browse, search and edit: saves are queued on disk
 and sent when it is back. If the server refuses a queued edit (someone else

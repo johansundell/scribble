@@ -229,3 +229,46 @@ func TestOpenNoteWhoseEditIsRefusedOnSyncReturnsToTheEditor(t *testing.T) {
 		t.Errorf("status says %q", ui.Status.Text)
 	}
 }
+
+func TestSyncKeepsAnUnsavedPreview(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Ideas\nfly")
+	ui, _ := openCached(t, c, "")
+	ui.List.Select(0)
+	test.Tap(ui.EditToggle)
+	ui.Editor.SetText("# Ideas\nmine")
+	test.Tap(ui.EditToggle) // preview, not saved
+
+	n := byTitle(t, c, "Ideas")
+	if _, err := c.Update(t.Context(), n.ID, "# Ideas\ntheirs", n.Revision); err != nil {
+		t.Fatal(err)
+	}
+	ui.Sync()
+
+	if ui.Editor.Text != "# Ideas\nmine" {
+		t.Fatalf("sync replaced the draft with %q", ui.Editor.Text)
+	}
+}
+
+func TestSavingAgainAfterOfflineSaveWasSentIsNotAConflict(t *testing.T) {
+	c := newServer(t)
+	cb := plug(c)
+	create(t, c, "# Ideas\nfly")
+	ui, _ := openCached(t, c, "")
+
+	cb.unplugged.Store(true)
+	ui.List.Select(0)
+	test.Tap(ui.EditToggle)
+	ui.Editor.SetText("# Ideas\nfly high")
+	test.Tap(ui.Save)
+	test.Tap(ui.EditToggle)
+	ui.Editor.SetText("# Ideas\nfly higher")
+
+	cb.unplugged.Store(false)
+	ui.Sync() // sends "fly high" while the editor is still open
+	test.Tap(ui.Save)
+
+	if got := byTitle(t, c, "Ideas").Body; got != "# Ideas\nfly higher" {
+		t.Fatalf("server holds %q; status %q", got, ui.Status.Text)
+	}
+}

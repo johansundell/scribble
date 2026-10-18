@@ -7,8 +7,12 @@ package offline
 import (
 	"cmp"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -54,6 +58,11 @@ type Store struct {
 	edits   []Edit          // in the order they were queued
 	localID int64           // the last local ID handed out
 	sent    map[int64]int64 // local ID -> server ID of notes created offline
+	// acked maps a note's server ID and the revision one of our edits
+	// started from to the revision the server gave that edit, so an
+	// editor still on the old revision is not stale against itself. A
+	// note created offline is recorded as an edit from revision 0.
+	acked   map[int64]map[int64]int64
 	version int64
 }
 
@@ -69,7 +78,7 @@ type state struct {
 // Open loads the copy saved at path, or starts an empty one if there is no
 // file yet. An empty path keeps the copy in memory only.
 func Open(path string) (*Store, error) {
-	s := &Store{path: path, notes: map[int64]notes.Note{}, sent: map[int64]int64{}}
+	s := &Store{path: path, notes: map[int64]notes.Note{}, sent: map[int64]int64{}, acked: map[int64]map[int64]int64{}}
 	if path == "" {
 		return s, nil
 	}
@@ -102,13 +111,15 @@ func DefaultPath(baseURL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	name := strings.Map(func(r rune) rune {
-		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '-' {
-			return r
-		}
-		return '_'
-	}, strings.TrimRight(baseURL, "/"))
-	return filepath.Join(dir, "scribble", name+".json"), nil
+	// The host keeps the name readable; the hash of the whole URL keeps
+	// servers that differ only in port or path apart.
+	baseURL = strings.TrimRight(baseURL, "/")
+	host := "server"
+	if u, err := url.Parse(baseURL); err == nil && u.Hostname() != "" {
+		host = u.Hostname()
+	}
+	sum := sha256.Sum256([]byte(baseURL))
+	return filepath.Join(dir, "scribble", host+"-"+hex.EncodeToString(sum[:8])+".json"), nil
 }
 
 // save writes the copy to disk. Callers hold s.mu.
@@ -128,11 +139,19 @@ func (s *Store) save() error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
 		return err
 	}
-	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+	tmp, err := os.CreateTemp(filepath.Dir(s.path), filepath.Base(s.path)+".*.tmp")
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, s.path)
+	defer os.Remove(tmp.Name()) // fails harmlessly once renamed
+	if _, err := tmp.Write(b); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), s.path)
 }
 
 // LatestSeq is the server's change counter as of the last sync.
@@ -171,7 +190,13 @@ func (s *Store) Queue(id int64, body string, baseRevision int64) (notes.Note, er
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	id = s.serverID(id) // a note created offline may have been sent meanwhile
+	if sid, ok := s.sent[id]; ok {
+		// Created offline and sent meanwhile: the editor's revision 0 is
+		// the one we created it from.
+		id, baseRevision = sid, s.rebase(sid, 0)
+	} else if baseRevision != 0 {
+		baseRevision = s.rebase(id, baseRevision)
+	}
 	if id == 0 {
 		s.localID--
 		id = s.localID
@@ -185,6 +210,31 @@ func (s *Store) Queue(id int64, body string, baseRevision int64) (notes.Note, er
 	}
 	n, _ := s.get(id)
 	return n, s.save()
+}
+
+// rebase moves revision base of note id past our own edits the server has
+// taken since, and no further. Callers hold s.mu.
+func (s *Store) rebase(id, base int64) int64 {
+	for {
+		next, ok := s.acked[id][base]
+		if !ok || next == base {
+			return base
+		}
+		base = next
+	}
+}
+
+func (s *Store) ack(id, from, to int64) {
+	if s.acked[id] == nil {
+		s.acked[id] = map[int64]int64{}
+	}
+	s.acked[id][from] = to
+}
+
+// retryable reports whether the server's answer is a passing trouble
+// rather than a refusal of the edit itself.
+func retryable(e *client.Error) bool {
+	return e.Status == http.StatusRequestTimeout || e.Status == http.StatusTooManyRequests || e.Status >= 500
 }
 
 // Drop throws away the queued edit of note id, if any.
@@ -351,11 +401,19 @@ func (s *Store) push(ctx context.Context, c *client.Client, r *Report) error {
 			n, err = c.Update(ctx, e.ID, e.Body, e.BaseRevision)
 		}
 		var refused *client.Error
-		if err != nil && !errors.As(err, &refused) {
+		if err != nil && (!errors.As(err, &refused) || retryable(refused)) {
 			return err
 		}
 		s.mu.Lock()
 		i := s.editIndex(e.ID)
+		if i < 0 && e.ID < 0 && n != nil {
+			// A new note dropped (deleted) while it was being created.
+			s.mu.Unlock()
+			if err := c.Delete(ctx, n.ID); err != nil {
+				return err
+			}
+			continue
+		}
 		switch {
 		case i < 0:
 			// Dropped while it was being sent.
@@ -373,6 +431,7 @@ func (s *Store) push(ctx context.Context, c *client.Client, r *Report) error {
 		}
 		if n != nil {
 			s.notes[n.ID] = *n
+			s.ack(n.ID, e.BaseRevision, n.Revision)
 			if e.ID < 0 {
 				s.sent[e.ID] = n.ID
 			}

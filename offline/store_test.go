@@ -28,16 +28,25 @@ type discardSink struct{}
 func (discardSink) Enqueue(types.UsageLog) {}
 
 // network sits between the client and the server. It records the requests
-// and fails them all while down, like an unreachable server.
+// and fails them all while down, like an unreachable server, or answers
+// them all with status while that is set.
 type network struct {
-	down atomic.Bool
-	mu   sync.Mutex
-	urls []string
+	down      atomic.Bool
+	status    atomic.Int32
+	onRequest func(*http.Request) // called before each request is sent
+	mu        sync.Mutex
+	urls      []string
 }
 
 func (n *network) RoundTrip(r *http.Request) (*http.Response, error) {
 	if n.down.Load() {
 		return nil, errors.New("network is down")
+	}
+	if status := int(n.status.Load()); status != 0 {
+		return &http.Response{StatusCode: status, Body: http.NoBody, Request: r}, nil
+	}
+	if n.onRequest != nil {
+		n.onRequest(r)
 	}
 	n.mu.Lock()
 	n.urls = append(n.urls, r.Method+" "+r.URL.RequestURI())
@@ -338,4 +347,121 @@ func TestEditingASentOfflineNoteByItsLocalIDUpdatesIt(t *testing.T) {
 	if len(list) != 1 || list[0].Body != "# Ideas\nfly high" {
 		t.Fatalf("server holds %+v, want one updated note", list)
 	}
+}
+
+func TestDefaultPathsOfDifferentServersDiffer(t *testing.T) {
+	a, err := offline.DefaultPath("https://host/a_b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := offline.DefaultPath("https://host/a/b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a == b {
+		t.Fatalf("both servers use %s", a)
+	}
+}
+
+func TestEditFromTheRevisionBeforeOwnSentEditIsNotStale(t *testing.T) {
+	c, net := newServer(t)
+	g := create(t, c, "# Groceries\nmilk")
+	s := open(t, "")
+	syncNow(t, s, c)
+
+	net.down.Store(true)
+	if _, err := s.Queue(g.ID, "# Groceries\nmilk and eggs", g.Revision); err != nil {
+		t.Fatal(err)
+	}
+	net.down.Store(false)
+	syncNow(t, s, c)
+	// The editor still holds the revision it started from.
+	if _, err := s.Queue(g.ID, "# Groceries\nmilk, eggs and tea", g.Revision); err != nil {
+		t.Fatal(err)
+	}
+
+	if r := syncNow(t, s, c); len(r.Failed) != 0 {
+		e, _ := s.Pending(g.ID)
+		t.Fatalf("own edit made the next one stale: %v", e.Err)
+	}
+	if got, _ := c.Get(context.Background(), g.ID); got.Body != "# Groceries\nmilk, eggs and tea" {
+		t.Fatalf("server holds %q", got.Body)
+	}
+}
+
+func TestEditOfSentOfflineNoteStillDetectsOtherWriters(t *testing.T) {
+	c, net := newServer(t)
+	s := open(t, "")
+	net.down.Store(true)
+	local, err := s.Queue(0, "# Ideas\nfly", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	net.down.Store(false)
+	syncNow(t, s, c)
+	id := s.ServerID(local.ID)
+	n, err := c.Get(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Update(context.Background(), id, "# Ideas\ntheirs", n.Revision); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := s.Queue(local.ID, "# Ideas\nmine", 0); err != nil {
+		t.Fatal(err)
+	}
+	syncNow(t, s, c)
+
+	if e, ok := s.Pending(id); !ok || !client.IsStale(e.Err) {
+		t.Fatalf("pending %+v, %v; want a stale conflict", e, ok)
+	}
+}
+
+func TestServerTroubleKeepsTheEditQueued(t *testing.T) {
+	c, net := newServer(t)
+	g := create(t, c, "# Groceries\nmilk")
+	s := open(t, "")
+	syncNow(t, s, c)
+	if _, err := s.Queue(g.ID, "# Groceries\nmilk and eggs", g.Revision); err != nil {
+		t.Fatal(err)
+	}
+
+	net.status.Store(http.StatusServiceUnavailable)
+	if _, err := s.Sync(context.Background(), c); err == nil {
+		t.Fatal("sync during an outage did not fail")
+	}
+	if e, ok := s.Pending(g.ID); !ok || e.Err != nil {
+		t.Fatalf("pending %+v, %v; want it queued for retry", e, ok)
+	}
+
+	net.status.Store(0)
+	syncNow(t, s, c)
+	if got, _ := c.Get(context.Background(), g.ID); got.Body != "# Groceries\nmilk and eggs" {
+		t.Fatalf("server holds %q", got.Body)
+	}
+}
+
+func TestNoteDroppedWhileBeingCreatedIsDeletedOnTheServer(t *testing.T) {
+	c, net := newServer(t)
+	s := open(t, "")
+	local, err := s.Queue(0, "# Ideas\nfly", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	net.onRequest = func(r *http.Request) {
+		if r.Method == "POST" {
+			if err := s.Drop(local.ID); err != nil {
+				t.Error(err)
+			}
+		}
+	}
+
+	syncNow(t, s, c)
+
+	net.onRequest = nil
+	if list, _ := c.List(context.Background(), ""); len(list) != 0 {
+		t.Fatalf("server still holds %q", titles(list))
+	}
+	assertTitles(t, s.List("", ""))
 }
