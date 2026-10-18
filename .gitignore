@@ -2,6 +2,7 @@
 /debug
 /scribble-server
 /scribble
+/scribble-gui
 # Binaries for programs and plugins
 *.exe
 *.exe~

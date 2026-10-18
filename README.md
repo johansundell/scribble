@@ -8,8 +8,9 @@ create and update notes over an HTTP API.
   [template-service](https://github.com/johansundell/template-service).
   Runs as a system service or in Docker.
 - **CLI** (`cmd/scribble`): `scribble new / show / edit / append / ls / search / ...`
-- **Client library** (`client/`): Go API client shared by the CLI and the
-  upcoming Fyne GUI (`cmd/scribble-gui`, not written yet).
+- **Desktop GUI** (`cmd/scribble-gui`): Fyne app to browse, search, view
+  (rendered Markdown), edit, create and delete notes.
+- **Client library** (`client/`): Go API client shared by the CLI and the GUI.
 
 ## Notes model
 
@@ -35,6 +36,20 @@ export SCRIBBLE_URL=http://localhost:8080 SCRIBBLE_TOKEN=change-me
 ./scribble new "Ideas" "first thought"
 git log --oneline -5 | ./scribble append "Work log"
 ./scribble edit Ideas
+
+# GUI (same SCRIBBLE_URL / SCRIBBLE_TOKEN)
+make build-gui
+./scribble-gui
+```
+
+The GUI is built with [Fyne](https://fyne.io), so it needs CGO and a C
+compiler. On Linux it also needs the GL, X11, Wayland and xkbcommon
+development headers (Debian/Ubuntu: `libgl1-mesa-dev xorg-dev libwayland-dev
+libxkbcommon-dev`). For Windows, cross-compile from Linux with MinGW:
+
+```sh
+GOOS=windows CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc \
+  go build -ldflags "-H=windowsgui" -o scribble-gui.exe ./cmd/scribble-gui
 ```
 
 See `docs/service-template.md` for all server settings (`AUTH_TOKEN`, `PORT`,
@@ -70,6 +85,8 @@ router/, handlers/, store/       routes, handlers, storage (notes: handlers/note
 notes/                           Note type and [[link]] helpers (no server deps)
 client/                          Go API client
 cmd/scribble/                    CLI
+gui/                             Fyne GUI: windows and widgets
+cmd/scribble-gui/                GUI entry point (reads SCRIBBLE_URL / SCRIBBLE_TOKEN)
 docs/service-template.md         the template's own docs
 ```
 
@@ -81,13 +98,15 @@ go test ./...
 
 Tests cover the link helpers, the SQLite note store (conflicts, tombstones,
 rename and backlinks), the whole API over HTTP, and the Go client against a
-real server.
+real server. GUI tests drive the window headlessly with Fyne's test driver,
+also against a real server.
 
 ## Roadmap
 
-- [ ] `cmd/scribble-gui`: Fyne desktop client (Windows first), with an
-      edit/view toggle where `[[links]]` are clickable (`notes.LinkifyForView`
-      already turns them into `note://` links for Fyne's Markdown renderer),
-      a backlinks panel, and a local cache synced through `/changes`
+- [x] `cmd/scribble-gui`: Fyne desktop client (Windows first): browse,
+      search, view, edit, create and delete
+- [ ] GUI: clickable `[[links]]` (`notes.LinkifyForView` already turns them
+      into `note://` links for Fyne's Markdown renderer) and a backlinks panel
+- [ ] GUI: conflict resolution, and a local cache synced through `/changes`
 - [ ] Global hotkey / tray icon for "instant new note"
 - [ ] Import from Tomboy `.note` XML
