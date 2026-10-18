@@ -173,14 +173,55 @@ func TestAutoLink(t *testing.T) {
 		"code":                {"# T\n`Go` and\n\n```\nGo\n```\n", "# T\n`Go` and\n\n```\nGo\n```\n"},
 		"markdown links":      {"# T\n[Go](http://x) and <http://go>", "# T\n[Go](http://x) and <http://go>"},
 		"emphasis":            {"# T\n*Go* and **Shopping**", "# T\n*[[Go]]* and **[[Shopping]]**"},
-		"task item":           {"# T\n- [ ] Shopping", "# T\n- [ ] [[Shopping]]"},
+		// Fyne cannot render a link in a task item (see plainTextSpans).
+		"task item":       {"# T\n- [ ] Shopping\n- Shopping", "# T\n- [ ] Shopping\n- [[Shopping]]"},
+		"project tag":     {"# T\n#go and #shopping-list", "# T\n#go and #shopping-list"},
+		"email":           {"# T\nmail go@example.com or me@go.dev", "# T\nmail go@example.com or me@go.dev"},
+		"bracketed":       {"# T\n[Go] and [Shopping]: x", "# T\n[Go] and [Shopping]: x"},
+		"html text":       {"# T\n<b>Go</b>", "# T\n<b>[[Go]]</b>"},
+		"heading & table": {"# T\n## Go\n| Go |\n| - |", "# T\n## [[Go]]\n| [[Go]] |\n| - |"},
 	}
 	for name, tc := range cases {
-		if got := AutoLink(tc.in, titles); got != tc.want {
+		if got, _ := AutoLink(tc.in, titles); got != tc.want {
 			t.Errorf("%s: AutoLink(%q)\n got  %q\n want %q", name, tc.in, got, tc.want)
 		}
 	}
-	if got := AutoLink("# T\nGo", nil); got != "# T\nGo" {
-		t.Errorf("no titles: got %q", got)
+	if got, n := AutoLink("# T\nGo", nil); got != "# T\nGo" || n != 0 {
+		t.Errorf("no titles: got %q, %d", got, n)
+	}
+}
+
+func TestAutoLinkOverlaps(t *testing.T) {
+	cases := []struct {
+		titles   []string
+		in, want string
+		n        int
+	}{
+		// The longest title wins even when a shorter one starts earlier.
+		{[]string{"New York", "York City Hall"}, "T\nNew York City Hall", "T\nNew [[York City Hall]]", 1},
+		{[]string{"A B", "B C D"}, "T\nA B C D", "T\nA [[B C D]]", 1},
+		// Equal lengths: the earlier one wins; what is left can still match.
+		{[]string{"A B", "B C", "C"}, "T\nA B C", "T\n[[A B]] [[C]]", 2},
+	}
+	for _, tc := range cases {
+		got, n := AutoLink(tc.in, tc.titles)
+		if got != tc.want || n != tc.n {
+			t.Errorf("AutoLink(%q, %q) = %q, %d; want %q, %d", tc.in, tc.titles, got, n, tc.want, tc.n)
+		}
+	}
+}
+
+func TestAutoLinkFoldsCase(t *testing.T) {
+	cases := map[string]struct{ title, in, want string }{
+		"sharp s":      {"Straße", "T\nSTRAẞE", "T\n[[STRAẞE]]"},
+		"kelvin sign":  {"kilo", "T\nKilo", "T\n[[Kilo]]"},
+		"accents":      {"École", "T\nécole", "T\n[[école]]"},
+		"bad title":    {"a]]b", "T\na]]b", "T\na]]b"},
+		"newline only": {"\n", "T\nx", "T\nx"},
+	}
+	for name, tc := range cases {
+		if got, _ := AutoLink(tc.in, []string{tc.title}); got != tc.want {
+			t.Errorf("%s: got %q, want %q", name, got, tc.want)
+		}
 	}
 }

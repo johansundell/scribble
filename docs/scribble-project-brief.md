@@ -25,7 +25,7 @@ Tomboy-NG (cross-platform rewrite, runs on Windows), Gnote, Joplin (has a CLI, R
 | --- | --- | --- |
 | Note format | Raw Markdown text, nothing else | CLI, API and every client see the same readable content |
 | Title | First non-empty line of the body (leading `#` ignored) | Feels like Tomboy, keeps the CLI simple (`scribble append "Title" "text"`). Titles are unique, case-insensitive |
-| Links | Explicit `[[Note Title]]` only | Degrades gracefully in any Markdown viewer. Auto-linking by title match was **deferred**: short titles match everywhere, and titles change. It can be added later as opt-in without changing storage |
+| Links | Explicit `[[Note Title]]` only | Degrades gracefully in any Markdown viewer. Auto-linking by title match is **opt-in only** (`scribble autolink <title>`), because short titles match everywhere and titles change. It writes ordinary `[[links]]`, so storage is unchanged |
 | Link logic location | Server stays "dumb": stores text, answers backlink queries, rewrites links on rename. Rendering and click handling are client-side | Keeps the server small |
 | Rename | Dedicated endpoint that rewrites `[[old]]` to `[[new]]` in all other notes in one transaction | A first-line title means renames would otherwise break links |
 | Conflicts | Optimistic concurrency: PUT carries `base_revision`; stale gives **412** | Simple and safe for one user on several devices |
@@ -96,7 +96,7 @@ docs/service-template.md
    - Handle 412 (stale revision) with a clear choice: reload, or overwrite with `base_revision` 0.
 2. **Instant new note:** tray icon plus global hotkey.
 3. **Import** from Tomboy `.note` XML (the files are easy to parse and convert to Markdown).
-4. Optional: opt-in **auto-linking** by title match (longest title first, case-insensitive, word boundaries).
+4. Opt-in **auto-linking** in the GUI, once `[[links]]` are clickable there (`notes.AutoLink` and `scribble autolink` already exist).
 5. Not yet done: nothing has been run on Windows, and the server hasn't been deployed (the Dockerfile and compose file from the template are untouched apart from renaming).
 
 ## 6. Open questions

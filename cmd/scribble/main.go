@@ -200,7 +200,7 @@ func cmdProjects(ctx context.Context, c *client.Client, w io.Writer, args []stri
 }
 
 // cmdAutoLink turns bare mentions of other notes' titles in one note into
-// [[links]] and saves it. Auto-linking is opt-in: nothing else calls it.
+// [[links]] and saves it, for users who ask for it.
 func cmdAutoLink(ctx context.Context, c *client.Client, w io.Writer, args []string) error {
 	return withNote(ctx, c, args, 1, func(n *notes.Note, _ []string) error {
 		list, err := c.List(ctx, "")
@@ -208,18 +208,18 @@ func cmdAutoLink(ctx context.Context, c *client.Client, w io.Writer, args []stri
 			return err
 		}
 		titles := make([]string, len(list))
-		for i, o := range list {
-			titles[i] = o.Title
+		for i, other := range list {
+			titles[i] = other.Title
 		}
-		body := notes.AutoLink(n.Body, titles)
-		if body == n.Body {
+		body, linked := notes.AutoLink(n.Body, titles)
+		if linked == 0 {
 			fmt.Fprintln(w, "no mentions to link")
 			return nil
 		}
 		if _, err := c.Update(ctx, n.ID, body, n.Revision); err != nil {
 			return explain(err, n.Title)
 		}
-		fmt.Fprintf(w, "linked %d mention(s) in %q\n", len(notes.Links(body))-len(notes.Links(n.Body)), n.Title)
+		fmt.Fprintf(w, "linked %d mention(s) in %q\n", linked, n.Title)
 		return nil
 	})
 }
