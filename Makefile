@@ -23,18 +23,16 @@ compile:
 	@gox -ldflags "-X 'main.Version=$(VERSION)'" \
 	-osarch="darwin/amd64" \
 	-osarch="linux/amd64" \
-	-osarch="linux/arm" \
 	-osarch="linux/arm64" \
-	-os="windows" \
+	-osarch="windows/amd64" \
 	-output "build/{{.Dir}}_$(VERSION)_{{.OS}}_{{.Arch}}/$(NAME)" \
 	.
 	@gox -ldflags "-X 'main.Version=$(VERSION)'" \
 	-osarch="darwin/amd64" \
 	-osarch="darwin/arm64" \
 	-osarch="linux/amd64" \
-	-osarch="linux/arm" \
 	-osarch="linux/arm64" \
-	-os="windows" \
+	-osarch="windows/amd64" \
 	-output "build/scribble_$(VERSION)_{{.OS}}_{{.Arch}}/scribble" \
 	./cmd/scribble
 
