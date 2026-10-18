@@ -68,7 +68,10 @@ editor. Renaming and deleting need the server.
 The GUI is built with [Fyne](https://fyne.io), so it needs CGO and a C
 compiler. On Linux it also needs the GL, X11, Wayland and xkbcommon
 development headers (Debian/Ubuntu: `libgl1-mesa-dev xorg-dev libwayland-dev
-libxkbcommon-dev`). For Windows, cross-compile from Linux with MinGW:
+libxkbcommon-dev`). `make compile` / `make dist` cross-compiles `scribble-gui`
+for `linux/amd64` and `windows/amd64` in Docker via
+[fyne-cross](https://github.com/fyne-io/fyne-cross) (`make deps` installs it).
+You can also cross-compile for Windows directly from Linux with MinGW:
 
 ```sh
 GOOS=windows CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc \

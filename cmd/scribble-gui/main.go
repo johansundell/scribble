@@ -28,7 +28,11 @@ var Version = "dev"
 
 func main() {
 	a := app.New()
-	w := a.NewWindow("Scribble " + Version)
+	ver := Version
+	if (ver == "" || ver == "dev") && a.Metadata().Version != "" {
+		ver = "v" + a.Metadata().Version
+	}
+	w := a.NewWindow("Scribble " + ver)
 	w.Resize(fyne.NewSize(1000, 700))
 
 	token := os.Getenv("SCRIBBLE_TOKEN")
