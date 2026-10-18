@@ -8,8 +8,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -34,6 +36,7 @@ Usage:
   scribble projects [<name>]         list #projects, or the notes in one
   scribble rename <title> <new>      retitle a note and fix [[links]] to it
   scribble autolink <title>          turn mentions of other note titles into [[links]]
+  scribble import <path...>          import Tomboy .note XML files or directories
   scribble rm <title>                delete a note
 
 Environment:
@@ -130,6 +133,8 @@ func run(args []string) error {
 		return cmdProjects(ctx, c, os.Stdout, rest)
 	case "autolink":
 		return cmdAutoLink(ctx, c, os.Stdout, rest)
+	case "import":
+		return cmdImport(ctx, c, os.Stdout, rest)
 	case "rm":
 		return withNote(ctx, c, rest, 1, func(n *notes.Note, _ []string) error {
 			if err := c.Delete(ctx, n.ID); err != nil {
@@ -222,6 +227,82 @@ func cmdAutoLink(ctx context.Context, c *client.Client, w io.Writer, args []stri
 		fmt.Fprintf(w, "linked %d mention(s) in %q\n", linked, n.Title)
 		return nil
 	})
+}
+
+// cmdImport parses Tomboy .note XML files (or directories of .note files) and
+// creates each note on the server, skipping titles that already exist.
+func cmdImport(ctx context.Context, c *client.Client, w io.Writer, args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: scribble import <path...>")
+	}
+	files, err := collectNoteFiles(args)
+	if err != nil {
+		return err
+	}
+	if len(files) == 0 {
+		return fmt.Errorf("no .note files found")
+	}
+	var created, skipped int
+	for _, path := range files {
+		body, err := readTomboyFile(path)
+		if err != nil {
+			return err
+		}
+		title := notes.TitleOf(body)
+		n, err := c.Create(ctx, body)
+		if client.IsTitleTaken(err) {
+			fmt.Fprintf(w, "skipped %q (already exists)\n", title)
+			skipped++
+			continue
+		}
+		if err != nil {
+			return explain(err, title)
+		}
+		fmt.Fprintf(w, "created %q\n", n.Title)
+		created++
+	}
+	fmt.Fprintf(w, "imported %d note(s), skipped %d\n", created, skipped)
+	return nil
+}
+
+func collectNoteFiles(paths []string) ([]string, error) {
+	var files []string
+	for _, p := range paths {
+		info, err := os.Stat(p)
+		if err != nil {
+			return nil, err
+		}
+		if !info.IsDir() {
+			files = append(files, p)
+			continue
+		}
+		err = filepath.WalkDir(p, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if !d.IsDir() && strings.HasSuffix(strings.ToLower(d.Name()), ".note") {
+				files = append(files, path)
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return files, nil
+}
+
+func readTomboyFile(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	body, err := notes.ParseTomboy(f)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", path, err)
+	}
+	return body, nil
 }
 
 func stdinPiped() bool {

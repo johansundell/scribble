@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -153,3 +155,108 @@ func TestCmdAutoLinkResolves(t *testing.T) {
 		t.Errorf("after rename body = %q, want %q", plans.Body, want)
 	}
 }
+
+func TestCmdImport(t *testing.T) {
+	ctx := context.Background()
+	c := newClient(t)
+
+	dir := t.TempDir()
+	subDir := filepath.Join(dir, "notes")
+	if err := os.MkdirAll(subDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	const startHereXML = `<?xml version="1.0" encoding="utf-8"?>
+<note version="0.3" xmlns:link="http://beatniksoftware.com/tomboy/link" xmlns:size="http://beatniksoftware.com/tomboy/size" xmlns="http://beatniksoftware.com/tomboy">
+  <title>Start Here</title>
+  <text xml:space="preserve"><note-content version="0.1">Start Here
+
+Welcome to <bold>Tomboy</bold>!
+See <link:internal>Ideas</link:internal> for more.
+</note-content></text>
+</note>`
+
+	const ideasXML = `<?xml version="1.0" encoding="utf-8"?>
+<note version="0.3" xmlns:link="http://beatniksoftware.com/tomboy/link" xmlns:size="http://beatniksoftware.com/tomboy/size" xmlns="http://beatniksoftware.com/tomboy">
+  <title>Ideas</title>
+  <text xml:space="preserve"><note-content version="0.1">Ideas
+
+<list><list-item dir="ltr">Build <monospace>scribble import</monospace></list-item></list>
+</note-content></text>
+</note>`
+
+	if err := os.WriteFile(filepath.Join(subDir, "a-start.note"), []byte(startHereXML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Non-.note files in a directory are ignored.
+	if err := os.WriteFile(filepath.Join(subDir, "README.txt"), []byte("ignore me"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ideasPath := filepath.Join(dir, "ideas.note")
+	if err := os.WriteFile(ideasPath, []byte(ideasXML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if err := cmdImport(ctx, c, &out, []string{subDir, ideasPath}); err != nil {
+		t.Fatal(err)
+	}
+	wantOut := "created \"Start Here\"\ncreated \"Ideas\"\nimported 2 note(s), skipped 0\n"
+	if out.String() != wantOut {
+		t.Errorf("printed:\n%q\nwant:\n%q", out.String(), wantOut)
+	}
+
+	startNote, err := c.ByTitle(ctx, "Start Here")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "# Start Here\n\nWelcome to **Tomboy**!\nSee [[Ideas]] for more.\n"; startNote.Body != want {
+		t.Errorf("Start Here body = %q, want %q", startNote.Body, want)
+	}
+	ideasNote, err := c.ByTitle(ctx, "Ideas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "# Ideas\n\n- Build `scribble import`\n"; ideasNote.Body != want {
+		t.Errorf("Ideas body = %q, want %q", ideasNote.Body, want)
+	}
+
+	// Imported [[Ideas]] link resolves as a backlink on the server.
+	back, err := c.Backlinks(ctx, ideasNote.ID)
+	if err != nil || len(back) != 1 || back[0].Title != "Start Here" {
+		t.Errorf("Backlinks(Ideas) = %v, %v", back, err)
+	}
+
+	// Re-importing skips existing titles and creates only new ones.
+	const thirdXML = `<note xmlns="http://beatniksoftware.com/tomboy"><title>Third</title><text><note-content>Third
+
+Fresh note</note-content></text></note>`
+	thirdPath := filepath.Join(dir, "third.note")
+	if err := os.WriteFile(thirdPath, []byte(thirdXML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if err := cmdImport(ctx, c, &out, []string{ideasPath, thirdPath}); err != nil {
+		t.Fatal(err)
+	}
+	wantSecond := "skipped \"Ideas\" (already exists)\ncreated \"Third\"\nimported 1 note(s), skipped 1\n"
+	if out.String() != wantSecond {
+		t.Errorf("second run printed:\n%q\nwant:\n%q", out.String(), wantSecond)
+	}
+
+	// Error cases: no arguments, missing path, empty directory.
+	if err := cmdImport(ctx, c, &bytes.Buffer{}, nil); err == nil {
+		t.Error("missing path should be refused")
+	}
+	if err := cmdImport(ctx, c, &bytes.Buffer{}, []string{filepath.Join(dir, "missing.note")}); err == nil {
+		t.Error("non-existent path should fail")
+	}
+	emptyDir := filepath.Join(dir, "empty")
+	if err := os.MkdirAll(emptyDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdImport(ctx, c, &bytes.Buffer{}, []string{emptyDir}); err == nil || !strings.Contains(err.Error(), ".note") {
+		t.Errorf("empty dir err = %v, want mention of .note", err)
+	}
+}
+

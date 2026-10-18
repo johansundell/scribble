@@ -139,4 +139,4 @@ also against a real server.
 - [x] GUI: a local cache synced through `/changes`, with offline edits
 - [ ] GUI: conflict resolution
 - [x] Global hotkey / tray icon for "instant new note"
-- [ ] Import from Tomboy `.note` XML
+- [x] Import from Tomboy `.note` XML (`scribble import <path...>`)
