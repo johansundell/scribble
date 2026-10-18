@@ -53,6 +53,13 @@ func IsTitleTaken(err error) bool   { return hasStatus(err, http.StatusConflict)
 func IsStale(err error) bool        { return hasStatus(err, http.StatusPreconditionFailed) }
 func IsUnauthorized(err error) bool { return hasStatus(err, http.StatusUnauthorized) }
 
+// IsUnreachable reports whether err is a failure to get an answer from the
+// server at all (no network, server down, timeout), rather than a refusal.
+func IsUnreachable(err error) bool {
+	var e *Error
+	return err != nil && !errors.As(err, &e)
+}
+
 func (c *Client) do(ctx context.Context, method, path string, query url.Values, in, out any) error {
 	u := c.BaseURL + path
 	if len(query) > 0 {

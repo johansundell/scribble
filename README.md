@@ -10,7 +10,9 @@ create and update notes over an HTTP API.
 - **CLI** (`cmd/scribble`): `scribble new / show / edit / append / ls / search / ...`
 - **Desktop GUI** (`cmd/scribble-gui`): Fyne app to browse, search, view
   (rendered Markdown), edit, create, rename and delete notes. `[[links]]` are
-  clickable, and each note shows the notes that link to it.
+  clickable, and each note shows the notes that link to it. It keeps a copy
+  of the notes on disk, so it starts instantly and keeps working while the
+  server is unreachable.
 - **Client library** (`client/`): Go API client shared by the CLI and the GUI.
 
 ## Notes model
@@ -55,6 +57,14 @@ global hotkey (`Ctrl+Alt+N` by default; override with `SCRIBBLE_HOTKEY`, or set
 `SCRIBBLE_HOTKEY=none` to disable) that opens or focuses a new-note editor from
 anywhere.
 
+`scribble-gui` keeps its copy of the notes in the user config directory
+(`scribble/<server URL>.json`) and syncs every 30 seconds through
+`/changes?since=N`, so only what changed is downloaded. While the server is
+unreachable you can still browse, search and edit: saves are queued on disk
+and sent when it is back. If the server refuses a queued edit (someone else
+changed the note meanwhile), opening the note brings the edit back into the
+editor. Renaming and deleting need the server.
+
 The GUI is built with [Fyne](https://fyne.io), so it needs CGO and a C
 compiler. On Linux it also needs the GL, X11, Wayland and xkbcommon
 development headers (Debian/Ubuntu: `libgl1-mesa-dev xorg-dev libwayland-dev
@@ -98,6 +108,7 @@ main.go, service.go, config.go   service lifecycle (from the template)
 router/, handlers/, store/       routes, handlers, storage (notes: handlers/notes.go, store/notes.go)
 notes/                           Note type, [[link]] and #project helpers (no server deps)
 client/                          Go API client
+offline/                         the GUI's local copy of the notes and its sync
 cmd/scribble/                    CLI
 gui/                             Fyne GUI: windows and widgets
 cmd/scribble-gui/                GUI entry point (reads SCRIBBLE_URL / SCRIBBLE_TOKEN / SCRIBBLE_HOTKEY)
@@ -125,6 +136,7 @@ also against a real server.
       other notes' titles into `[[links]]` (`notes.AutoLink`)
 - [x] GUI: clickable `[[links]]` (a link to a missing note creates it), a
       "Linked from" backlinks panel, and rename that rewrites incoming links
-- [ ] GUI: conflict resolution, and a local cache synced through `/changes`
+- [x] GUI: a local cache synced through `/changes`, with offline edits
+- [ ] GUI: conflict resolution
 - [x] Global hotkey / tray icon for "instant new note"
 - [ ] Import from Tomboy `.note` XML

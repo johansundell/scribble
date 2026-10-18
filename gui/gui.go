@@ -18,11 +18,15 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/johansundell/scribble/client"
 	"github.com/johansundell/scribble/notes"
+	"github.com/johansundell/scribble/offline"
 )
 
-// requestTimeout bounds each call to the server. Calls run on the UI thread,
-// so this is also the longest the window can stall.
+// requestTimeout bounds each call to the server. Saves, renames and deletes
+// run on the UI thread, so this is also the longest the window can stall.
 const requestTimeout = 10 * time.Second
+
+// unreachable is the status line while the server cannot be reached.
+const unreachable = "The server is unreachable. Showing the notes saved on this computer; edits are saved here and sent when it is back."
 
 // allNotes is the project choice that turns the project filter off.
 const allNotes = "All notes"
@@ -52,20 +56,25 @@ type UI struct {
 
 	w        fyne.Window
 	c        *client.Client
+	store    *offline.Store // the local copy all reads come from
 	hasTray  bool
+	offline  bool // the last sync could not reach the server
 	notes    []notes.Note
-	projects []string // the server's #projects, as of the last reload
+	projects []string // the #projects in use, as of the last reload
 	// current is the open note, nil when none; ID 0 for a new, unsaved
-	// note. Its working text, saved or not, is always Editor.Text.
+	// note, negative for one saved only on this computer so far. Its
+	// working text, saved or not, is always Editor.Text.
 	current *notes.Note
 	// draftTag is the "#project" New pre-filled into the open draft, "" if
 	// none. The draft cannot be saved while that tag is still its title.
 	draftTag string
 }
 
-// New builds the main window's content for server c and loads the notes.
-func New(w fyne.Window, c *client.Client) *UI {
-	ui := &UI{w: w, c: c}
+// New builds the main window's content for server c and shows the notes in
+// store, its local copy. It does not wait for the server: call Sync or
+// StartSync to bring the copy up to date.
+func New(w fyne.Window, c *client.Client, store *offline.Store) *UI {
+	ui := &UI{w: w, c: c, store: store}
 	ui.List = widget.NewList(
 		func() int { return len(ui.notes) },
 		func() fyne.CanvasObject { return widget.NewLabel("") },
@@ -190,26 +199,62 @@ func requestContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), requestTimeout)
 }
 
-// isSaved reports whether the open note exists on the server.
+// isSaved reports whether the open note has been saved, on the server or
+// only on this computer so far.
 func (ui *UI) isSaved() bool { return ui.current != nil && ui.current.ID != 0 }
 
-// hasUnsavedChanges reports whether the editor holds text that is not on
-// the server.
+// onServer reports whether the open note is on the server with no edit
+// waiting to be sent.
+func (ui *UI) onServer() bool {
+	if ui.current == nil || ui.current.ID <= 0 {
+		return false
+	}
+	_, queued := ui.store.Pending(ui.current.ID)
+	return !queued
+}
+
+// hasUnsavedChanges reports whether the editor holds text that is not
+// saved.
 func (ui *UI) hasUnsavedChanges() bool {
 	return ui.current != nil && (ui.current.ID == 0 || ui.Editor.Text != ui.current.Body)
 }
 
-// load fetches the latest version of note id from the server and opens it.
-// If that fails, whatever was open stays open.
+// load opens note id from the local copy. If the server refused the note's
+// queued edit, the edit comes back as unsaved text in the editor, over the
+// version it was based on, with the reason in the status line, just as if
+// the save had just been refused.
 func (ui *UI) load(id int64) {
-	ctx, cancel := requestContext()
-	defer cancel()
-	n, err := ui.c.Get(ctx, id)
-	if ui.report(err) {
-		ui.selectCurrent()
+	n, ok := ui.store.Get(id)
+	if !ok {
+		ui.Status.SetText("That note is gone.")
+		ui.reload()
 		return
 	}
-	ui.open(*n)
+	e, queued := ui.store.Pending(id)
+	if !queued || e.Err == nil {
+		ui.open(n)
+		return
+	}
+	base, ok := ui.store.Server(id)
+	if ok {
+		base.Revision = e.BaseRevision
+	} else {
+		base = notes.Note{} // never reached the server, or deleted there: save it anew
+	}
+	ui.restore(base, e)
+}
+
+// restore opens refused edit e as unsaved text over note base. The editor
+// now holds the edit, so it leaves the queue.
+func (ui *UI) restore(base notes.Note, e offline.Edit) {
+	ui.open(base)
+	ui.Editor.SetText(e.Body)
+	ui.showEdit()
+	if ui.report(ui.store.Drop(e.ID)) {
+		return
+	}
+	ui.reload()
+	ui.report(e.Err)
 }
 
 // open shows note n in view mode.
@@ -225,12 +270,7 @@ func (ui *UI) open(n notes.Note) {
 func (ui *UI) loadBacklinks() {
 	var list []notes.Note
 	if ui.isSaved() {
-		ctx, cancel := requestContext()
-		defer cancel()
-		var err error
-		if list, err = ui.c.Backlinks(ctx, ui.current.ID); ui.report(err) {
-			list = nil
-		}
+		list = ui.store.Backlinks(ui.current.ID)
 	}
 	slices.SortFunc(list, func(a, b notes.Note) int {
 		return strings.Compare(strings.ToLower(a.Title), strings.ToLower(b.Title))
@@ -252,26 +292,20 @@ func (ui *UI) loadBacklinks() {
 // none yet it creates it and opens it for editing below the title; inside a
 // project it is tagged #project, so it stays in view like a New note.
 func (ui *UI) follow(title string) {
-	ctx, cancel := requestContext()
-	defer cancel()
-	n, err := ui.c.ByTitle(ctx, title)
-	if !client.IsNotFound(err) {
-		if !ui.report(err) {
-			ui.Status.SetText("")
-			ui.open(*n)
-		}
+	if n, ok := ui.store.ByTitle(title); ok {
+		ui.Status.SetText("")
+		ui.load(n.ID)
 		return
 	}
 	body := "# " + title + "\n\n"
 	if p := ui.activeProject(); p != "" {
 		body += "#" + p + "\n"
 	}
-	if n, err = ui.c.Create(ctx, body); ui.report(err) {
+	n, ok := ui.write(0, body, 0)
+	if !ok {
 		return
 	}
-	ui.Status.SetText("")
-	ui.reload()
-	ui.open(*n)
+	ui.open(n)
 	ui.Editor.CursorRow, ui.Editor.CursorColumn = 1, 0
 	ui.Editor.Refresh()
 	ui.showEdit()
@@ -385,8 +419,8 @@ func (ui *UI) updateButtons() {
 	setEnabled(ui.EditToggle, ui.current != nil)
 	setEnabled(ui.Save, ui.hasUnsavedChanges())
 	// Rename rewrites the note on the server, which would make unsaved
-	// edits stale.
-	setEnabled(ui.Rename, ui.isSaved() && !ui.hasUnsavedChanges())
+	// or queued edits stale.
+	setEnabled(ui.Rename, ui.onServer() && !ui.hasUnsavedChanges())
 	setEnabled(ui.Delete, ui.isSaved())
 }
 
@@ -414,21 +448,38 @@ func (ui *UI) save() {
 		ui.Status.SetText("Type a title on the first line, above the #tag.")
 		return
 	}
+	if n, ok := ui.write(ui.current.ID, ui.Editor.Text, ui.current.Revision); ok {
+		ui.open(n)
+	}
+}
+
+// write saves body as note id's text (id 0 for a new note), edited from
+// revision base, and syncs. It returns the note as saved: on the server,
+// or only on this computer while the server is unreachable. If the server
+// refuses the edit, it reports why and returns false; the text then stays
+// only in the editor.
+func (ui *UI) write(id int64, body string, base int64) (notes.Note, bool) {
+	n, err := ui.store.Queue(id, body, base)
+	if ui.report(err) {
+		return n, false
+	}
 	ctx, cancel := requestContext()
 	defer cancel()
-	var n *notes.Note
-	var err error
-	if ui.isSaved() {
-		n, err = ui.c.Update(ctx, ui.current.ID, ui.Editor.Text, ui.current.Revision)
-	} else {
-		n, err = ui.c.Create(ctx, ui.Editor.Text)
+	r, err := ui.store.Sync(ctx, ui.c)
+	key := n.ID
+	if created, ok := r.Created[key]; ok {
+		key = created
 	}
-	if ui.report(err) {
-		return
+	if e, ok := ui.store.Pending(key); ok && e.Err != nil {
+		ui.report(ui.store.Drop(key))
+		ui.report(e.Err)
+		return n, false
 	}
+	r.Failed = slices.DeleteFunc(r.Failed, func(id int64) bool { return id == key })
 	ui.Status.SetText("")
-	ui.reload()
-	ui.open(*n)
+	ui.synced(r, err)
+	n, _ = ui.store.Get(key)
+	return n, true
 }
 
 // askRename asks for a new title for the open note. The server rewrites
@@ -456,11 +507,14 @@ func (ui *UI) rename(id int64, title string) {
 	ctx, cancel := requestContext()
 	defer cancel()
 	n, err := ui.c.Rename(ctx, id, title)
-	if ui.report(err) {
+	if ui.reportOnline(err) {
 		return
 	}
 	ui.Status.SetText("")
-	ui.reload()
+	ui.Sync()
+	if cached, ok := ui.store.Get(n.ID); ok {
+		*n = cached
+	}
 	ui.open(*n)
 }
 
@@ -482,31 +536,127 @@ func (ui *UI) confirmDelete() {
 }
 
 func (ui *UI) delete(n notes.Note) {
-	ctx, cancel := requestContext()
-	defer cancel()
-	if ui.report(ui.c.Delete(ctx, n.ID)) {
+	if n.ID > 0 {
+		ctx, cancel := requestContext()
+		defer cancel()
+		if ui.reportOnline(ui.c.Delete(ctx, n.ID)) {
+			return
+		}
+	}
+	// A queued edit of the note has nothing left to change.
+	if ui.report(ui.store.Drop(n.ID)) {
 		return
 	}
 	ui.Status.SetText("")
 	if ui.current != nil && ui.current.ID == n.ID {
-		ui.current = nil
-		ui.Editor.SetText("")
-		ui.showView()
-		ui.loadBacklinks()
+		ui.closeNote()
 	}
-	ui.reload()
+	if n.ID > 0 {
+		ui.Sync()
+	} else {
+		ui.reload()
+	}
 }
 
-// reload refreshes the project choices and the note list. Called after the
-// notes change; typing in the search box only needs refresh.
-func (ui *UI) reload() {
+// closeNote leaves no note open.
+func (ui *UI) closeNote() {
+	ui.current = nil
+	ui.Editor.SetText("")
+	ui.showView()
+	ui.loadBacklinks()
+}
+
+// Sync brings the local copy up to date with the server and shows the
+// result. It runs on the UI thread; StartSync runs it in the background.
+func (ui *UI) Sync() {
 	ctx, cancel := requestContext()
 	defer cancel()
-	projects, err := ui.c.Projects(ctx)
-	if !ui.report(err) {
-		ui.projects = projects
-		ui.Project.SetOptions(ui.projectOptions(ui.activeProject()))
+	r, err := ui.store.Sync(ctx, ui.c)
+	ui.synced(r, err)
+}
+
+// StartSync syncs now and then every interval in the background, until
+// the app quits.
+func (ui *UI) StartSync(interval time.Duration) {
+	go func() {
+		for {
+			ctx, cancel := requestContext()
+			r, err := ui.store.Sync(ctx, ui.c)
+			cancel()
+			fyne.Do(func() { ui.synced(r, err) })
+			time.Sleep(interval)
+		}
+	}()
+}
+
+// synced shows the outcome of a sync: the refreshed list, the open note's
+// latest version, and any trouble in the status line.
+func (ui *UI) synced(r offline.Report, err error) {
+	switch {
+	case client.IsUnreachable(err):
+		if !ui.offline || ui.Status.Text == "" {
+			ui.Status.SetText(unreachable)
+		}
+		ui.offline = true
+	case ui.report(err):
+	case ui.offline:
+		ui.offline = false
+		if ui.Status.Text == unreachable {
+			ui.Status.SetText("")
+		}
 	}
+	for _, id := range r.Failed {
+		if n, ok := ui.store.Get(id); ok {
+			e, _ := ui.store.Pending(id)
+			ui.Status.SetText("\"" + n.Title + "\" could not be synced. " + explain(e.Err) + " Open the note to sort it out.")
+		}
+	}
+	ui.reload()
+	ui.followOpenNote(r)
+}
+
+// followOpenNote keeps the open note in step with the local copy after a
+// sync: it takes the server ID of a note created offline, reopens a
+// refused edit in the editor, and shows the latest version unless the user
+// is editing.
+func (ui *UI) followOpenNote(r offline.Report) {
+	if !ui.isSaved() {
+		return
+	}
+	id := ui.current.ID
+	if created, ok := r.Created[id]; ok {
+		id = created
+	}
+	n, ok := ui.store.Get(id)
+	e, queued := ui.store.Pending(id)
+	switch {
+	case queued && e.Err != nil && !ui.hasUnsavedChanges():
+		ui.load(id) // refused: back to the editor
+	case !ok:
+		if !ui.hasUnsavedChanges() {
+			ui.closeNote() // deleted elsewhere
+		}
+	case ui.Editor.Visible():
+		// Keep the text being edited; a save goes on from the revision
+		// the edit started from, unless the note just got its server ID.
+		if id != ui.current.ID {
+			n.Body = ui.current.Body
+			ui.current = &n
+			ui.updateButtons()
+		}
+	case n.Revision != ui.current.Revision || n.Body != ui.current.Body || n.ID != ui.current.ID:
+		ui.open(n)
+	default:
+		ui.loadBacklinks()
+	}
+}
+
+// reload refreshes the project choices and the note list from the local
+// copy. Called after the notes change; typing in the search box only needs
+// refresh.
+func (ui *UI) reload() {
+	ui.projects = ui.store.Projects()
+	ui.Project.SetOptions(ui.projectOptions(ui.activeProject()))
 	ui.refresh()
 }
 
@@ -528,16 +678,10 @@ func (ui *UI) selectProject(name string) {
 	ui.Project.SetSelected(name)
 }
 
-// refresh reloads the note list from the server, filtered by the project
-// and the search box.
+// refresh reloads the note list from the local copy, filtered by the
+// project and the search box.
 func (ui *UI) refresh() {
-	ctx, cancel := requestContext()
-	defer cancel()
-	list, err := ui.c.ListInProject(ctx, ui.activeProject(), ui.Search.Text)
-	if ui.report(err) {
-		return
-	}
-	ui.notes = list
+	ui.notes = ui.store.List(ui.activeProject(), ui.Search.Text)
 	ui.List.Refresh()
 	ui.selectCurrent()
 }
@@ -551,6 +695,15 @@ func (ui *UI) selectCurrent() {
 		}
 	}
 	ui.List.UnselectAll()
+}
+
+// reportOnline is report for an action only the server can do.
+func (ui *UI) reportOnline(err error) bool {
+	if client.IsUnreachable(err) {
+		ui.Status.SetText("The server is unreachable. Renaming and deleting a note need it; try again when it is back.")
+		return true
+	}
+	return ui.report(err)
 }
 
 // report shows err in the status line and reports whether there was one.
