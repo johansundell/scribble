@@ -2,10 +2,6 @@
 
 package gui
 
-// setTitleBarDark leaves the title bar to the window manager: only Windows
-// needs telling.
-func setTitleBarDark(ctx any, dark bool) {
-	if d, ok := ctx.(interface{ SetTitleBarDark(bool) }); ok {
-		d.SetTitleBarDark(dark)
-	}
-}
+// setTitleBarDark does nothing: outside Windows the window manager draws the
+// title bar and follows the desktop theme.
+func setTitleBarDark(ctx any, dark bool) {}

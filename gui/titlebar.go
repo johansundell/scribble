@@ -19,9 +19,15 @@ func MatchTitleBar(w fyne.Window, s fyne.Settings) {
 	if !ok {
 		return
 	}
-	apply := func(s fyne.Settings) {
-		dark := s.ThemeVariant() == theme.VariantDark
-		nw.RunNative(func(ctx any) { setTitleBarDark(ctx, dark) })
+	apply := func(set fyne.Settings) {
+		dark := set.ThemeVariant() == theme.VariantDark
+		nw.RunNative(func(ctx any) {
+			if d, ok := ctx.(interface{ SetTitleBarDark(bool) }); ok {
+				d.SetTitleBarDark(dark)
+				return
+			}
+			setTitleBarDark(ctx, dark)
+		})
 	}
 	apply(s)
 	s.AddListener(apply)

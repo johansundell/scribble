@@ -31,10 +31,6 @@ const (
 // bar on a Win32 window, then has it redraw the frame: Windows 10 otherwise
 // keeps the old colour until the window is next activated.
 func setTitleBarDark(ctx any, dark bool) {
-	if d, ok := ctx.(interface{ SetTitleBarDark(bool) }); ok {
-		d.SetTitleBarDark(dark)
-		return
-	}
 	wc, ok := ctx.(driver.WindowsWindowContext)
 	if !ok || wc.HWND == 0 {
 		return

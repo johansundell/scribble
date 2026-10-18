@@ -16,6 +16,8 @@ type titleBarSpy struct {
 	dark []bool
 }
 
+// RunNative passes the titleBarSpy itself, not the embedded spyWindow, so
+// MatchTitleBar finds SetTitleBarDark on it.
 func (s *titleBarSpy) RunNative(f func(any)) {
 	f(s)
 }
