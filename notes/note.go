@@ -238,22 +238,34 @@ func AutoLink(body string, titles []string) (string, int) {
 		for i := max(sp[0], start); i < sp[1]; {
 			for _, t := range candidates {
 				if size := mentionAt(body, i, sp[1], t); size > 0 {
-					m := mention{start: i, end: i + size, title: t}
-					m.runes = utf8.RuneCountInString(body[m.start:m.end])
-					mentions = append(mentions, m)
+					text := body[i : i+size]
+					mentions = append(mentions, mention{
+						start: i, end: i + size, runes: utf8.RuneCountInString(text),
+						title: t, asWritten: equalFoldASCII(text, t),
+					})
 				}
 			}
 			_, size := utf8.DecodeRuneInString(body[i:])
 			i += size
 		}
 	}
-	// Longest first, then earliest; a mention survives if none of its
-	// bytes are taken yet.
+	// Longest first, then earliest, then a title the mention spells (so of
+	// "École" and "école", "école" links "école"); a mention survives if
+	// none of its bytes are taken yet.
 	slices.SortFunc(mentions, func(a, b mention) int {
 		if a.runes != b.runes {
 			return b.runes - a.runes
 		}
-		return a.start - b.start
+		if a.start != b.start {
+			return a.start - b.start
+		}
+		switch {
+		case a.asWritten && !b.asWritten:
+			return -1
+		case b.asWritten && !a.asWritten:
+			return 1
+		}
+		return 0
 	})
 	taken := protectedBytes(body)
 	var linked []mention
@@ -279,25 +291,33 @@ func AutoLink(body string, titles []string) (string, int) {
 }
 
 // mention is a match of title at body[start:end], runes characters long.
+// asWritten is set when the text differs from title only in ASCII case,
+// which is all the store folds when it resolves a link.
 type mention struct {
 	start, end, runes int
 	title             string
+	asWritten         bool
 }
 
-// target is the link text for m: the mention's own spelling when it differs
-// from the title only in ASCII case, which is all the store folds when it
-// resolves a link; otherwise the title itself.
+// target is the link text for m: the mention's own spelling when that
+// resolves to the title, otherwise the title itself.
 func (m mention) target(body string) string {
-	text := body[m.start:m.end]
-	if len(text) != len(m.title) {
-		return m.title
+	if m.asWritten {
+		return body[m.start:m.end]
 	}
-	for i := range len(text) {
-		if lowerASCII(text[i]) != lowerASCII(m.title[i]) {
-			return m.title
+	return m.title
+}
+
+func equalFoldASCII(a, b string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range len(a) {
+		if lowerASCII(a[i]) != lowerASCII(b[i]) {
+			return false
 		}
 	}
-	return text
+	return true
 }
 
 func lowerASCII(c byte) byte {

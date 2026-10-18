@@ -232,3 +232,18 @@ func TestAutoLinkFoldsCase(t *testing.T) {
 		}
 	}
 }
+
+func TestAutoLinkPrefersTitleAsWritten(t *testing.T) {
+	// "École" and "école" can both exist, since the store folds only ASCII
+	// case. A mention links the one it spells, whatever the title order.
+	for _, titles := range [][]string{{"École", "école"}, {"école", "École"}} {
+		for in, want := range map[string]string{
+			"T\nécole": "T\n[[école]]",
+			"T\nÉCOLE": "T\n[[ÉCOLE]]",
+		} {
+			if got, _ := AutoLink(in, titles); got != want {
+				t.Errorf("AutoLink(%q, %q) = %q, want %q", in, titles, got, want)
+			}
+		}
+	}
+}
