@@ -285,7 +285,7 @@ func TestSavingAgainAfterOfflineSaveWasSentIsNotAConflict(t *testing.T) {
 func TestDraftOfNoteCreatedOfflineStaysStaleAgainstOtherWriters(t *testing.T) {
 	c := newServer(t)
 	cb := plug(c)
-	ui, _ := openCached(t, c, "")
+	ui, w := openCached(t, c, "")
 
 	cb.unplugged.Store(true)
 	test.Tap(ui.NewNote)
@@ -314,6 +314,76 @@ func TestDraftOfNoteCreatedOfflineStaysStaleAgainstOtherWriters(t *testing.T) {
 	}
 	if !strings.Contains(ui.Status.Text, "changed elsewhere") {
 		t.Errorf("status says %q", ui.Status.Text)
+	}
+
+	tapDialogButton(t, w, "Overwrite")
+	if got := byTitle(t, other, "Ideas").Body; got != "# Ideas\nmine" {
+		t.Fatalf("overwrite: server holds %q, status %q", got, ui.Status.Text)
+	}
+}
+
+func TestStaleSaveReloadWhileUnreachableKeepsTheDraft(t *testing.T) {
+	c := newServer(t)
+	cb := plug(c)
+	create(t, c, "# Ideas\nfly")
+	ui, w := openCached(t, c, "")
+	ui.List.Select(0)
+	test.Tap(ui.EditToggle)
+	ui.Editor.SetText("# Ideas\nmine")
+	n := byTitle(t, c, "Ideas")
+	if _, err := c.Update(t.Context(), n.ID, "# Ideas\ntheirs", n.Revision); err != nil {
+		t.Fatal(err)
+	}
+	test.Tap(ui.Save)
+
+	cb.unplugged.Store(true)
+	tapDialogButton(t, w, "Reload")
+
+	if !ui.Editor.Visible() || ui.Editor.Text != "# Ideas\nmine" {
+		t.Fatalf("editor visible %v with %q, want the draft kept", ui.Editor.Visible(), ui.Editor.Text)
+	}
+	if !strings.Contains(ui.Status.Text, "unreachable") {
+		t.Errorf("status says %q", ui.Status.Text)
+	}
+}
+
+func TestStaleSaveOverwriteWhileUnreachableIsNotQueued(t *testing.T) {
+	c := newServer(t)
+	cb := plug(c)
+	create(t, c, "# Ideas\nfly")
+	ui, w := openCached(t, c, "")
+	ui.List.Select(0)
+	test.Tap(ui.EditToggle)
+	ui.Editor.SetText("# Ideas\nmine")
+	n := byTitle(t, c, "Ideas")
+	if _, err := c.Update(t.Context(), n.ID, "# Ideas\ntheirs", n.Revision); err != nil {
+		t.Fatal(err)
+	}
+	test.Tap(ui.Save)
+
+	cb.unplugged.Store(true)
+	tapDialogButton(t, w, "Overwrite")
+	if !ui.Editor.Visible() || ui.Editor.Text != "# Ideas\nmine" {
+		t.Fatalf("editor visible %v with %q, want the draft kept", ui.Editor.Visible(), ui.Editor.Text)
+	}
+	if !strings.Contains(ui.Status.Text, "unreachable") {
+		t.Errorf("status says %q", ui.Status.Text)
+	}
+
+	// Nothing was queued: back online, a sync must not overwrite theirs,
+	// and an ordinary save is still checked against their revision.
+	cb.unplugged.Store(false)
+	ui.Sync()
+	if got := byTitle(t, c, "Ideas").Body; got != "# Ideas\ntheirs" {
+		t.Fatalf("the offline overwrite was sent later: server holds %q", got)
+	}
+	test.Tap(ui.Save)
+	if got := byTitle(t, c, "Ideas").Body; got != "# Ideas\ntheirs" {
+		t.Fatalf("an ordinary save overwrote theirs: server holds %q", got)
+	}
+	tapDialogButton(t, w, "Overwrite")
+	if got := byTitle(t, c, "Ideas").Body; got != "# Ideas\nmine" {
+		t.Fatalf("overwrite back online: server holds %q, status %q", got, ui.Status.Text)
 	}
 }
 
