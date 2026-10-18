@@ -67,6 +67,20 @@ func TestMenuSaveSavesAndStaysInTheEditor(t *testing.T) {
 		t.Fatal("the search box should keep the focus")
 	}
 
+	// Clicked in the menu bar, which took the focus from the editor.
+	ui.Editor.SetText("# Ideas\nfly higher still")
+	moveCursor(ui, 1, 6)
+	w.Canvas().Focus(ui.Editor)
+	w.Canvas().Unfocus()
+	save.Action()
+	if got := byTitle(t, c, "Ideas").Body; got != "# Ideas\nfly higher still" {
+		t.Fatalf("server holds %q, status %q", got, ui.Status.Text)
+	}
+	assertStillEditing(t, ui, "# Ideas\nfly higher still", 1, 6)
+	if w.Canvas().Focused() != ui.Editor {
+		t.Fatal("a clicked File > Save should give the editor its focus back")
+	}
+
 	// Nothing focused, previewing the edit in view mode.
 	ui.Editor.SetText("# Ideas\nfly highest")
 	moveCursor(ui, 1, 7)
@@ -79,6 +93,32 @@ func TestMenuSaveSavesAndStaysInTheEditor(t *testing.T) {
 	assertStillEditing(t, ui, "# Ideas\nfly highest", 1, 7)
 	if ui.Status.Text != "" {
 		t.Errorf("status says %q", ui.Status.Text)
+	}
+}
+
+func TestMenuSaveWhileServerIsDownQueuesAndStaysInTheEditor(t *testing.T) {
+	c := newServer(t)
+	cb := plug(c)
+	create(t, c, "# Ideas\nfly")
+	ui, w := openCached(t, c, "")
+
+	cb.unplugged.Store(true)
+	ui.List.Select(0)
+	test.Tap(ui.EditToggle)
+	ui.Editor.SetText("# Ideas\nfly to the moon")
+	menuItem(t, w, "File", "Save").Action()
+
+	if !ui.Editor.Visible() || ui.Editor.Text != "# Ideas\nfly to the moon" || !ui.Save.Disabled() {
+		t.Fatalf("editor visible %v with %q, Save disabled %v", ui.Editor.Visible(), ui.Editor.Text, ui.Save.Disabled())
+	}
+	if !strings.Contains(ui.Status.Text, "unreachable") {
+		t.Errorf("status says %q", ui.Status.Text)
+	}
+
+	cb.unplugged.Store(false)
+	ui.Sync()
+	if got := byTitle(t, c, "Ideas").Body; got != "# Ideas\nfly to the moon" {
+		t.Fatalf("server holds %q", got)
 	}
 }
 

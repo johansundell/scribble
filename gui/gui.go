@@ -457,17 +457,19 @@ func (ui *UI) save() { ui.saveThen(ui.open) }
 // saveAndKeepEditing writes the editor to the server and stays in edit
 // mode, with the cursor and the focus where they were.
 func (ui *UI) saveAndKeepEditing() {
-	row, col := ui.Editor.CursorRow, ui.Editor.CursorColumn
-	focused := ui.w.Canvas().Focused()
+	// From a view-mode preview too, and if the save is refused, the user
+	// ends up in the editor.
 	ui.showEdit()
 	ui.saveThen(func(n notes.Note) {
-		ui.open(n)
-		ui.showEdit()
-		ui.Editor.CursorRow, ui.Editor.CursorColumn = row, col
-		ui.Editor.Refresh()
-		if focused == ui.Editor {
-			// open unfocused the editor on the way through view mode.
-			ui.w.Canvas().Focus(ui.Editor)
+		// The editor already holds the saved text; leave it, and its
+		// cursor, selection and scroll position, alone.
+		ui.current = &n
+		ui.updateButtons()
+		ui.selectCurrent()
+		ui.loadBacklinks()
+		if f := ui.editTarget(); f != nil {
+			// Clicking the menu bar took the focus away.
+			ui.w.Canvas().Focus(f)
 		}
 	})
 }
