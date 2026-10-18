@@ -1,6 +1,7 @@
 package notes
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -43,10 +44,10 @@ See <link:url>https://example.com/a&amp;b</link:url> and <link:internal>Grocerie
 
 <list>
   <list-item dir="ltr">Milk &amp; bread</list-item>
-  <list-item dir="ltr">Check <link:internal>Pantry</link:internal><list><list-item dir="ltr">Flour</list-item><list-item dir="ltr">Sugar</list-item></list></list-item>
+  <list-item dir="ltr">Check <link:internal><bold>Pantry</bold></link:internal><list><list-item dir="ltr">Flour</list-item><list-item dir="ltr">Sugar</list-item></list></list-item>
   <list-item dir="ltr">Apples</list-item>
 </list>
-After list.
+After list with *literal* _marks_ and [brackets].
 </note-content></text>
 </note>`
 
@@ -65,9 +66,40 @@ After list.
 		"  - Flour",
 		"  - Sugar",
 		"- Apples",
-		"After list.",
+		"",
+		`After list with \*literal\* \_marks\_ and \[brackets\].`,
 		"",
 	}, "\n")
+	if got != want {
+		t.Errorf("got:\n%q\nwant:\n%q", got, want)
+	}
+	if gotLinks := Links(got); !slices.Equal(gotLinks, []string{"Groceries", "Pantry"}) {
+		t.Errorf("Links = %q, want [Groceries Pantry]", gotLinks)
+	}
+}
+
+func TestParseTomboyPreservesHashTitleAndLiteralCode(t *testing.T) {
+	const raw = `<?xml version="1.0" encoding="utf-8"?>
+<note version="0.3" xmlns:link="http://beatniksoftware.com/tomboy/link" xmlns="http://beatniksoftware.com/tomboy">
+  <title>#Ideas</title>
+  <text xml:space="preserve"><note-content version="0.1">#Ideas
+
+Link to <link:internal>#Ideas</link:internal> and <link:internal>C*Note_1</link:internal>.
+Code <monospace>*raw* ` + "`" + `tick` + "`" + `</monospace> and literal ~tilde~ ` + "`" + `backtick` + "`" + `.
+</note-content></text>
+</note>`
+
+	got, err := ParseTomboy(strings.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if TitleOf(got) != "#Ideas" {
+		t.Errorf("TitleOf = %q, want %q", TitleOf(got), "#Ideas")
+	}
+	if gotLinks := Links(got); !slices.Equal(gotLinks, []string{"#Ideas", "C*Note_1"}) {
+		t.Errorf("Links = %q, want [#Ideas C*Note_1]", gotLinks)
+	}
+	want := "# #Ideas\n\nLink to [[#Ideas]] and [[C*Note_1]].\nCode `` *raw* `tick` `` and literal \\~tilde\\~ \\`backtick\\`.\n"
 	if got != want {
 		t.Errorf("got:\n%q\nwant:\n%q", got, want)
 	}
