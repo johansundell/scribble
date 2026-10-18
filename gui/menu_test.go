@@ -101,7 +101,7 @@ func TestMenuItemsGreyOutWithToolbar(t *testing.T) {
 
 	check := func(when string) {
 		t.Helper()
-		for _, c := range []struct {
+		for _, row := range []struct {
 			menu, label string
 			button      *widget.Button
 		}{
@@ -109,12 +109,12 @@ func TestMenuItemsGreyOutWithToolbar(t *testing.T) {
 			{"File", "Delete…", ui.Delete},
 			{"View", "Edit note", ui.EditToggle},
 		} {
-			label := c.label
-			if c.button == ui.EditToggle && ui.EditToggle.Text == "View" {
+			label := row.label
+			if row.button == ui.EditToggle && ui.EditToggle.Text == "View" {
 				label = "View note"
 			}
-			if got := menuItem(t, w, c.menu, label).Disabled; got != c.button.Disabled() {
-				t.Errorf("%s: %s > %s disabled %v, toolbar button disabled %v", when, c.menu, label, got, c.button.Disabled())
+			if got := menuItem(t, w, row.menu, label).Disabled; got != row.button.Disabled() {
+				t.Errorf("%s: %s > %s disabled %v, toolbar button disabled %v", when, row.menu, label, got, row.button.Disabled())
 			}
 		}
 		for _, label := range []string{"New note", "Quit"} {

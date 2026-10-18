@@ -20,7 +20,7 @@ func (ui *UI) setupMenu() {
 	quit.IsQuit = true
 
 	clip := fyne.CurrentApp().Clipboard()
-	redo := ui.forward("Redo", &fyne.ShortcutRedo{})
+	redo := ui.forwardingItem("Redo", &fyne.ShortcutRedo{})
 	if runtime.GOOS == "darwin" {
 		redo.Shortcut = &desktop.CustomShortcut{KeyName: fyne.KeyZ, Modifier: fyne.KeyModifierSuper | fyne.KeyModifierShift}
 	}
@@ -34,13 +34,13 @@ func (ui *UI) setupMenu() {
 			quit,
 		),
 		fyne.NewMenu("Edit",
-			ui.forward("Undo", &fyne.ShortcutUndo{}),
+			ui.forwardingItem("Undo", &fyne.ShortcutUndo{}),
 			redo,
 			fyne.NewMenuItemSeparator(),
-			ui.forward("Cut", &fyne.ShortcutCut{Clipboard: clip}),
-			ui.forward("Copy", &fyne.ShortcutCopy{Clipboard: clip}),
-			ui.forward("Paste", &fyne.ShortcutPaste{Clipboard: clip}),
-			ui.forward("Select all", &fyne.ShortcutSelectAll{}),
+			ui.forwardingItem("Cut", &fyne.ShortcutCut{Clipboard: clip}),
+			ui.forwardingItem("Copy", &fyne.ShortcutCopy{Clipboard: clip}),
+			ui.forwardingItem("Paste", &fyne.ShortcutPaste{Clipboard: clip}),
+			ui.forwardingItem("Select all", &fyne.ShortcutSelectAll{}),
 			fyne.NewMenuItemSeparator(),
 			menuItem("Find", ctrl(fyne.KeyF), ui.unlessDialog(func() { ui.w.Canvas().Focus(ui.Search) })),
 		),
@@ -62,10 +62,10 @@ func ctrl(key fyne.KeyName) fyne.Shortcut {
 	return &desktop.CustomShortcut{KeyName: key, Modifier: fyne.KeyModifierShortcutDefault}
 }
 
-// forward is an Edit menu item that passes shortcut on to the focused text
-// field: as the menu's shortcut it no longer reaches the field by itself. A
-// field in an open dialog has the focus, so it works there too.
-func (ui *UI) forward(label string, shortcut fyne.Shortcut) *fyne.MenuItem {
+// forwardingItem is an Edit menu item that passes shortcut on to the
+// focused text field, which no longer gets it once it is a menu shortcut.
+// A field in an open dialog has the focus, so it also works there.
+func (ui *UI) forwardingItem(label string, shortcut fyne.Shortcut) *fyne.MenuItem {
 	return menuItem(label, shortcut, func() {
 		if f, ok := ui.w.Canvas().Focused().(fyne.Shortcutable); ok {
 			f.TypedShortcut(shortcut)
@@ -76,6 +76,7 @@ func (ui *UI) forward(label string, shortcut fyne.Shortcut) *fyne.MenuItem {
 // dialogOpen reports whether a dialog is showing over the window.
 func (ui *UI) dialogOpen() bool { return ui.w.Canvas().Overlays().Top() != nil }
 
+// unlessDialog wraps action to do nothing while a dialog is open.
 func (ui *UI) unlessDialog(action func()) func() {
 	return func() {
 		if !ui.dialogOpen() {
@@ -84,8 +85,9 @@ func (ui *UI) unlessDialog(action func()) func() {
 	}
 }
 
-// whenEnabled is action, for a menu item that does what toolbar button b
-// does: its shortcut fires even while the item is greyed out.
+// whenEnabled wraps action, the action of toolbar button b, for its menu
+// item: it does nothing while b is disabled or a dialog is open. The
+// item's shortcut fires even while the item is greyed out.
 func (ui *UI) whenEnabled(b *widget.Button, action func()) func() {
 	return ui.unlessDialog(func() {
 		if !b.Disabled() {
@@ -125,8 +127,8 @@ func (ui *UI) updateMenu() {
 	}
 }
 
-// NoteList is the note list. It takes the keys typedKey handles before the
-// list does.
+// NoteList is the note list. It passes key presses to typedKey first, so F2
+// renames the note after a click on it has focused the list.
 type NoteList struct {
 	widget.List
 	ui *UI
