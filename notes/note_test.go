@@ -1,7 +1,9 @@
 package notes
 
 import (
+	"net/url"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -44,8 +46,50 @@ func TestLinks(t *testing.T) {
 }
 
 func TestLinkifyForView(t *testing.T) {
-	if got := LinkifyForView("go [[My Note]]"); got != "go [My Note](note://My%20Note)" {
-		t.Errorf("got %q", got)
+	cases := map[string]string{
+		"go [[My Note]]":      "go [My Note](note:///My%20Note)",
+		"T\n*see [[ Plan ]]*": "T\n*see [Plan](note:///Plan)*",
+		"T\n| [[a/b (c)]] |":  "T\n| [a/b (c)](note:///a%2Fb%20%28c%29) |",
+	}
+	for in, want := range cases {
+		if got := LinkifyForView(in); got != want {
+			t.Errorf("LinkifyForView(%q)\n got  %q\n want %q", in, got, want)
+		}
+	}
+}
+
+func TestLinkifyForViewLeavesMarkdownIntact(t *testing.T) {
+	unchanged := []string{
+		"`[[code]]`",
+		"``` go\n[[fenced]]\n```",
+		"    [[indented]]",
+		"[see [[x]]](https://example.com)",
+		"- [ ] [[task]]", // see TestLinkifyProjectsForViewLeavesMarkdownIntact
+	}
+	for _, md := range unchanged {
+		body := "T\n\n" + md + "\n\n[[b]]"
+		want := "T\n\n" + md + "\n\n[b](note:///b)"
+		if got := LinkifyForView(body); got != want {
+			t.Errorf("LinkifyForView(%q)\n got  %q\n want %q", body, got, want)
+		}
+	}
+}
+
+func TestLinkTitleReadsBackLinkifiedTitles(t *testing.T) {
+	for _, title := range []string{"Plan", "My Note", "a/b (c)", "50% #off?", "Göteborg & co"} {
+		md := LinkifyForView("[[" + title + "]]")
+		dest := md[strings.Index(md, "](")+2 : len(md)-1]
+		u, err := url.Parse(dest)
+		if err != nil {
+			t.Fatalf("%q: link %q does not parse: %v", title, dest, err)
+		}
+		if got, ok := LinkTitle(u); !ok || got != title {
+			t.Errorf("LinkTitle(%q) = %q, %v; want %q", dest, got, ok, title)
+		}
+	}
+	u, _ := url.Parse("project://home")
+	if _, ok := LinkTitle(u); ok {
+		t.Error("LinkTitle accepted a project:// link")
 	}
 }
 

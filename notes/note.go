@@ -4,6 +4,7 @@
 package notes
 
 import (
+	"net/url"
 	"regexp"
 	"slices"
 	"strings"
@@ -409,11 +410,35 @@ func mergeSpans(spans [][2]int) [][2]int {
 	return out
 }
 
-// LinkifyForView rewrites [[Title]] into a Markdown link with the note://
-// scheme, ready for a Markdown renderer. Used by GUI clients.
+// LinkifyForView rewrites [[Title]] into a Markdown link with the note:///
+// scheme, ready for a Markdown renderer; LinkTitle reads the title back.
+// Only links in plain text are rewritten, so code and Markdown links stay
+// intact. Used by GUI clients.
 func LinkifyForView(body string) string {
-	return linkRe.ReplaceAllStringFunc(body, func(s string) string {
-		t := strings.TrimSpace(s[2 : len(s)-2])
-		return "[" + t + "](note://" + strings.ReplaceAll(t, " ", "%20") + ")"
-	})
+	spans := mergeSpans(plainTextSpans(body))
+	var b strings.Builder
+	last, s := 0, 0
+	for _, m := range linkRe.FindAllStringSubmatchIndex(body, -1) {
+		for s < len(spans) && spans[s][1] <= m[0] {
+			s++
+		}
+		if s == len(spans) || m[0] < spans[s][0] || m[1] > spans[s][1] {
+			continue
+		}
+		t := strings.TrimSpace(body[m[2]:m[3]])
+		b.WriteString(body[last:m[0]])
+		b.WriteString("[" + t + "](note:///" + url.PathEscape(t) + ")")
+		last = m[1]
+	}
+	b.WriteString(body[last:])
+	return b.String()
+}
+
+// LinkTitle returns the note title a link made by LinkifyForView points
+// at, and false for any other link.
+func LinkTitle(u *url.URL) (string, bool) {
+	if u == nil || u.Scheme != "note" || u.Host != "" || !strings.HasPrefix(u.Path, "/") {
+		return "", false
+	}
+	return u.Path[1:], true
 }
