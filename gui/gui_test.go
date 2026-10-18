@@ -613,6 +613,13 @@ func TestSavingProjectDraftWithTitleWorks(t *testing.T) {
 	}
 	assertTitles(t, ui, "Roadmap", "Plans")
 
+	test.Tap(ui.NewNote)
+	test.Type(ui.Editor, "#scribble") // titled after its own project
+	test.Tap(ui.Save)
+	if got := byTitle(t, c, "scribble").Body; got != "#scribble\n\n#scribble\n" {
+		t.Fatalf("server holds %q, status %q", got, ui.Status.Text)
+	}
+
 	ui.Project.SetSelected("All notes")
 	test.Tap(ui.NewNote)
 	ui.Editor.SetText("#Ideas\nbody")

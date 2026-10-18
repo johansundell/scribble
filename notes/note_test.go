@@ -123,6 +123,7 @@ func TestLinkifyProjectsForViewLeavesMarkdownIntact(t *testing.T) {
 		"~~~\n#fenced\n~~~",
 		"    #indented code",
 		`<span title=" #x">hi</span>`,
+		"_see #home_", // the regex would take the closing '_' too
 	}
 	for _, md := range unchanged {
 		// Blank lines: definitions and indented code cannot interrupt a

@@ -185,7 +185,9 @@ func LinkifyProjectsForView(body string) string {
 		for s < len(spans) && spans[s][1] <= hash {
 			s++
 		}
-		if hash < start || s == len(spans) || hash < spans[s][0] {
+		// The whole tag must lie in one span: in "_see #home_" the regex
+		// takes the closing '_' as well, and rewriting would eat it.
+		if hash < start || s == len(spans) || hash < spans[s][0] || end > spans[s][1] {
 			continue
 		}
 		name := body[m[4]:m[5]]

@@ -259,7 +259,8 @@ func (ui *UI) save() {
 	if ui.current == nil {
 		return
 	}
-	if !ui.isSaved() && ui.draftTag != "" && strings.EqualFold(notes.TitleLine(ui.Editor.Text), ui.draftTag) {
+	if !ui.isSaved() && ui.draftTag != "" && strings.EqualFold(notes.TitleLine(ui.Editor.Text), ui.draftTag) &&
+		!notes.HasProject(ui.Editor.Text, ui.draftTag) {
 		// No title typed above the pre-filled tag: saved like this, the
 		// tag would become the title and the note would not be in the
 		// project.
