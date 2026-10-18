@@ -79,7 +79,9 @@ The window has a menu bar (on macOS, the system menu bar; there Ctrl is Cmd):
 unreachable you can still browse, search and edit: saves are queued on disk
 and sent when it is back. If the server refuses a queued edit (someone else
 changed the note meanwhile), opening the note brings the edit back into the
-editor. Renaming and deleting need the server.
+editor. Renaming and deleting need the server. The status bar shows real-time
+connection status (Connected with a green dot, or Offline with a red dot);
+clicking it retries the connection immediately.
 
 The GUI is built with [Fyne](https://fyne.io), so it needs CGO and a C
 compiler. On Linux it also needs the GL, X11, Wayland and xkbcommon
