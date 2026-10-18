@@ -55,9 +55,9 @@ type UI struct {
 
 	backlinkButtons *fyne.Container // inside Backlinks
 
-	menu                               *fyne.MainMenu
-	renameItem, deleteItem, toggleItem *fyne.MenuItem // greyed out like their toolbar buttons
-	lastField                          *TextField     // the text field that had focus last, nil if another widget did
+	menu                                         *fyne.MainMenu
+	saveItem, renameItem, deleteItem, toggleItem *fyne.MenuItem // greyed out like their toolbar buttons
+	lastField                                    *TextField     // the text field that had focus last, nil if another widget did
 
 	w        fyne.Window
 	c        *client.Client
@@ -451,12 +451,35 @@ func setEnabled(b *widget.Button, on bool) {
 	}
 }
 
-// save writes the editor to the server and returns to view mode. The server
-// takes the title from the first non-empty line. An update carries the
-// revision the edit started from, so the server refuses it if someone else
-// saved in between; the edit then stays open and askConflict asks what to
-// do about it.
-func (ui *UI) save() {
+// save writes the editor to the server and returns to view mode.
+func (ui *UI) save() { ui.saveThen(ui.open) }
+
+// saveAndKeepEditing writes the editor to the server and stays in edit
+// mode, with the cursor and the focus where they were.
+func (ui *UI) saveAndKeepEditing() {
+	// From a view-mode preview too, and if the save is refused, the user
+	// ends up in the editor.
+	ui.showEdit()
+	ui.saveThen(func(n notes.Note) {
+		// The editor already holds the saved text; leave it, and its
+		// cursor, selection and scroll position, alone.
+		ui.current = &n
+		ui.updateButtons()
+		ui.selectCurrent()
+		ui.loadBacklinks()
+		if f := ui.editTarget(); f != nil {
+			// Clicking the menu bar took the focus away.
+			ui.w.Canvas().Focus(f)
+		}
+	})
+}
+
+// saveThen writes the editor to the server and passes the saved note to
+// then. The server takes the title from the first non-empty line. An update
+// carries the revision the edit started from, so the server refuses it if
+// someone else saved in between; the edit then stays open and askConflict
+// asks what to do about it.
+func (ui *UI) saveThen(then func(notes.Note)) {
 	if ui.current == nil {
 		return
 	}
@@ -474,7 +497,7 @@ func (ui *UI) save() {
 		ui.report(err)
 		ui.askConflict()
 	case !ui.report(err):
-		ui.open(n)
+		then(n)
 	}
 }
 

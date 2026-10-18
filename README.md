@@ -63,6 +63,7 @@ The window has a menu bar (on macOS, the system menu bar; there Ctrl is Cmd):
 | Menu | Item | Shortcut |
 |------|------|----------|
 | File | New note | `Ctrl+N` |
+| File | Save | `Ctrl+S` (saves and stays in the editor; the Save button returns to view mode) |
 | File | Rename… | `F2` (when the note list or nothing has focus) |
 | File | Delete… | none |
 | File | Quit | `Ctrl+Q` (quits fully, even with a tray, after asking about unsaved changes) |

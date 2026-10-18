@@ -12,6 +12,7 @@ import (
 // a menu item's shortcut before the focused widget sees the key, and even
 // while a dialog is open, so each action checks for that itself.
 func (ui *UI) setupMenu() {
+	ui.saveItem = menuItem("Save", ctrl(fyne.KeyS), ui.whenEnabled(ui.Save, ui.saveAndKeepEditing))
 	ui.renameItem = menuItem("Rename…", &desktop.CustomShortcut{KeyName: fyne.KeyF2}, ui.whenEnabled(ui.Rename, ui.askRename))
 	ui.deleteItem = menuItem("Delete…", nil, ui.whenEnabled(ui.Delete, ui.confirmDelete))
 	ui.toggleItem = menuItem("Edit note", ctrl(fyne.KeyE), ui.whenEnabled(ui.EditToggle, ui.toggleMode))
@@ -27,6 +28,7 @@ func (ui *UI) setupMenu() {
 	ui.menu = fyne.NewMainMenu(
 		fyne.NewMenu("File",
 			menuItem("New note", ctrl(fyne.KeyN), ui.OpenNewNote),
+			ui.saveItem,
 			fyne.NewMenuItemSeparator(),
 			ui.renameItem,
 			ui.deleteItem,
@@ -125,7 +127,7 @@ func (ui *UI) typedKey(e *fyne.KeyEvent) bool {
 func (ui *UI) updateMenu() {
 	changed := false
 	for item, b := range map[*fyne.MenuItem]*widget.Button{
-		ui.renameItem: ui.Rename, ui.deleteItem: ui.Delete, ui.toggleItem: ui.EditToggle,
+		ui.saveItem: ui.Save, ui.renameItem: ui.Rename, ui.deleteItem: ui.Delete, ui.toggleItem: ui.EditToggle,
 	} {
 		if item.Disabled != b.Disabled() {
 			item.Disabled = b.Disabled()
