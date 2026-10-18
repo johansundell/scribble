@@ -40,8 +40,7 @@ type Edit struct {
 
 // Report says what a Sync did with the queued edits.
 type Report struct {
-	Created map[int64]int64 // local ID -> server ID of notes created offline
-	Failed  []int64         // edits the server refused, see Edit.Err
+	Failed []int64 // edits the server refused, see Edit.Err
 }
 
 // Store is the local copy. It is safe for concurrent use.
@@ -52,23 +51,25 @@ type Store struct {
 	mu      sync.Mutex
 	seq     int64 // the server's latest_seq as of the last sync
 	notes   map[int64]notes.Note
-	edits   []Edit // in the order they were queued
-	localID int64  // the last local ID handed out
+	edits   []Edit          // in the order they were queued
+	localID int64           // the last local ID handed out
+	sent    map[int64]int64 // local ID -> server ID of notes created offline
 	version int64
 }
 
 // state is the file format.
 type state struct {
-	LatestSeq int64        `json:"latest_seq"`
-	LocalID   int64        `json:"local_id"`
-	Notes     []notes.Note `json:"notes"`
-	Edits     []Edit       `json:"edits"`
+	LatestSeq int64           `json:"latest_seq"`
+	LocalID   int64           `json:"local_id"`
+	Notes     []notes.Note    `json:"notes"`
+	Edits     []Edit          `json:"edits"`
+	Sent      map[int64]int64 `json:"sent,omitempty"`
 }
 
 // Open loads the copy saved at path, or starts an empty one if there is no
 // file yet. An empty path keeps the copy in memory only.
 func Open(path string) (*Store, error) {
-	s := &Store{path: path, notes: map[int64]notes.Note{}}
+	s := &Store{path: path, notes: map[int64]notes.Note{}, sent: map[int64]int64{}}
 	if path == "" {
 		return s, nil
 	}
@@ -84,6 +85,9 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	s.seq, s.localID, s.edits = st.LatestSeq, st.LocalID, st.Edits
+	if st.Sent != nil {
+		s.sent = st.Sent
+	}
 	for _, n := range st.Notes {
 		s.notes[n.ID] = n
 	}
@@ -112,7 +116,7 @@ func (s *Store) save() error {
 	if s.path == "" {
 		return nil
 	}
-	st := state{LatestSeq: s.seq, LocalID: s.localID, Edits: s.edits}
+	st := state{LatestSeq: s.seq, LocalID: s.localID, Edits: s.edits, Sent: s.sent}
 	for _, n := range s.notes {
 		st.Notes = append(st.Notes, n)
 	}
@@ -142,6 +146,21 @@ func (s *Store) editIndex(id int64) int {
 	return slices.IndexFunc(s.edits, func(e Edit) bool { return e.ID == id })
 }
 
+// ServerID returns the server ID of a note created offline once a Sync has
+// sent it, and any other id as it is.
+func (s *Store) ServerID(id int64) int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.serverID(id)
+}
+
+func (s *Store) serverID(id int64) int64 {
+	if sid, ok := s.sent[id]; ok {
+		return sid
+	}
+	return id
+}
+
 // Queue records body as the new text of note id, to be sent by the next
 // Sync; id 0 makes a new note, which gets a negative local ID until then.
 // baseRevision is the revision the edit started from. It returns the note
@@ -152,6 +171,7 @@ func (s *Store) Queue(id int64, body string, baseRevision int64) (notes.Note, er
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	id = s.serverID(id) // a note created offline may have been sent meanwhile
 	if id == 0 {
 		s.localID--
 		id = s.localID
@@ -308,7 +328,7 @@ func (s *Store) Backlinks(id int64) []notes.Note {
 func (s *Store) Sync(ctx context.Context, c *client.Client) (Report, error) {
 	s.syncing.Lock()
 	defer s.syncing.Unlock()
-	r := Report{Created: map[int64]int64{}}
+	var r Report
 	if err := s.push(ctx, c, &r); err != nil {
 		return r, err
 	}
@@ -354,7 +374,7 @@ func (s *Store) push(ctx context.Context, c *client.Client, r *Report) error {
 		if n != nil {
 			s.notes[n.ID] = *n
 			if e.ID < 0 {
-				r.Created[e.ID] = n.ID
+				s.sent[e.ID] = n.ID
 			}
 		}
 		err = s.save()

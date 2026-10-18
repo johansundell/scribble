@@ -5,6 +5,7 @@ package gui
 import (
 	"context"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -466,10 +467,7 @@ func (ui *UI) write(id int64, body string, base int64) (notes.Note, bool) {
 	ctx, cancel := requestContext()
 	defer cancel()
 	r, err := ui.store.Sync(ctx, ui.c)
-	key := n.ID
-	if created, ok := r.Created[key]; ok {
-		key = created
-	}
+	key := ui.store.ServerID(n.ID)
 	if e, ok := ui.store.Pending(key); ok && e.Err != nil {
 		ui.report(ui.store.Drop(key))
 		ui.report(e.Err)
@@ -592,41 +590,41 @@ func (ui *UI) StartSync(interval time.Duration) {
 // synced shows the outcome of a sync: the refreshed list, the open note's
 // latest version, and any trouble in the status line.
 func (ui *UI) synced(r offline.Report, err error) {
+	wasOffline := ui.offline
+	ui.offline = client.IsUnreachable(err)
 	switch {
-	case client.IsUnreachable(err):
-		if !ui.offline || ui.Status.Text == "" {
+	case ui.offline:
+		if !wasOffline || ui.Status.Text == "" {
 			ui.Status.SetText(unreachable)
 		}
-		ui.offline = true
-	case ui.report(err):
-	case ui.offline:
-		ui.offline = false
-		if ui.Status.Text == unreachable {
-			ui.Status.SetText("")
-		}
+	case err != nil:
+		ui.report(err)
+	case wasOffline && ui.Status.Text == unreachable:
+		ui.Status.SetText("")
 	}
-	for _, id := range r.Failed {
-		if n, ok := ui.store.Get(id); ok {
-			e, _ := ui.store.Pending(id)
-			ui.Status.SetText("\"" + n.Title + "\" could not be synced. " + explain(e.Err) + " Open the note to sort it out.")
+	if len(r.Failed) > 0 {
+		id := r.Failed[0]
+		n, _ := ui.store.Get(id)
+		e, _ := ui.store.Pending(id)
+		msg := "\"" + n.Title + "\" could not be synced. " + explain(e.Err) + " Open the note to sort it out."
+		if more := len(r.Failed) - 1; more > 0 {
+			msg += " " + strconv.Itoa(more) + " more edits could not be synced either."
 		}
+		ui.Status.SetText(msg)
 	}
 	ui.reload()
-	ui.followOpenNote(r)
+	ui.followOpenNote()
 }
 
 // followOpenNote keeps the open note in step with the local copy after a
 // sync: it takes the server ID of a note created offline, reopens a
 // refused edit in the editor, and shows the latest version unless the user
 // is editing.
-func (ui *UI) followOpenNote(r offline.Report) {
+func (ui *UI) followOpenNote() {
 	if !ui.isSaved() {
 		return
 	}
-	id := ui.current.ID
-	if created, ok := r.Created[id]; ok {
-		id = created
-	}
+	id := ui.store.ServerID(ui.current.ID)
 	n, ok := ui.store.Get(id)
 	e, queued := ui.store.Pending(id)
 	switch {

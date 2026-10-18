@@ -257,11 +257,11 @@ func TestNoteCreatedOfflineGetsItsServerID(t *testing.T) {
 	assertTitles(t, s.List("", ""), "Ideas")
 
 	net.down.Store(false)
-	r := syncNow(t, s, c)
+	syncNow(t, s, c)
 
-	id := r.Created[local.ID]
+	id := s.ServerID(local.ID)
 	if id <= 0 {
-		t.Fatalf("report %+v has no server id for %d", r, local.ID)
+		t.Fatalf("no server id for %d, got %d", local.ID, id)
 	}
 	if n, ok := s.Get(id); !ok || n.Title != "Ideas" {
 		t.Fatalf("Get(%d) = %+v, %v", id, n, ok)
@@ -312,5 +312,30 @@ func TestStaleOfflineEditIsKeptAsAConflict(t *testing.T) {
 	}
 	if n, _ := s.Get(g.ID); n.Body != "# Groceries\ntheirs" {
 		t.Fatalf("after drop %q", n.Body)
+	}
+}
+
+func TestEditingASentOfflineNoteByItsLocalIDUpdatesIt(t *testing.T) {
+	c, net := newServer(t)
+	s := open(t, "")
+	net.down.Store(true)
+	local, err := s.Queue(0, "# Ideas\nfly", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	net.down.Store(false)
+	syncNow(t, s, c) // say, the background sync
+
+	if _, err := s.Queue(local.ID, "# Ideas\nfly high", 0); err != nil {
+		t.Fatal(err)
+	}
+	syncNow(t, s, c)
+
+	list, err := c.List(context.Background(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || list[0].Body != "# Ideas\nfly high" {
+		t.Fatalf("server holds %+v, want one updated note", list)
 	}
 }

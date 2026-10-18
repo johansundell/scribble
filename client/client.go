@@ -37,8 +37,8 @@ func New(baseURL, token string) *Client {
 // Error is a non-2xx answer from the server. The server replies with the
 // plain HTTP status text, so Message is short ("Not Found", ...).
 type Error struct {
-	Status  int
-	Message string
+	Status  int    `json:"status"`
+	Message string `json:"message"`
 }
 
 func (e *Error) Error() string { return fmt.Sprintf("server said %d %s", e.Status, e.Message) }
@@ -56,8 +56,8 @@ func IsUnauthorized(err error) bool { return hasStatus(err, http.StatusUnauthori
 // IsUnreachable reports whether err is a failure to get an answer from the
 // server at all (no network, server down, timeout), rather than a refusal.
 func IsUnreachable(err error) bool {
-	var e *Error
-	return err != nil && !errors.As(err, &e)
+	var e *url.Error
+	return errors.As(err, &e)
 }
 
 func (c *Client) do(ctx context.Context, method, path string, query url.Values, in, out any) error {
