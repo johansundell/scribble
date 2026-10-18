@@ -178,6 +178,8 @@ func TestAutoLink(t *testing.T) {
 		"project tag":     {"# T\n#go and #shopping-list", "# T\n#go and #shopping-list"},
 		"email":           {"# T\nmail go@example.com or me@go.dev", "# T\nmail go@example.com or me@go.dev"},
 		"bracketed":       {"# T\n[Go] and [Shopping]: x", "# T\n[Go] and [Shopping]: x"},
+		"inside brackets": {"# T\n[Learn Go today] then Go", "# T\n[Learn Go today] then [[Go]]"},
+		"combining mark":  {"# T\nGöteborg", "# T\nGöteborg"},
 		"html text":       {"# T\n<b>Go</b>", "# T\n<b>[[Go]]</b>"},
 		"heading & table": {"# T\n## Go\n| Go |\n| - |", "# T\n## [[Go]]\n| [[Go]] |\n| - |"},
 	}
@@ -202,6 +204,8 @@ func TestAutoLinkOverlaps(t *testing.T) {
 		{[]string{"A B", "B C D"}, "T\nA B C D", "T\nA [[B C D]]", 1},
 		// Equal lengths: the earlier one wins; what is left can still match.
 		{[]string{"A B", "B C", "C"}, "T\nA B C", "T\n[[A B]] [[C]]", 2},
+		// Length is counted in characters: the Kelvin sign is 3 bytes.
+		{[]string{"K A", "A BC"}, "T\nK A BC", "T\nK [[A BC]]", 1},
 	}
 	for _, tc := range cases {
 		got, n := AutoLink(tc.in, tc.titles)
@@ -212,10 +216,13 @@ func TestAutoLinkOverlaps(t *testing.T) {
 }
 
 func TestAutoLinkFoldsCase(t *testing.T) {
+	// The store folds only ASCII case when it resolves a link, so a mention
+	// that differs from the title in any other way links the title's spelling.
 	cases := map[string]struct{ title, in, want string }{
-		"sharp s":      {"Straße", "T\nSTRAẞE", "T\n[[STRAẞE]]"},
-		"kelvin sign":  {"kilo", "T\nKilo", "T\n[[Kilo]]"},
-		"accents":      {"École", "T\nécole", "T\n[[école]]"},
+		"ascii case":   {"Straße", "T\nSTRAßE", "T\n[[STRAßE]]"},
+		"sharp s":      {"Straße", "T\nSTRAẞE", "T\n[[Straße]]"},
+		"kelvin sign":  {"kilo", "T\nKilo", "T\n[[kilo]]"},
+		"accents":      {"École", "T\nécole", "T\n[[École]]"},
 		"bad title":    {"a]]b", "T\na]]b", "T\na]]b"},
 		"newline only": {"\n", "T\nx", "T\nx"},
 	}

@@ -212,10 +212,10 @@ func LinkifyProjectsForView(body string) string {
 // plain text, but a title inside one must not be linked.
 var addressRe = regexp.MustCompile(`(?i)\b(?:[a-z][a-z0-9+.-]*://|www\.)\S+|[\w.+-]+@[\w-]+(?:\.[\w-]+)+`)
 
-// AutoLink wraps bare mentions of titles in body as [[links]], keeping the
-// mention's spelling, and reports how many it added. Matching is
-// case-insensitive and on word boundaries; where mentions overlap, the
-// longest wins. The title line, the note's own title, existing [[links]],
+// AutoLink wraps bare mentions of titles in body as [[links]] and reports
+// how many it added. A link keeps the mention's spelling unless that would
+// not resolve (see mention.target). Matching is case-insensitive and on
+// word boundaries; where mentions overlap, the longest wins. The title line, the note's own title, existing [[links]],
 // bracketed text, URLs, email addresses, #project tags, code, Markdown links
 // and task-list items are left alone.
 func AutoLink(body string, titles []string) (string, int) {
@@ -232,61 +232,103 @@ func AutoLink(body string, titles []string) (string, int) {
 		return body, 0
 	}
 
-	var mentions [][2]int
+	var mentions []mention
 	start := titleEnd(body)
 	for _, sp := range mergeSpans(plainTextSpans(body)) {
 		for i := max(sp[0], start); i < sp[1]; {
 			for _, t := range candidates {
 				if size := mentionAt(body, i, sp[1], t); size > 0 {
-					mentions = append(mentions, [2]int{i, i + size})
+					m := mention{start: i, end: i + size, title: t}
+					m.runes = utf8.RuneCountInString(body[m.start:m.end])
+					mentions = append(mentions, m)
 				}
 			}
 			_, size := utf8.DecodeRuneInString(body[i:])
 			i += size
 		}
 	}
-	// Longest first, then earliest; a mention survives if nothing taken
-	// so far overlaps it.
-	slices.SortFunc(mentions, func(a, b [2]int) int {
-		if la, lb := a[1]-a[0], b[1]-b[0]; la != lb {
-			return lb - la
+	// Longest first, then earliest; a mention survives if none of its
+	// bytes are taken yet.
+	slices.SortFunc(mentions, func(a, b mention) int {
+		if a.runes != b.runes {
+			return b.runes - a.runes
 		}
-		return a[0] - b[0]
+		return a.start - b.start
 	})
-	taken := protectedSpans(body)
-	var linked [][2]int
+	taken := protectedBytes(body)
+	var linked []mention
 	for _, m := range mentions {
-		if !overlapsAny(taken, m) {
-			taken = append(taken, m)
+		if !slices.Contains(taken[m.start:m.end], true) {
+			for i := m.start; i < m.end; i++ {
+				taken[i] = true
+			}
 			linked = append(linked, m)
 		}
 	}
-	slices.SortFunc(linked, func(a, b [2]int) int { return a[0] - b[0] })
+	slices.SortFunc(linked, func(a, b mention) int { return a.start - b.start })
 
 	var b strings.Builder
 	last := 0
 	for _, m := range linked {
-		b.WriteString(body[last:m[0]])
-		b.WriteString("[[" + body[m[0]:m[1]] + "]]")
-		last = m[1]
+		b.WriteString(body[last:m.start])
+		b.WriteString("[[" + m.target(body) + "]]")
+		last = m.end
 	}
 	b.WriteString(body[last:])
 	return b.String(), len(linked)
 }
 
-// protectedSpans returns the ranges of body a mention must not overlap:
-// [[links]], URLs, email addresses and #project tags.
-func protectedSpans(body string) [][2]int {
-	var spans [][2]int
-	for _, re := range []*regexp.Regexp{linkRe, addressRe} {
+// mention is a match of title at body[start:end], runes characters long.
+type mention struct {
+	start, end, runes int
+	title             string
+}
+
+// target is the link text for m: the mention's own spelling when it differs
+// from the title only in ASCII case, which is all the store folds when it
+// resolves a link; otherwise the title itself.
+func (m mention) target(body string) string {
+	text := body[m.start:m.end]
+	if len(text) != len(m.title) {
+		return m.title
+	}
+	for i := range len(text) {
+		if lowerASCII(text[i]) != lowerASCII(m.title[i]) {
+			return m.title
+		}
+	}
+	return text
+}
+
+func lowerASCII(c byte) byte {
+	if 'A' <= c && c <= 'Z' {
+		return c + 'a' - 'A'
+	}
+	return c
+}
+
+// bracketRe matches [bracketed text] on one line: possibly a Markdown link
+// waiting for a reference definition, and not a place for a [[link]].
+var bracketRe = regexp.MustCompile(`\[[^\[\]\n]*\]`)
+
+// protectedBytes marks the bytes of body a mention must not overlap:
+// [[links]], bracketed text, URLs, email addresses and #project tags.
+func protectedBytes(body string) []bool {
+	taken := make([]bool, len(body))
+	mark := func(start, end int) {
+		for i := start; i < end; i++ {
+			taken[i] = true
+		}
+	}
+	for _, re := range []*regexp.Regexp{linkRe, bracketRe, addressRe} {
 		for _, m := range re.FindAllStringIndex(body, -1) {
-			spans = append(spans, [2]int{m[0], m[1]})
+			mark(m[0], m[1])
 		}
 	}
 	for _, m := range projectRe.FindAllStringSubmatchIndex(body, -1) {
-		spans = append(spans, [2]int{m[4] - 1, m[1]})
+		mark(m[4]-1, m[1])
 	}
-	return spans
+	return taken
 }
 
 // mentionAt returns the byte length of the mention of title at body[i:],
@@ -308,11 +350,8 @@ func mentionAt(body string, i, end int, title string) int {
 	lastRune, _ := utf8.DecodeLastRuneInString(title)
 	before, _ := utf8.DecodeLastRuneInString(body[:i])
 	after, _ := utf8.DecodeRuneInString(body[j:])
-	switch {
-	case isWordRune(first) && isWordRune(before), isWordRune(lastRune) && isWordRune(after):
+	if (isWordRune(first) && isWordRune(before)) || (isWordRune(lastRune) && isWordRune(after)) {
 		return 0
-	case before == '[' || after == ']':
-		return 0 // "[Title]" is bracketed text, or the start of a Markdown link
 	}
 	return j - i
 }
@@ -330,8 +369,10 @@ func foldEqual(a, b rune) bool {
 	}
 }
 
+// isWordRune reports whether r can be part of a word. Combining marks
+// count, so "Göteborg" (a decomposed "Göteborg") is one word.
 func isWordRune(r rune) bool {
-	return r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r)
+	return r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsMark(r)
 }
 
 // mergeSpans joins sorted spans that touch, since Markdown splits one run
@@ -346,15 +387,6 @@ func mergeSpans(spans [][2]int) [][2]int {
 		out = append(out, s)
 	}
 	return out
-}
-
-func overlapsAny(spans [][2]int, s [2]int) bool {
-	for _, r := range spans {
-		if s[0] < r[1] && r[0] < s[1] {
-			return true
-		}
-	}
-	return false
 }
 
 // LinkifyForView rewrites [[Title]] into a Markdown link with the note://

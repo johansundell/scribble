@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/johansundell/scribble/client"
 	"github.com/johansundell/scribble/handlers"
+	"github.com/johansundell/scribble/notes"
 	"github.com/johansundell/scribble/router"
 	"github.com/johansundell/scribble/store"
 	"github.com/johansundell/scribble/types"
@@ -110,5 +111,45 @@ func TestCmdAutoLink(t *testing.T) {
 	}
 	if err := cmdAutoLink(ctx, c, &out, nil); err == nil {
 		t.Error("missing title should be refused")
+	}
+}
+
+// TestCmdAutoLinkResolves checks that links AutoLink writes for non-ASCII
+// mentions find their note, show up as backlinks and follow a rename.
+func TestCmdAutoLinkResolves(t *testing.T) {
+	ctx := context.Background()
+	c := newClient(t)
+	ecole, err := c.Create(ctx, "# École\nx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Create(ctx, "# Plans\nback to école, then ÉCOLE"); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdAutoLink(ctx, c, &bytes.Buffer{}, []string{"Plans"}); err != nil {
+		t.Fatal(err)
+	}
+
+	plans, err := c.ByTitle(ctx, "Plans")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range notes.Links(plans.Body) {
+		if n, err := c.ByTitle(ctx, l); err != nil || n.ID != ecole.ID {
+			t.Errorf("[[%s]] does not resolve to École: %v", l, err)
+		}
+	}
+	back, err := c.Backlinks(ctx, ecole.ID)
+	if err != nil || len(back) != 1 || back[0].Title != "Plans" {
+		t.Errorf("backlinks = %v, %v", back, err)
+	}
+	if _, err := c.Rename(ctx, ecole.ID, "School"); err != nil {
+		t.Fatal(err)
+	}
+	if plans, err = c.ByTitle(ctx, "Plans"); err != nil {
+		t.Fatal(err)
+	}
+	if want := "# Plans\nback to [[School]], then [[School]]"; plans.Body != want {
+		t.Errorf("after rename body = %q, want %q", plans.Body, want)
 	}
 }
