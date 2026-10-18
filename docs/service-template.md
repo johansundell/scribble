@@ -161,6 +161,10 @@ docker compose cp scribble-server:/app/data/scribble-server.db ./scribble-server
 
 Inside the container the service always listens on **8080** (the image sets `PORT=:8080`), which the image's `EXPOSE` and health check rely on. Choose the port on the host instead: `HOST_PORT=9090 docker compose up`, or `docker run -p 9090:8080 ...`. Don't set `PORT` for the container. The health check calls `GET /`, so the container turns unhealthy when the storage backend is unreachable.
 
+### Behind nginx
+
+[`docs/nginx/notes.sudde.net.conf`](nginx/notes.sudde.net.conf) is an example reverse proxy that serves the service over HTTPS at `notes.sudde.net`, with the service bound to `127.0.0.1:8082` (`PORT=127.0.0.1:8082`, or `HOST_PORT=127.0.0.1:8082` with Docker). It raises nginx's 1 MB body limit, because notes may be up to 4 MB.
+
 ## Configuration
 
 The application is configured via environment variables. You can set these in a `.env` file in the root directory. Environment variables explicitly set in the system or terminal take precedence over values in the `.env` file.
