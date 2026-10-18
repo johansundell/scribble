@@ -1,9 +1,12 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/johansundell/scribble/offline"
 )
 
 func TestLoadEnvReadsDotEnvInDir(t *testing.T) {
@@ -36,5 +39,23 @@ func TestLoadEnvReadsDotEnvInDir(t *testing.T) {
 func TestLoadEnvWithoutDotEnvIsFine(t *testing.T) {
 	if err := loadEnv(t.TempDir()); err != nil {
 		t.Fatalf("missing .env: %v", err)
+	}
+}
+
+func TestOpenCacheLocksAndPreventsSecondInstance(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	first, err := openCache("http://localhost:8080")
+	if err != nil {
+		t.Fatalf("first openCache: %v", err)
+	}
+	defer first.Close()
+
+	second, err := openCache("http://localhost:8080")
+	if err == nil {
+		_ = second.Close()
+		t.Fatal("second openCache succeeded, want ErrLocked")
+	}
+	if !errors.Is(err, offline.ErrLocked) {
+		t.Fatalf("second openCache error %v, want ErrLocked", err)
 	}
 }
