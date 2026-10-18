@@ -58,6 +58,19 @@ global hotkey (`Ctrl+Alt+N` by default; override with `SCRIBBLE_HOTKEY`, or set
 `SCRIBBLE_HOTKEY=none` to disable) that opens or focuses a new-note editor from
 anywhere.
 
+The window has a menu bar (on macOS, the system menu bar; there Ctrl is Cmd):
+
+| Menu | Item | Shortcut |
+|------|------|----------|
+| File | New note | `Ctrl+N` |
+| File | Rename… | `F2` (when the note list or nothing has focus) |
+| File | Delete… | none |
+| File | Quit | `Ctrl+Q` (quits fully, even with a tray, after asking about unsaved changes) |
+| Edit | Undo / Redo | `Ctrl+Z` / `Ctrl+Y` (`Cmd+Shift+Z` on macOS) |
+| Edit | Cut / Copy / Paste / Select all | `Ctrl+X` / `Ctrl+C` / `Ctrl+V` / `Ctrl+A` |
+| Edit | Find (focus the search box) | `Ctrl+F` |
+| View | Edit note / View note | `Ctrl+E` |
+
 `scribble-gui` keeps its copy of the notes in the user config directory
 (`scribble/<host>-<hash of the server URL>.json`) and syncs every 30 seconds through
 `/changes?since=N`, so only what changed is downloaded. While the server is

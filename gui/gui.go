@@ -37,7 +37,7 @@ const allNotes = "All notes"
 type UI struct {
 	Project *widget.Select // allNotes or a #project the list is narrowed to
 	Search  *widget.Entry
-	List    *widget.List
+	List    *NoteList
 	Viewer  *widget.RichText // view mode: the open note rendered as Markdown
 	Editor  *widget.Entry    // edit mode: the open note's raw Markdown
 
@@ -54,6 +54,9 @@ type UI struct {
 	Status *widget.Label // the last error, empty when all is well
 
 	backlinkButtons *fyne.Container // inside Backlinks
+
+	menu                               *fyne.MainMenu
+	renameItem, deleteItem, toggleItem *fyne.MenuItem // greyed out like their toolbar buttons
 
 	w        fyne.Window
 	c        *client.Client
@@ -76,11 +79,12 @@ type UI struct {
 // StartSync to bring the copy up to date.
 func New(w fyne.Window, c *client.Client, store *offline.Store) *UI {
 	ui := &UI{w: w, c: c, store: store}
-	ui.List = widget.NewList(
-		func() int { return len(ui.notes) },
-		func() fyne.CanvasObject { return widget.NewLabel("") },
-		func(i widget.ListItemID, o fyne.CanvasObject) { o.(*widget.Label).SetText(ui.notes[i].Title) },
-	)
+	ui.List = &NoteList{ui: ui, List: widget.List{
+		Length:     func() int { return len(ui.notes) },
+		CreateItem: func() fyne.CanvasObject { return widget.NewLabel("") },
+		UpdateItem: func(i widget.ListItemID, o fyne.CanvasObject) { o.(*widget.Label).SetText(ui.notes[i].Title) },
+	}}
+	ui.List.ExtendBaseWidget(ui.List)
 	ui.List.OnSelected = func(i widget.ListItemID) {
 		id := ui.notes[i].ID
 		if ui.current == nil || ui.current.ID != id {
@@ -97,13 +101,7 @@ func New(w fyne.Window, c *client.Client, store *offline.Store) *UI {
 	ui.Editor = widget.NewMultiLineEntry()
 	ui.Editor.Wrapping = fyne.TextWrapWord
 	ui.Editor.OnChanged = func(string) { ui.updateButtons() }
-	ui.EditToggle = widget.NewButton("Edit", func() {
-		if ui.Editor.Visible() {
-			ui.showView()
-		} else {
-			ui.showEdit()
-		}
-	})
+	ui.EditToggle = widget.NewButton("Edit", ui.toggleMode)
 	ui.Save = widget.NewButton("Save", ui.save)
 	ui.NewNote = widget.NewButton("New", func() { ui.unlessUnsaved(ui.startNote) })
 	ui.Rename = widget.NewButton("Rename", ui.askRename)
@@ -125,6 +123,7 @@ func New(w fyne.Window, c *client.Client, store *offline.Store) *UI {
 	split.Offset = 0.3
 	w.SetContent(container.NewBorder(nil, ui.Status, nil, nil, split))
 	w.SetCloseIntercept(ui.Close)
+	ui.setupMenu()
 	ui.showView()
 	ui.reload()
 	return ui
@@ -166,14 +165,14 @@ func (ui *UI) showWindow() {
 // ready for typing, asking first if there are unsaved changes.
 func (ui *UI) OpenNewNote() {
 	ui.showWindow()
-	if ui.w.Canvas().Overlays().Top() != nil {
+	if ui.dialogOpen() {
 		return
 	}
 	ui.unlessUnsaved(ui.startNote)
 }
 
 func (ui *UI) quit() {
-	if ui.w.Canvas().Overlays().Top() != nil {
+	if ui.dialogOpen() {
 		ui.showWindow()
 		return
 	}
@@ -418,6 +417,15 @@ func (ui *UI) showEdit() {
 	ui.updateButtons()
 }
 
+// toggleMode switches between view and edit mode.
+func (ui *UI) toggleMode() {
+	if ui.Editor.Visible() {
+		ui.showView()
+	} else {
+		ui.showEdit()
+	}
+}
+
 func (ui *UI) updateButtons() {
 	setEnabled(ui.EditToggle, ui.current != nil)
 	setEnabled(ui.Save, ui.hasUnsavedChanges())
@@ -425,6 +433,7 @@ func (ui *UI) updateButtons() {
 	// or queued edits stale.
 	setEnabled(ui.Rename, ui.onServer() && !ui.hasUnsavedChanges())
 	setEnabled(ui.Delete, ui.isSaved())
+	ui.updateMenu()
 }
 
 func setEnabled(b *widget.Button, on bool) {
