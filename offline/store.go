@@ -50,6 +50,7 @@ type Report struct {
 // Store is the local copy. It is safe for concurrent use.
 type Store struct {
 	path string // "" keeps the copy in memory only
+	lock *lockHandle
 
 	syncing sync.Mutex // one Sync at a time
 	mu      sync.Mutex
@@ -77,20 +78,33 @@ type state struct {
 
 // Open loads the copy saved at path, or starts an empty one if there is no
 // file yet. An empty path keeps the copy in memory only.
+// If path is non-empty, Open acquires an exclusive lock on path + ".lock".
+// When another process holds the lock, Open returns an error wrapping ErrLocked.
 func Open(path string) (*Store, error) {
 	s := &Store{path: path, notes: map[int64]notes.Note{}, sent: map[int64]int64{}, acked: map[int64]map[int64]int64{}}
 	if path == "" {
 		return s, nil
 	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return nil, err
+	}
+	lock, err := acquireLock(path + ".lock")
+	if err != nil {
+		return nil, err
+	}
+	s.lock = lock
+
 	b, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return s, nil
 	}
 	if err != nil {
+		_ = s.lock.Close()
 		return nil, err
 	}
 	var st state
 	if err := json.Unmarshal(b, &st); err != nil {
+		_ = s.lock.Close()
 		return nil, err
 	}
 	s.seq, s.localID, s.edits = st.LatestSeq, st.LocalID, st.Edits
@@ -101,6 +115,18 @@ func Open(path string) (*Store, error) {
 		s.notes[n.ID] = n
 	}
 	return s, nil
+}
+
+// Close releases the store's exclusive lock on the cache file.
+func (s *Store) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.lock != nil {
+		err := s.lock.Close()
+		s.lock = nil
+		return err
+	}
+	return nil
 }
 
 // DefaultPath is where the GUI keeps its copy of the server at baseURL.

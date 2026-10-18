@@ -48,15 +48,16 @@ func openCached(t *testing.T, c *client.Client, path string) (*gui.UI, fyne.Wind
 	t.Helper()
 	test.NewTempApp(t)
 	w := test.NewWindow(nil)
-	t.Cleanup(func() {
-		if slices.Contains(fyne.CurrentApp().Driver().AllWindows(), w) {
-			w.Close()
-		}
-	})
 	cache, err := offline.Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		_ = cache.Close()
+		if slices.Contains(fyne.CurrentApp().Driver().AllWindows(), w) {
+			w.Close()
+		}
+	})
 	ui := gui.New(w, c, cache)
 	ui.Sync()
 	w.Resize(fyne.NewSize(900, 600))
@@ -69,7 +70,8 @@ func TestBrowsesAndSearchesSavedNotesWhileServerIsDown(t *testing.T) {
 	create(t, c, "# Groceries\nmilk #home")
 	create(t, c, "# Ideas\nfly")
 	path := filepath.Join(t.TempDir(), "cache.json")
-	openCached(t, c, path)
+	first, _ := openCached(t, c, path)
+	first.CloseStore()
 
 	cb.unplugged.Store(true)
 	ui, _ := openCached(t, c, path)
@@ -436,6 +438,7 @@ func TestDeleteShowsEvenIfTheSyncAfterItFails(t *testing.T) {
 	tapDialogButton(t, w, "Delete")
 
 	assertTitles(t, ui, "Groceries")
+	ui.CloseStore()
 	ui, _ = openCached(t, c, path) // restarted, still offline
 	assertTitles(t, ui, "Groceries")
 }

@@ -108,6 +108,7 @@ func open(t *testing.T, path string) *offline.Store {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = s.Close() })
 	return s
 }
 
@@ -203,7 +204,9 @@ func TestCacheOnDiskServesReadsWhileOffline(t *testing.T) {
 	create(t, c, "# Groceries\nmilk #home")
 	create(t, c, "# Ideas\nfly")
 	path := filepath.Join(t.TempDir(), "cache.json")
-	syncNow(t, open(t, path), c)
+	first := open(t, path)
+	syncNow(t, first, c)
+	first.Close()
 
 	net.down.Store(true)
 	s := open(t, path)
@@ -235,6 +238,7 @@ func TestEditQueuedOfflineReachesTheServerOnReconnect(t *testing.T) {
 	}
 
 	net.down.Store(false)
+	s.Close()
 	s = open(t, path) // the queue survives a restart
 	syncNow(t, s, c)
 

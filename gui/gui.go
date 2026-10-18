@@ -197,6 +197,14 @@ func (ui *UI) Close() {
 	ui.unlessUnsaved(ui.w.Close)
 }
 
+// CloseStore releases the lock on the underlying offline cache.
+func (ui *UI) CloseStore() error {
+	if ui.store != nil {
+		return ui.store.Close()
+	}
+	return nil
+}
+
 func requestContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), requestTimeout)
 }

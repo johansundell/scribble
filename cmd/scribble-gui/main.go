@@ -13,6 +13,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -20,6 +21,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/widget"
 	"github.com/johansundell/scribble/client"
@@ -53,8 +55,21 @@ func main() {
 	} else if token == "" {
 		w.SetContent(widget.NewLabel("SCRIBBLE_TOKEN is not set. Set it to the server's AUTH_TOKEN, in the environment or in a .env file next to scribble-gui, and start it again."))
 	} else if cache, err := openCache(baseURL); err != nil {
-		w.SetContent(widget.NewLabel("Cannot open the notes saved on this computer: " + err.Error()))
+		var locked *offline.LockedError
+		if errors.As(err, &locked) {
+			msg := "Another scribble-gui instance is already running for this server."
+			if locked.PID > 0 {
+				msg = fmt.Sprintf("Another scribble-gui instance (process %d) is already running for this server.", locked.PID)
+			}
+			w.SetContent(container.NewVBox(
+				widget.NewLabel(msg),
+				widget.NewButton("Quit", func() { a.Quit() }),
+			))
+		} else {
+			w.SetContent(widget.NewLabel("Cannot open the notes saved on this computer: " + err.Error()))
+		}
 	} else {
+		defer cache.Close()
 		ui := gui.New(w, client.New(baseURL, token), cache)
 		ui.StartSync(syncInterval)
 		if desk, ok := a.(desktop.App); ok {
