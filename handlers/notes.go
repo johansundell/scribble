@@ -80,7 +80,8 @@ func bindJSON(c *gin.Context, v any) error {
 }
 
 // ListNotes handles GET /notes. ?title= is an exact (case-insensitive)
-// lookup returning zero or one note; ?q= searches titles and bodies.
+// lookup returning zero or one note; ?q= searches titles and bodies and
+// ?project= keeps notes tagged #project.
 func (h *Handler) ListNotes(c *gin.Context) error {
 	ns, err := h.noteStore()
 	if err != nil {
@@ -99,7 +100,21 @@ func (h *Handler) ListNotes(c *gin.Context) error {
 		c.JSON(http.StatusOK, []notes.Note{*n})
 		return nil
 	}
-	list, err := ns.ListNotes(ctx, c.Query("q"))
+	list, err := ns.ListNotes(ctx, c.Query("q"), c.Query("project"))
+	if err != nil {
+		return noteError(err)
+	}
+	c.JSON(http.StatusOK, list)
+	return nil
+}
+
+// ListProjects handles GET /projects: the sorted #project names in use.
+func (h *Handler) ListProjects(c *gin.Context) error {
+	ns, err := h.noteStore()
+	if err != nil {
+		return err
+	}
+	list, err := ns.Projects(c.Request.Context())
 	if err != nil {
 		return noteError(err)
 	}

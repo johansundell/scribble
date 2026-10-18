@@ -1,10 +1,11 @@
-// Package notes holds the Note type and the [[wiki-link]] helpers shared by
-// the server, the CLI and the GUI client. It has no dependencies on the rest
-// of the module so clients stay small.
+// Package notes holds the Note type and the [[wiki-link]] and #project
+// helpers shared by the server, the CLI and the GUI client. It has no
+// dependencies on the rest of the module so clients stay small.
 package notes
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 )
@@ -81,6 +82,57 @@ func RewriteLinks(body, oldTitle, newTitle string) string {
 			return "[[" + newTitle + "]]"
 		}
 		return s
+	})
+}
+
+// projectRe matches a #project tag: '#' then an ASCII letter, at the start of
+// a line or after whitespace. Group 1 is the separator, group 2 the name.
+var projectRe = regexp.MustCompile(`(?m)(^|\s)#([A-Za-z][A-Za-z0-9_-]*)`)
+
+// titleEnd returns the offset just past the title line (the first non-empty
+// line), so "# Title" is never read as a project tag.
+func titleEnd(body string) int {
+	off := 0
+	for {
+		line, _, more := strings.Cut(body[off:], "\n")
+		end := off + len(line)
+		if strings.TrimSpace(line) != "" || !more {
+			return end
+		}
+		off = end + 1
+	}
+}
+
+// Projects returns the #project tags in body, lowercase without the '#',
+// deduplicated and sorted. The title line is ignored.
+func Projects(body string) []string {
+	var out []string
+	for _, m := range projectRe.FindAllStringSubmatch(body[titleEnd(body):], -1) {
+		out = append(out, strings.ToLower(m[2]))
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+// HasProject reports whether body is tagged #project (case-insensitive; a
+// leading '#' on project is optional).
+func HasProject(body, project string) bool {
+	_, found := slices.BinarySearch(Projects(body), NormalizeProject(project))
+	return found && project != ""
+}
+
+// NormalizeProject turns "#Name" or "Name" into the stored form "name".
+func NormalizeProject(project string) string {
+	return strings.ToLower(strings.TrimPrefix(strings.TrimSpace(project), "#"))
+}
+
+// LinkifyProjectsForView rewrites #project tags (outside the title line)
+// into Markdown links with the project:// scheme. Used by GUI clients.
+func LinkifyProjectsForView(body string) string {
+	i := titleEnd(body)
+	return body[:i] + projectRe.ReplaceAllStringFunc(body[i:], func(s string) string {
+		m := projectRe.FindStringSubmatch(s)
+		return m[1] + "[#" + m[2] + "](project://" + strings.ToLower(m[2]) + ")"
 	})
 }
 

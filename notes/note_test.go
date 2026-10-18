@@ -1,6 +1,9 @@
 package notes
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func TestTitleOf(t *testing.T) {
 	cases := map[string]string{
@@ -43,5 +46,44 @@ func TestLinks(t *testing.T) {
 func TestLinkifyForView(t *testing.T) {
 	if got := LinkifyForView("go [[My Note]]"); got != "go [My Note](note://My%20Note)" {
 		t.Errorf("got %q", got)
+	}
+}
+
+func TestProjects(t *testing.T) {
+	cases := map[string][]string{
+		"# Title\nwork on #Scribble and #home-lab today":   {"home-lab", "scribble"},
+		"#Title line is skipped\n#work\n#WORK again #work": {"work"},
+		"\n\n  #notitle here\nbody":                        nil,
+		"T\nissue #42, url http://x.y/#anchor, a#b":        nil,
+		"T\n## Heading\n# Heading\nend #a_1.":              {"a_1"},
+		"T\n\t#tabbed\n#first-col":                         {"first-col", "tabbed"},
+		"":                                                 nil,
+	}
+	for in, want := range cases {
+		if got := Projects(in); !slices.Equal(got, want) {
+			t.Errorf("Projects(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestHasProject(t *testing.T) {
+	body := "# Plans\nsee #Scribble"
+	for _, p := range []string{"scribble", "SCRIBBLE", "#scribble"} {
+		if !HasProject(body, p) {
+			t.Errorf("HasProject(%q) = false", p)
+		}
+	}
+	for _, p := range []string{"scrib", "plans", ""} {
+		if HasProject(body, p) {
+			t.Errorf("HasProject(%q) = true", p)
+		}
+	}
+}
+
+func TestLinkifyProjectsForView(t *testing.T) {
+	got := LinkifyProjectsForView("# Title #x\nsee #Scribble, #42 and a#b\n#home-lab")
+	want := "# Title #x\nsee [#Scribble](project://scribble), #42 and a#b\n[#home-lab](project://home-lab)"
+	if got != want {
+		t.Errorf("got  %q\nwant %q", got, want)
 	}
 }

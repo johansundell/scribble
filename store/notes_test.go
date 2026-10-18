@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -50,11 +51,11 @@ func TestNotesCRUD(t *testing.T) {
 		t.Errorf("want ErrStaleRevision, got %v", err)
 	}
 
-	found, _ := s.ListNotes(ctx, "eggs")
+	found, _ := s.ListNotes(ctx, "eggs", "")
 	if len(found) != 1 {
 		t.Errorf("search eggs: got %d", len(found))
 	}
-	if found, _ = s.ListNotes(ctx, "%"); len(found) != 0 {
+	if found, _ = s.ListNotes(ctx, "%", ""); len(found) != 0 {
 		t.Errorf("'%%' must be literal, got %d matches", len(found))
 	}
 }
@@ -116,5 +117,38 @@ func TestNotesBacklinksAndRename(t *testing.T) {
 	}
 	if _, err := s.RenameNote(ctx, target.ID, "bad [[title]]"); !errors.Is(err, ErrNoTitle) {
 		t.Errorf("brackets in title should be rejected, got %v", err)
+	}
+}
+
+func TestNotesProjects(t *testing.T) {
+	ctx := context.Background()
+	s := newNoteStore(t)
+	a, _ := s.CreateNote(ctx, "# Plans\nfor #Scribble and #home")
+	b, _ := s.CreateNote(ctx, "# Bugs\n#scribble: fix sync")
+	_, _ = s.CreateNote(ctx, "# Scribblings\nmentions scribble and #scribbler")
+	gone, _ := s.CreateNote(ctx, "# Old\n#archive")
+	_, _ = s.CreateNote(ctx, "#title-only")
+	if err := s.DeleteNote(ctx, gone.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.Projects(ctx)
+	if err != nil || !slices.Equal(got, []string{"home", "scribble", "scribbler"}) {
+		t.Fatalf("Projects = %q, %v", got, err)
+	}
+
+	list, err := s.ListNotes(ctx, "", "#SCRIBBLE")
+	if err != nil || len(list) != 2 || list[0].ID != b.ID || list[1].ID != a.ID {
+		t.Fatalf("project filter: %v %+v", err, list)
+	}
+	list, _ = s.ListNotes(ctx, "sync", "scribble")
+	if len(list) != 1 || list[0].ID != b.ID {
+		t.Errorf("project + search: %+v", list)
+	}
+	if list, _ = s.ListNotes(ctx, "", "archive"); len(list) != 0 {
+		t.Errorf("deleted notes must not be listed: %+v", list)
+	}
+	if list, _ = s.ListNotes(ctx, "", "scri%"); len(list) != 0 {
+		t.Errorf("'%%' must be literal: %+v", list)
 	}
 }

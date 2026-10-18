@@ -183,6 +183,7 @@ func TestGetRoutes(t *testing.T) {
 		"NoteBacklinks": {method: "GET", pattern: "/notes/:id/backlinks", useLogger: false, useAuth: true},
 		"RenameNote":    {method: "POST", pattern: "/notes/:id/rename", useLogger: false, useAuth: true},
 		"NoteChanges":   {method: "GET", pattern: "/changes", useLogger: false, useAuth: true},
+		"ListProjects":  {method: "GET", pattern: "/projects", useLogger: false, useAuth: true},
 	}
 
 	if len(routes) != len(expectedRoutes) {

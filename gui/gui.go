@@ -4,6 +4,7 @@ package gui
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -19,13 +20,17 @@ import (
 // so this is also the longest the window can stall.
 const requestTimeout = 10 * time.Second
 
+// allNotes is the project choice that turns the project filter off.
+const allNotes = "All notes"
+
 // UI is the main window's content. The widgets are exported so tests can
 // drive the window the way a user does.
 type UI struct {
-	Search *widget.Entry
-	List   *widget.List
-	Viewer *widget.RichText // view mode: the open note rendered as Markdown
-	Editor *widget.Entry    // edit mode: the open note's raw Markdown
+	Project *widget.Select // allNotes or a #project the list is narrowed to
+	Search  *widget.Entry
+	List    *widget.List
+	Viewer  *widget.RichText // view mode: the open note rendered as Markdown
+	Editor  *widget.Entry    // edit mode: the open note's raw Markdown
 
 	EditToggle *widget.Button // switches between view and edit mode
 	Save       *widget.Button
@@ -56,6 +61,8 @@ func New(w fyne.Window, c *client.Client) *UI {
 			ui.unlessUnsaved(func() { ui.load(id) })
 		}
 	}
+	ui.Project = widget.NewSelect([]string{allNotes}, func(string) { ui.refresh() })
+	ui.Project.Selected = allNotes
 	ui.Search = widget.NewEntry()
 	ui.Search.SetPlaceHolder("Search")
 	ui.Search.OnChanged = func(string) { ui.refresh() }
@@ -79,7 +86,7 @@ func New(w fyne.Window, c *client.Client) *UI {
 
 	toolbar := container.NewHBox(ui.NewNote, ui.EditToggle, ui.Save, layout.NewSpacer(), ui.Delete)
 	split := container.NewHSplit(
-		container.NewBorder(ui.Search, nil, nil, nil, ui.List),
+		container.NewBorder(container.NewVBox(ui.Project, ui.Search), nil, nil, nil, ui.List),
 		container.NewBorder(toolbar, nil, nil, nil,
 			container.NewStack(container.NewVScroll(ui.Viewer), ui.Editor)),
 	)
@@ -129,10 +136,15 @@ func (ui *UI) open(n notes.Note) {
 	ui.selectCurrent()
 }
 
-// startNote opens an empty editor for a new note.
+// startNote opens an editor for a new note. Inside a project it starts with
+// the #project tag below an empty title line, so the note stays in view.
 func (ui *UI) startNote() {
 	ui.current = &notes.Note{}
-	ui.Editor.SetText("")
+	text := ""
+	if p := ui.activeProject(); p != "" {
+		text = "\n\n#" + p + "\n"
+	}
+	ui.Editor.SetText(text)
 	ui.showEdit()
 	ui.selectCurrent()
 }
@@ -156,13 +168,41 @@ func (ui *UI) unlessUnsaved(then func()) {
 	d.Show()
 }
 
-// showView switches to view mode, rendering the editor's text.
+// showView switches to view mode, rendering the editor's text with its
+// #project tags as links that switch the project filter.
 func (ui *UI) showView() {
-	ui.Viewer.ParseMarkdown(ui.Editor.Text)
+	ui.Viewer.ParseMarkdown(notes.LinkifyProjectsForView(ui.Editor.Text))
+	ui.hookProjectLinks(ui.Viewer.Segments)
 	ui.Editor.Hide()
 	ui.Viewer.Show()
 	ui.EditToggle.SetText("Edit")
 	ui.updateButtons()
+}
+
+// hookProjectLinks makes project:// links select their project instead of
+// asking the OS to open the URL. Lists nest their segments, so it recurses.
+func (ui *UI) hookProjectLinks(segs []widget.RichTextSegment) {
+	for _, s := range segs {
+		switch s := s.(type) {
+		case *widget.HyperlinkSegment:
+			if s.URL != nil && s.URL.Scheme == "project" {
+				name := s.URL.Host
+				s.OnTapped = func() { ui.Project.SetSelected(name) }
+			}
+		case interface {
+			Segments() []widget.RichTextSegment
+		}:
+			ui.hookProjectLinks(s.Segments())
+		}
+	}
+}
+
+// activeProject returns the project the list is narrowed to, "" for all.
+func (ui *UI) activeProject() string {
+	if ui.Project.Selected == allNotes {
+		return ""
+	}
+	return ui.Project.Selected
 }
 
 // showEdit switches to edit mode on the open note.
@@ -244,11 +284,23 @@ func (ui *UI) delete(n notes.Note) {
 	ui.refresh()
 }
 
-// refresh reloads the note list from the server, filtered by the search box.
+// refresh reloads the project choices and the note list from the server,
+// the list filtered by the project and the search box.
 func (ui *UI) refresh() {
 	ctx, cancel := requestContext()
 	defer cancel()
-	list, err := ui.c.List(ctx, ui.Search.Text)
+	projects, err := ui.c.Projects(ctx)
+	if ui.report(err) {
+		return
+	}
+	// Keep the active project selectable even when no saved note has it
+	// any more (its last note deleted, or a tag only in an unsaved draft).
+	if p := ui.activeProject(); p != "" && !slices.Contains(projects, p) {
+		projects = append(projects, p)
+		slices.Sort(projects)
+	}
+	ui.Project.SetOptions(append([]string{allNotes}, projects...))
+	list, err := ui.c.ListInProject(ctx, ui.activeProject(), ui.Search.Text)
 	if ui.report(err) {
 		return
 	}

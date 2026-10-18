@@ -130,7 +130,9 @@ func findSegment(segs []widget.RichTextSegment, text string) *widget.TextSegment
 			if s.Text == text {
 				return s
 			}
-		case interface{ Segments() []widget.RichTextSegment }:
+		case interface {
+			Segments() []widget.RichTextSegment
+		}:
 			if ts := findSegment(s.Segments(), text); ts != nil {
 				return ts
 			}
@@ -426,6 +428,119 @@ func TestSearchKeepsErrorInStatus(t *testing.T) {
 	test.Type(ui.Search, "fly")
 	if !strings.Contains(ui.Status.Text, "already has that title") {
 		t.Errorf("searching cleared the error, status says %q", ui.Status.Text)
+	}
+}
+
+func TestProjectFilterNarrowsList(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Plans\nfor #Scribble and #home")
+	create(t, c, "# Bugs\n#scribble sync bug")
+	create(t, c, "# Groceries\nmilk")
+
+	ui, _ := open(t, c)
+	if want := []string{"All notes", "home", "scribble"}; !slices.Equal(ui.Project.Options, want) {
+		t.Fatalf("project options %q, want %q", ui.Project.Options, want)
+	}
+	if ui.Project.Selected != "All notes" {
+		t.Errorf("starts on %q, want All notes", ui.Project.Selected)
+	}
+
+	ui.Project.SetSelected("scribble")
+	assertTitles(t, ui, "Bugs", "Plans")
+
+	test.Type(ui.Search, "sync")
+	assertTitles(t, ui, "Bugs")
+
+	ui.Search.SetText("")
+	ui.Project.SetSelected("All notes")
+	assertTitles(t, ui, "Groceries", "Bugs", "Plans")
+}
+
+// link returns the viewer's hyperlink with exactly this text.
+func link(ui *gui.UI, text string) *widget.HyperlinkSegment {
+	return findLink(ui.Viewer.Segments, text)
+}
+
+func findLink(segs []widget.RichTextSegment, text string) *widget.HyperlinkSegment {
+	for _, s := range segs {
+		switch s := s.(type) {
+		case *widget.HyperlinkSegment:
+			if s.Text == text {
+				return s
+			}
+		case interface {
+			Segments() []widget.RichTextSegment
+		}:
+			if l := findLink(s.Segments(), text); l != nil {
+				return l
+			}
+		}
+	}
+	return nil
+}
+
+func TestTappingProjectLinkSwitchesFilter(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Plans\nfor #Scribble and #home\n- see #home-lab")
+	create(t, c, "# Bugs\n#scribble sync bug")
+	create(t, c, "# Lab\n#home-lab")
+
+	ui, _ := open(t, c)
+	ui.List.Select(2) // Plans
+	if link(ui, "#Plans") != nil {
+		t.Error("the title line must not become a project link")
+	}
+
+	l := link(ui, "#Scribble")
+	if l == nil || l.OnTapped == nil {
+		t.Fatalf("no tappable #Scribble link, got segments %#v", ui.Viewer.Segments)
+	}
+	l.OnTapped()
+	if ui.Project.Selected != "scribble" {
+		t.Fatalf("project filter is %q, want scribble", ui.Project.Selected)
+	}
+	assertTitles(t, ui, "Bugs", "Plans")
+
+	link(ui, "#home-lab").OnTapped() // inside a list item
+	assertTitles(t, ui, "Lab", "Plans")
+	if segment(ui, "for ") == nil {
+		t.Error("switching project should keep the open note")
+	}
+}
+
+func TestNewNoteInProjectStaysInProject(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Plans\n#scribble")
+
+	ui, w := open(t, c)
+	test.Tap(ui.NewNote)
+	if ui.Editor.Text != "" {
+		t.Fatalf("New outside a project should be empty, got %q", ui.Editor.Text)
+	}
+	ui.Project.SetSelected("scribble")
+	test.Tap(ui.NewNote)
+	tapDialogButton(t, w, "Discard") // the empty draft from the first New
+	if ui.Editor.Text != "\n\n#scribble\n" {
+		t.Fatalf("editor holds %q, want the project tag pre-filled", ui.Editor.Text)
+	}
+
+	ui.Editor.SetText("Roadmap" + ui.Editor.Text)
+	test.Tap(ui.Save)
+	assertTitles(t, ui, "Roadmap", "Plans")
+}
+
+func TestSavingNewTagAddsProject(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Plans\nnothing yet")
+
+	ui, _ := open(t, c)
+	ui.List.Select(0)
+	test.Tap(ui.EditToggle)
+	ui.Editor.SetText("# Plans\nnow #tagged")
+	test.Tap(ui.Save)
+
+	if want := []string{"All notes", "tagged"}; !slices.Equal(ui.Project.Options, want) {
+		t.Fatalf("project options %q, want %q", ui.Project.Options, want)
 	}
 }
 

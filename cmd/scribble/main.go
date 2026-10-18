@@ -31,6 +31,7 @@ Usage:
   scribble search <text>             find notes containing text
   scribble links <title>             notes this note links to
   scribble backlinks <title>         notes that link to this note
+  scribble projects [<name>]         list #projects, or the notes in one
   scribble rename <title> <new>      retitle a note and fix [[links]] to it
   scribble rm <title>                delete a note
 
@@ -87,7 +88,7 @@ func run(args []string) error {
 		if err != nil {
 			return err
 		}
-		printList(list)
+		printList(os.Stdout, list)
 		return nil
 	case "search":
 		if len(rest) == 0 {
@@ -97,7 +98,7 @@ func run(args []string) error {
 		if err != nil {
 			return err
 		}
-		printList(list)
+		printList(os.Stdout, list)
 		return nil
 	case "links":
 		return withNote(ctx, c, rest, 1, func(n *notes.Note, _ []string) error {
@@ -112,7 +113,7 @@ func run(args []string) error {
 			if err != nil {
 				return err
 			}
-			printList(list)
+			printList(os.Stdout, list)
 			return nil
 		})
 	case "rename":
@@ -124,6 +125,8 @@ func run(args []string) error {
 			fmt.Printf("renamed to %q\n", r.Title)
 			return nil
 		})
+	case "projects":
+		return cmdProjects(ctx, c, os.Stdout, rest)
 	case "rm":
 		return withNote(ctx, c, rest, 1, func(n *notes.Note, _ []string) error {
 			if err := c.Delete(ctx, n.ID); err != nil {
@@ -163,10 +166,34 @@ func explain(err error, title string) error {
 	return err
 }
 
-func printList(list []notes.Note) {
+func printList(w io.Writer, list []notes.Note) {
 	for _, n := range list {
-		fmt.Println(n.Title)
+		fmt.Fprintln(w, n.Title)
 	}
+}
+
+// cmdProjects prints every #project, or with one argument the titles of the
+// notes in that project.
+func cmdProjects(ctx context.Context, c *client.Client, w io.Writer, args []string) error {
+	switch len(args) {
+	case 0:
+		list, err := c.Projects(ctx)
+		if err != nil {
+			return err
+		}
+		for _, p := range list {
+			fmt.Fprintln(w, p)
+		}
+		return nil
+	case 1:
+		list, err := c.ListInProject(ctx, args[0], "")
+		if err != nil {
+			return err
+		}
+		printList(w, list)
+		return nil
+	}
+	return fmt.Errorf("usage: scribble projects [<name>]")
 }
 
 func stdinPiped() bool {

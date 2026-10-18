@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"testing"
 	"testing/fstest"
 
@@ -100,6 +101,27 @@ func TestClientRoundTrip(t *testing.T) {
 	list, _ := c.List(ctx, "thoughts")
 	if len(list) != 1 {
 		t.Errorf("search: %+v", list)
+	}
+}
+
+func TestClientProjects(t *testing.T) {
+	ctx := context.Background()
+	c := newClient(t)
+	plans, _ := c.Create(ctx, "# Plans\nfor #Scribble and #home")
+	bugs, _ := c.Create(ctx, "# Bugs\n#scribble sync bug")
+	_, _ = c.Create(ctx, "# Other\nno tags")
+
+	got, err := c.Projects(ctx)
+	if err != nil || !slices.Equal(got, []string{"home", "scribble"}) {
+		t.Fatalf("Projects = %q, %v", got, err)
+	}
+	list, err := c.ListInProject(ctx, "#scribble", "")
+	if err != nil || len(list) != 2 || list[0].ID != bugs.ID || list[1].ID != plans.ID {
+		t.Fatalf("ListInProject: %v %+v", err, list)
+	}
+	list, _ = c.ListInProject(ctx, "scribble", "sync")
+	if len(list) != 1 || list[0].ID != bugs.ID {
+		t.Errorf("project + search: %+v", list)
 	}
 }
 
