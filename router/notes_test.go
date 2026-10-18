@@ -134,6 +134,25 @@ func TestNotesAPI(t *testing.T) {
 		t.Errorf("nothing new expected, got %d", len(ch.Notes))
 	}
 	wantStatus(do("GET", "/changes?since=x", ""), http.StatusBadRequest)
+
+	// Projects: discovery and filtering, combinable with ?q=.
+	wantStatus(do("POST", "/notes", `{"body":"# Plans\nfor #Scribble and #home"}`), http.StatusCreated)
+	wantStatus(do("POST", "/notes", `{"body":"# Bugs\n#scribble sync bug"}`), http.StatusCreated)
+	var projects []string
+	w = do("GET", "/projects", "")
+	wantStatus(w, http.StatusOK)
+	decode(w, &projects)
+	if strings.Join(projects, ",") != "home,scribble" {
+		t.Fatalf("projects: %q", projects)
+	}
+	decode(do("GET", "/notes?project=SCRIBBLE", ""), &list)
+	if len(list) != 2 {
+		t.Fatalf("project filter: %+v", list)
+	}
+	decode(do("GET", "/notes?project=scribble&q=sync", ""), &list)
+	if len(list) != 1 || list[0].Title != "Bugs" {
+		t.Fatalf("project + search: %+v", list)
+	}
 }
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }

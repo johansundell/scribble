@@ -10,6 +10,7 @@ require (
 	github.com/kardianos/service v1.3.0
 	github.com/ncruces/go-sqlite3 v0.35.5
 	github.com/stretchr/testify v1.12.1
+	github.com/yuin/goldmark v1.8.2
 )
 
 require (
@@ -63,7 +64,6 @@ require (
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.2 // indirect
-	github.com/yuin/goldmark v1.8.2 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.9.1 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/arch v0.31.0 // indirect

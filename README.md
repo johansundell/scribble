@@ -19,6 +19,11 @@ create and update notes over an HTTP API.
   Titles are unique, case-insensitively.
 - `[[Another Note]]` links to a note by title. The server stays simple: it only
   stores text, answers backlink queries, and rewrites links when you rename.
+- `#project` puts a note in a project; a note can be in several. A tag is
+  `#` plus an ASCII letter and then letters, digits, `_` or `-`, at the start
+  of a line or after whitespace. The title line is never read for tags, and
+  names are case-insensitive (stored lowercase), so `#42` and `page#anchor`
+  are not projects. Tags live in the text only: no extra tables.
 - Every note has a `revision` (for edit-conflict detection) and a `seq` (a
   global change counter, for sync). Deleting leaves a tombstone so synced
   clients learn about it.
@@ -36,6 +41,7 @@ export SCRIBBLE_URL=http://localhost:8080 SCRIBBLE_TOKEN=change-me
 ./scribble new "Ideas" "first thought"
 git log --oneline -5 | ./scribble append "Work log"
 ./scribble edit Ideas
+./scribble projects            # every #project; `projects <name>` lists its notes
 
 # GUI (same SCRIBBLE_URL / SCRIBBLE_TOKEN)
 make build-gui
@@ -64,7 +70,8 @@ text, like the rest of the service.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| GET | `/notes` | list, newest first. `?q=` searches title and body; `?title=` is an exact lookup returning `[]` or one note |
+| GET | `/notes` | list, newest first. `?q=` searches title and body; `?project=` keeps notes tagged `#project` (combinable with `?q=`); `?title=` is an exact lookup returning `[]` or one note |
+| GET | `/projects` | the `#project` names in use, lowercase and sorted |
 | POST | `/notes` | `{"body": "# Title\n..."}` -> 201. **409** if the title exists |
 | GET | `/notes/:id` | one note |
 | PUT | `/notes/:id` | `{"body": "...", "base_revision": 3}` -> **412** if the note changed since that revision (omit or 0 to overwrite). **409** if the new title is taken |
@@ -82,7 +89,7 @@ warning at startup.
 ```
 main.go, service.go, config.go   service lifecycle (from the template)
 router/, handlers/, store/       routes, handlers, storage (notes: handlers/notes.go, store/notes.go)
-notes/                           Note type and [[link]] helpers (no server deps)
+notes/                           Note type, [[link]] and #project helpers (no server deps)
 client/                          Go API client
 cmd/scribble/                    CLI
 gui/                             Fyne GUI: windows and widgets
@@ -96,15 +103,17 @@ docs/service-template.md         the template's own docs
 go test ./...
 ```
 
-Tests cover the link helpers, the SQLite note store (conflicts, tombstones,
-rename and backlinks), the whole API over HTTP, and the Go client against a
-real server. GUI tests drive the window headlessly with Fyne's test driver,
+Tests cover the link and project helpers, the SQLite note store (conflicts,
+tombstones, rename, backlinks and projects), the whole API over HTTP, and the
+Go client and the CLI against a real server. GUI tests drive the window headlessly with Fyne's test driver,
 also against a real server.
 
 ## Roadmap
 
 - [x] `cmd/scribble-gui`: Fyne desktop client (Windows first): browse,
       search, view, edit, create and delete
+- [x] `#project` tags: `/projects`, `?project=`, `scribble projects`, and a
+      project filter with clickable tags in the GUI
 - [ ] GUI: clickable `[[links]]` (`notes.LinkifyForView` already turns them
       into `note://` links for Fyne's Markdown renderer) and a backlinks panel
 - [ ] GUI: conflict resolution, and a local cache synced through `/changes`

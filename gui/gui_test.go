@@ -130,7 +130,9 @@ func findSegment(segs []widget.RichTextSegment, text string) *widget.TextSegment
 			if s.Text == text {
 				return s
 			}
-		case interface{ Segments() []widget.RichTextSegment }:
+		case interface {
+			Segments() []widget.RichTextSegment
+		}:
 			if ts := findSegment(s.Segments(), text); ts != nil {
 				return ts
 			}
@@ -426,6 +428,250 @@ func TestSearchKeepsErrorInStatus(t *testing.T) {
 	test.Type(ui.Search, "fly")
 	if !strings.Contains(ui.Status.Text, "already has that title") {
 		t.Errorf("searching cleared the error, status says %q", ui.Status.Text)
+	}
+}
+
+func TestProjectFilterNarrowsList(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Plans\nfor #Scribble and #home")
+	create(t, c, "# Bugs\n#scribble sync bug")
+	create(t, c, "# Groceries\nmilk")
+
+	ui, _ := open(t, c)
+	if want := []string{"All notes", "home", "scribble"}; !slices.Equal(ui.Project.Options, want) {
+		t.Fatalf("project options %q, want %q", ui.Project.Options, want)
+	}
+	if ui.Project.Selected != "All notes" {
+		t.Errorf("starts on %q, want All notes", ui.Project.Selected)
+	}
+
+	ui.Project.SetSelected("scribble")
+	assertTitles(t, ui, "Bugs", "Plans")
+
+	test.Type(ui.Search, "sync")
+	assertTitles(t, ui, "Bugs")
+
+	ui.Search.SetText("")
+	ui.Project.SetSelected("All notes")
+	assertTitles(t, ui, "Groceries", "Bugs", "Plans")
+}
+
+// link returns the viewer's hyperlink with exactly this text.
+func link(ui *gui.UI, text string) *widget.HyperlinkSegment {
+	return findLink(ui.Viewer.Segments, text)
+}
+
+func findLink(segs []widget.RichTextSegment, text string) *widget.HyperlinkSegment {
+	for _, s := range segs {
+		switch s := s.(type) {
+		case *widget.HyperlinkSegment:
+			if s.Text == text {
+				return s
+			}
+		case interface {
+			Segments() []widget.RichTextSegment
+		}:
+			if l := findLink(s.Segments(), text); l != nil {
+				return l
+			}
+		}
+	}
+	return nil
+}
+
+// tapLink taps the rendered hyperlink with this text in the viewer, the way
+// a user clicks it.
+func tapLink(t *testing.T, ui *gui.UI, text string) {
+	t.Helper()
+	for _, o := range test.LaidOutObjects(ui.Viewer) {
+		if h, ok := o.(*widget.Hyperlink); ok && h.Text == text {
+			// Taps beside the text are ignored, and a link may be laid out
+			// wider than its text; aim at the middle of the text.
+			test.TapAt(h, fyne.NewPos(h.MinSize().Width/2, h.Size().Height/2))
+			return
+		}
+	}
+	t.Fatalf("the viewer shows no %q link, segments %#v", text, ui.Viewer.Segments)
+}
+
+func TestTappingProjectLinkSwitchesFilter(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Plans\nfor #Scribble and #home\n\n- see #home-lab\n\n| where |\n| --- |\n| at #work |")
+	create(t, c, "# Bugs\n#scribble sync bug")
+	create(t, c, "# Lab\n#home-lab")
+	create(t, c, "# Job\n#work")
+
+	ui, _ := open(t, c)
+	ui.List.Select(3) // Plans
+	if link(ui, "#Plans") != nil {
+		t.Error("the title line must not become a project link")
+	}
+
+	tapLink(t, ui, "#Scribble")
+	if ui.Project.Selected != "scribble" {
+		t.Fatalf("project filter is %q, want scribble", ui.Project.Selected)
+	}
+	assertTitles(t, ui, "Bugs", "Plans")
+
+	tapLink(t, ui, "#home-lab") // inside a list item
+	assertTitles(t, ui, "Lab", "Plans")
+	if segment(ui, "for ") == nil {
+		t.Error("switching project should keep the open note")
+	}
+
+	tapLink(t, ui, "#work") // inside a table cell
+	assertTitles(t, ui, "Job", "Plans")
+}
+
+// checkBox returns the viewer's task-list item with exactly this text.
+func checkBox(segs []widget.RichTextSegment, text string) *widget.CheckBoxSegment {
+	for _, s := range segs {
+		switch s := s.(type) {
+		case *widget.CheckBoxSegment:
+			if s.Text == text {
+				return s
+			}
+		case interface {
+			Segments() []widget.RichTextSegment
+		}:
+			if c := checkBox(s.Segments(), text); c != nil {
+				return c
+			}
+		}
+	}
+	return nil
+}
+
+func TestTaskListWithTagsRenders(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Todo\n\n- [ ] #home\n- [x] do #home more")
+
+	ui, _ := open(t, c)
+	ui.List.Select(0) // panicked in Fyne's renderer before the fix
+
+	for _, want := range []string{"#home", "do #home more"} {
+		if checkBox(ui.Viewer.Segments, want) == nil {
+			t.Errorf("no task item %q, segments %#v", want, ui.Viewer.Segments)
+		}
+	}
+}
+
+func TestNewNoteInProjectStaysInProject(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Plans\n#scribble")
+
+	ui, w := open(t, c)
+	test.Tap(ui.NewNote)
+	if ui.Editor.Text != "" {
+		t.Fatalf("New outside a project should be empty, got %q", ui.Editor.Text)
+	}
+	ui.Project.SetSelected("scribble")
+	test.Tap(ui.NewNote)
+	tapDialogButton(t, w, "Discard") // the empty draft from the first New
+	if ui.Editor.Text != "\n\n#scribble\n" {
+		t.Fatalf("editor holds %q, want the project tag pre-filled", ui.Editor.Text)
+	}
+
+	test.Type(ui.Editor, "Roadmap") // the cursor starts on the title line
+	test.Tap(ui.Save)
+	assertTitles(t, ui, "Roadmap", "Plans")
+}
+
+func TestTappingTagOfUnsavedDraftSwitchesFilter(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Plans\nmilk")
+
+	ui, _ := open(t, c)
+	test.Tap(ui.NewNote)
+	ui.Editor.SetText("# Draft\nfor #brand-new")
+	test.Tap(ui.EditToggle)
+
+	tapLink(t, ui, "#brand-new")
+	if ui.Project.Selected != "brand-new" {
+		t.Fatalf("project filter is %q, want brand-new", ui.Project.Selected)
+	}
+	assertTitles(t, ui)
+}
+
+func TestNewNoteInProjectStartsOnTitleLine(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Plans\nfirst line\nsecond line #scribble")
+
+	ui, _ := open(t, c)
+	ui.Project.SetSelected("scribble")
+	ui.List.Select(0)
+	test.Tap(ui.EditToggle)
+	ui.Editor.CursorRow, ui.Editor.CursorColumn = 2, 5 // in the note's body
+	test.Tap(ui.EditToggle)                            // back to view, no edits
+
+	test.Tap(ui.NewNote)
+	test.Type(ui.Editor, "Roadmap")
+	if ui.Editor.Text != "Roadmap\n\n#scribble\n" {
+		t.Fatalf("editor holds %q; typing should land on the title line", ui.Editor.Text)
+	}
+}
+
+func TestSavingUntitledProjectDraftIsRefused(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Plans\n#scribble")
+
+	ui, _ := open(t, c)
+	ui.Project.SetSelected("scribble")
+	test.Tap(ui.NewNote)
+	ui.Project.SetSelected("All notes") // the check must not rely on the filter
+	test.Tap(ui.Save)
+
+	if _, err := c.ByTitle(context.Background(), "scribble"); !client.IsNotFound(err) {
+		t.Fatalf("the untitled draft was saved as %q: %v", "scribble", err)
+	}
+	if !ui.Editor.Visible() || ui.Editor.Text != "\n\n#scribble\n" {
+		t.Errorf("the draft should stay open, editor holds %q", ui.Editor.Text)
+	}
+	if !strings.Contains(ui.Status.Text, "title") {
+		t.Errorf("status says %q", ui.Status.Text)
+	}
+}
+
+func TestSavingProjectDraftWithTitleWorks(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Plans\n#scribble")
+
+	ui, _ := open(t, c)
+	ui.Project.SetSelected("scribble")
+	test.Tap(ui.NewNote)
+	test.Type(ui.Editor, "#Roadmap") // a title that looks like a tag
+	test.Tap(ui.Save)
+	if got := byTitle(t, c, "Roadmap").Body; got != "#Roadmap\n\n#scribble\n" {
+		t.Fatalf("server holds %q, status %q", got, ui.Status.Text)
+	}
+	assertTitles(t, ui, "Roadmap", "Plans")
+
+	test.Tap(ui.NewNote)
+	test.Type(ui.Editor, "#scribble") // titled after its own project
+	test.Tap(ui.Save)
+	if got := byTitle(t, c, "scribble").Body; got != "#scribble\n\n#scribble\n" {
+		t.Fatalf("server holds %q, status %q", got, ui.Status.Text)
+	}
+
+	ui.Project.SetSelected("All notes")
+	test.Tap(ui.NewNote)
+	ui.Editor.SetText("#Ideas\nbody")
+	test.Tap(ui.Save)
+	byTitle(t, c, "Ideas")
+}
+
+func TestSavingNewTagAddsProject(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Plans\nnothing yet")
+
+	ui, _ := open(t, c)
+	ui.List.Select(0)
+	test.Tap(ui.EditToggle)
+	ui.Editor.SetText("# Plans\nnow #tagged")
+	test.Tap(ui.Save)
+
+	if want := []string{"All notes", "tagged"}; !slices.Equal(ui.Project.Options, want) {
+		t.Fatalf("project options %q, want %q", ui.Project.Options, want)
 	}
 }
 

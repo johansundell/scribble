@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -25,8 +26,11 @@ type NoteStore interface {
 	CreateNote(ctx context.Context, body string) (*notes.Note, error)
 	GetNote(ctx context.Context, id int64) (*notes.Note, error)
 	GetNoteByTitle(ctx context.Context, title string) (*notes.Note, error)
-	// ListNotes returns live notes, newest first; q filters on title/body.
-	ListNotes(ctx context.Context, q string) ([]notes.Note, error)
+	// ListNotes returns live notes, newest first; q filters on title/body
+	// and a non-empty project keeps only notes tagged #project.
+	ListNotes(ctx context.Context, q, project string) ([]notes.Note, error)
+	// Projects returns the distinct #project names across live notes, sorted.
+	Projects(ctx context.Context) ([]string, error)
 	// NoteChanges returns every note, tombstones included, with Seq > since.
 	NoteChanges(ctx context.Context, since int64) ([]notes.Note, error)
 	// UpdateNote replaces the body. baseRev > 0 must match the stored
@@ -156,7 +160,7 @@ func (s *SQLStore) GetNoteByTitle(ctx context.Context, title string) (*notes.Not
 		`SELECT `+noteCols+` FROM notes WHERE lower(title) = lower(?) AND deleted = 0`, title))
 }
 
-func (s *SQLStore) ListNotes(ctx context.Context, q string) ([]notes.Note, error) {
+func (s *SQLStore) ListNotes(ctx context.Context, q, project string) ([]notes.Note, error) {
 	if err := s.checkNotes(); err != nil {
 		return nil, err
 	}
@@ -167,8 +171,41 @@ func (s *SQLStore) ListNotes(ctx context.Context, q string) ([]notes.Note, error
 		like := "%" + escapeLike(q) + "%"
 		args = append(args, like, like)
 	}
+	project = notes.NormalizeProject(project)
+	if project != "" {
+		// LIKE (case-insensitive for ASCII) only narrows the candidates;
+		// HasProject does the exact match.
+		query += ` AND body LIKE ? ESCAPE '\'`
+		args = append(args, "%#"+escapeLike(project)+"%")
+	}
 	query += ` ORDER BY updated_at DESC, id DESC`
-	return queryNotes(ctx, s.db, query, args...)
+	list, err := queryNotes(ctx, s.db, query, args...)
+	if err != nil || project == "" {
+		return list, err
+	}
+	out := []notes.Note{}
+	for _, n := range list {
+		if notes.HasProject(n.Body, project) {
+			out = append(out, n)
+		}
+	}
+	return out, nil
+}
+
+func (s *SQLStore) Projects(ctx context.Context) ([]string, error) {
+	if err := s.checkNotes(); err != nil {
+		return nil, err
+	}
+	list, err := queryNotes(ctx, s.db, `SELECT `+noteCols+` FROM notes WHERE deleted = 0 AND body LIKE '%#%'`)
+	if err != nil {
+		return nil, err
+	}
+	out := []string{}
+	for _, n := range list {
+		out = append(out, notes.Projects(n.Body)...)
+	}
+	slices.Sort(out)
+	return slices.Compact(out), nil
 }
 
 // escapeLike makes user text match literally inside a LIKE pattern.

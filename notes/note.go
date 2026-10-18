@@ -1,12 +1,19 @@
-// Package notes holds the Note type and the [[wiki-link]] helpers shared by
-// the server, the CLI and the GUI client. It has no dependencies on the rest
-// of the module so clients stay small.
+// Package notes holds the Note type and the [[wiki-link]] and #project
+// helpers shared by the server, the CLI and the GUI client. It has no
+// dependencies on the rest of the module so clients stay small.
 package notes
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 	"time"
+
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/extension"
+	east "github.com/yuin/goldmark/extension/ast"
+	"github.com/yuin/goldmark/text"
 )
 
 // Note is a single Markdown note. The title is not stored separately by
@@ -26,12 +33,17 @@ type Note struct {
 // TitleOf returns the title implied by a Markdown body.
 func TitleOf(body string) string {
 	for _, line := range strings.Split(body, "\n") {
-		line = strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(line), "#"))
-		if line != "" {
-			return line
+		if t := titleText(line); t != "" {
+			return t
 		}
 	}
 	return ""
+}
+
+// titleText is line without its leading '#' marks and spaces; a line that
+// is empty afterwards cannot be the title.
+func titleText(line string) string {
+	return strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(line), "#"))
 }
 
 // SetTitle replaces the title line of body, keeping any leading '#' marks.
@@ -82,6 +94,116 @@ func RewriteLinks(body, oldTitle, newTitle string) string {
 		}
 		return s
 	})
+}
+
+// projectRe matches a #project tag: '#' then an ASCII letter, at the start of
+// a line or after whitespace. Group 1 is the separator, group 2 the name.
+var projectRe = regexp.MustCompile(`(?m)(^|\s)#([A-Za-z][A-Za-z0-9_-]*)`)
+
+// titleEnd returns the offset just past the line TitleOf takes the title
+// from, so "# Title" is never read as a project tag.
+func titleEnd(body string) int {
+	off := 0
+	for {
+		line, _, more := strings.Cut(body[off:], "\n")
+		end := off + len(line)
+		if titleText(line) != "" || !more {
+			return end
+		}
+		off = end + 1
+	}
+}
+
+// Projects returns the #project tags in body, lowercase without the '#',
+// deduplicated and sorted. The title line is ignored.
+func Projects(body string) []string {
+	var out []string
+	for _, m := range projectRe.FindAllStringSubmatch(body[titleEnd(body):], -1) {
+		out = append(out, strings.ToLower(m[2]))
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+// HasProject reports whether body is tagged #project (case-insensitive; a
+// leading '#' on project is optional).
+func HasProject(body, project string) bool {
+	_, found := slices.BinarySearch(Projects(body), NormalizeProject(project))
+	return found
+}
+
+// NormalizeProject turns "#Name" or "Name" into the stored form "name".
+func NormalizeProject(project string) string {
+	return strings.ToLower(strings.TrimPrefix(strings.TrimSpace(project), "#"))
+}
+
+// TitleLine returns the line TitleOf takes the title from, trimmed but with
+// its '#' marks, so "#tag" and "# tag" can be told apart.
+func TitleLine(body string) string {
+	i := titleEnd(body)
+	return strings.TrimSpace(body[strings.LastIndex(body[:i], "\n")+1 : i])
+}
+
+// markdown parses like Fyne's RichText.ParseMarkdown, so the GUI renders the
+// same structure LinkifyProjectsForView sees.
+var markdown = goldmark.New(goldmark.WithExtensions(extension.Strikethrough, extension.TaskList, extension.Table))
+
+// plainTextSpans returns the byte ranges of body that Markdown renders as
+// plain text: not code, HTML, links, images, link destinations or reference
+// definitions (those never become text nodes, or are skipped here).
+func plainTextSpans(body string) [][2]int {
+	var spans [][2]int
+	doc := markdown.Parser().Parse(text.NewReader([]byte(body)))
+	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		switch n := n.(type) {
+		case *ast.Link, *ast.Image, *ast.AutoLink, *ast.CodeSpan, *ast.RawHTML:
+			return ast.WalkSkipChildren, nil
+		case *ast.TextBlock, *ast.Paragraph:
+			// Fyne (v2.8) renders a task item from the single text node
+			// after its checkbox: a link there panics it or drops the rest.
+			if _, ok := n.FirstChild().(*east.TaskCheckBox); ok {
+				return ast.WalkSkipChildren, nil
+			}
+		case *ast.Text:
+			spans = append(spans, [2]int{n.Segment.Start, n.Segment.Stop})
+		}
+		return ast.WalkContinue, nil
+	})
+	slices.SortFunc(spans, func(a, b [2]int) int { return a[0] - b[0] })
+	return spans
+}
+
+// LinkifyProjectsForView rewrites #project tags (outside the title line)
+// into Markdown links with the project:// scheme. Only tags in plain text
+// are rewritten, so code, links and reference definitions stay intact.
+// Used by GUI clients.
+func LinkifyProjectsForView(body string) string {
+	start := titleEnd(body)
+	spans := plainTextSpans(body)
+	var b strings.Builder
+	last, s := 0, 0
+	for _, m := range projectRe.FindAllStringSubmatchIndex(body, -1) {
+		hash, end := m[4]-1, m[1]
+		// Tags and spans are both in order, so one pass over the spans
+		// suffices.
+		for s < len(spans) && spans[s][1] <= hash {
+			s++
+		}
+		// The whole tag must lie in one span: in "_see #home_" the regex
+		// takes the closing '_' as well, and rewriting would eat it.
+		if hash < start || s == len(spans) || hash < spans[s][0] || end > spans[s][1] {
+			continue
+		}
+		name := body[m[4]:m[5]]
+		b.WriteString(body[last:hash])
+		b.WriteString("[#" + name + "](project://" + strings.ToLower(name) + ")")
+		last = end
+	}
+	b.WriteString(body[last:])
+	return b.String()
 }
 
 // LinkifyForView rewrites [[Title]] into a Markdown link with the note://

@@ -95,12 +95,27 @@ func notePath(id int64, suffix string) string {
 
 // List returns notes, newest first. A non-empty q searches titles and bodies.
 func (c *Client) List(ctx context.Context, q string) ([]notes.Note, error) {
+	return c.ListInProject(ctx, "", q)
+}
+
+// ListInProject is List narrowed to notes tagged #project ("#name" or
+// "name"); an empty project lists every note.
+func (c *Client) ListInProject(ctx context.Context, project, q string) ([]notes.Note, error) {
 	var out []notes.Note
 	query := url.Values{}
 	if q != "" {
 		query.Set("q", q)
 	}
+	if project != "" {
+		query.Set("project", project)
+	}
 	return out, c.do(ctx, "GET", "/notes", query, nil, &out)
+}
+
+// Projects returns the #project names in use, lowercase and sorted.
+func (c *Client) Projects(ctx context.Context) ([]string, error) {
+	var out []string
+	return out, c.do(ctx, "GET", "/projects", nil, nil, &out)
 }
 
 // ByTitle finds a note by exact (case-insensitive) title. It returns an
