@@ -1,0 +1,14 @@
+{{define "content"}}
+<div class="health-container">
+    <div>
+        <img src="/assets/img/logo.png" alt="health" class="logo" />
+    </div>
+    <div class="status-item">
+        We are up and running <span class="accent">{{.name}}</span> with version <span
+            class="accent">{{.version}}</span> ;)
+    </div>
+    <div class="status-item">
+        Database: <span class="accent">{{.dbStatus}}</span>
+    </div>
+</div>
+{{end}}

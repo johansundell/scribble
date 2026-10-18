@@ -1,0 +1,27 @@
+# true logs the route table and an access log line per request
+DEBUG=false
+PORT=:8080
+# true serves assets/ and tmpl/ from next to the binary; needs a built binary, not go run
+USE_FILE_SYSTEM=false
+TIMEOUT=15
+# storage backend: sqlite, mysql or filemaker
+STORAGE=sqlite
+# optional path to sqlite database file (defaults to <binary dir>/<nameOfService>.db)
+SQLITE_PATH=""
+# leave empty to generate a temporary token on each start
+AUTH_TOKEN=""
+MYSQL_USERNAME=""
+MYSQL_PASSWORD=""
+MYSQL_HOST="127.0.0.1"
+MYSQL_PORT="3306"
+MYSQL_DATABASE="test"
+# FileMaker (STORAGE=filemaker); the log table must exist, see README
+FMS_HOST="https://fms.example.com"
+FMS_DATABASE=""
+FMS_USERNAME=""
+FMS_PASSWORD=""
+FMS_TIMEOUT="10s"
+FMS_LOG_TABLE="Logs"
+# optional PEM file with a private CA; FMS_INSECURE_SKIP_VERIFY disables checks
+FMS_CA_FILE=""
+FMS_INSECURE_SKIP_VERIFY=false

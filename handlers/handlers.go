@@ -1,0 +1,48 @@
+package handlers
+
+import (
+	"errors"
+	"io/fs"
+	"os"
+	"text/template"
+
+	"github.com/johansundell/scribble/store"
+	"github.com/johansundell/scribble/utils"
+)
+
+type Handler struct {
+	store            store.Store
+	templates        fs.FS // holds tmpl/*.html
+	nameOfService    string
+	versionOfService string
+}
+
+// NewHandler creates the handlers. With useFileSystem, templates are read
+// from the tmpl folder next to the binary on every request (edit without
+// rebuilding) and embedded is ignored; otherwise the embedded filesystem is
+// required.
+func NewHandler(s store.Store, useFileSystem bool, embedded fs.FS, name, version string) (*Handler, error) {
+	templates := embedded
+	if useFileSystem {
+		templates = os.DirFS(utils.GetBinaryBasePath())
+	} else if embedded == nil {
+		return nil, errors.New("embedded templates filesystem is nil")
+	}
+	return &Handler{
+		store:            s,
+		templates:        templates,
+		nameOfService:    name,
+		versionOfService: version,
+	}, nil
+}
+
+func (h *Handler) getTemplate(withBase bool, tmplFile ...string) (*template.Template, error) {
+	files := make([]string, 0, len(tmplFile)+1)
+	for _, t := range tmplFile {
+		files = append(files, "tmpl/"+t)
+	}
+	if withBase {
+		files = append(files, "tmpl/base.html")
+	}
+	return template.ParseFS(h.templates, files...)
+}

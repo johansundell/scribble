@@ -1,0 +1,12 @@
+.git
+.vscode
+bin
+dist
+build
+*.exe
+*.test
+*.db
+*.db-wal
+*.db-shm
+.env
+data

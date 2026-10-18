@@ -1,0 +1,50 @@
+body {
+    background-color: #000000;
+}
+
+div {
+    color: #FFFFFF;
+    font-family: courier;
+    font-size: 160%;
+}
+
+table {
+    color: #FFFFFF;
+    font-family: courier;
+    font-size: 160%;
+}
+
+input {
+    color: #000000;
+    font-family: courier;
+    font-size: 100%;
+}
+
+button {
+    color: #000000;
+    font-family: courier;
+    font-size: 100%;
+}
+
+.health-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    text-align: center;
+}
+
+.logo {
+    max-width: 200px;
+    margin-bottom: 2rem;
+}
+
+.status-item {
+    margin: 0.5rem 0;
+}
+
+.accent {
+    color: #00ff00;
+    font-weight: bold;
+}
