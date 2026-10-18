@@ -59,6 +59,7 @@ func TestMainMenuHasItemsWithShortcuts(t *testing.T) {
 		shortcut    fyne.Shortcut // nil for none
 	}{
 		{"File", "New note", ctrl(fyne.KeyN)},
+		{"File", "Save", ctrl(fyne.KeyS)},
 		{"File", "Rename…", &desktop.CustomShortcut{KeyName: fyne.KeyF2}},
 		{"File", "Delete…", nil},
 		{"File", "Quit", ctrl(fyne.KeyQ)},
@@ -106,6 +107,7 @@ func TestMenuItemsGreyOutWithToolbar(t *testing.T) {
 			menu, label string
 			button      *widget.Button
 		}{
+			{"File", "Save", ui.Save},
 			{"File", "Rename…", ui.Rename},
 			{"File", "Delete…", ui.Delete},
 			{"View", "Edit note", ui.EditToggle},
