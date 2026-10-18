@@ -826,10 +826,21 @@ func TestSystemTrayQuitAsksBeforeDiscardingEdits(t *testing.T) {
 		t.Fatal("discarding on Quit should close the window")
 	}
 
-	// Without unsaved changes, Quit closes straight away.
+	// Without unsaved changes, an open Delete confirmation dialog blocks Quit
+	// and must show the hidden window so the user can dismiss the dialog.
 	ui2, w2 := openWithSpy(t, c)
 	tray2 := &fakeTray{}
 	ui2.SetupTray(tray2)
+	ui2.List.Select(0)
+	test.Tap(ui2.Delete)
+	ui2.Close() // hidden to tray while Delete dialog is open
+	trayItem(t, tray2.menu, "Quit").Action()
+	if w2.hidden || w2.closed {
+		t.Fatalf("Quit with an open dialog should show the window (hidden=%v, closed=%v)", w2.hidden, w2.closed)
+	}
+	tapDialogButton(t, w2, "Cancel")
+
+	// Without unsaved changes or an open dialog, Quit closes straight away.
 	ui2.Close()
 	trayItem(t, tray2.menu, "Quit").Action()
 	if !w2.closed {

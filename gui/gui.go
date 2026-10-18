@@ -146,11 +146,12 @@ func (ui *UI) OpenNewNote() {
 }
 
 func (ui *UI) quit() {
+	if ui.w.Canvas().Overlays().Top() != nil {
+		ui.showWindow()
+		return
+	}
 	if ui.hasUnsavedChanges() {
 		ui.showWindow()
-	}
-	if ui.w.Canvas().Overlays().Top() != nil {
-		return
 	}
 	ui.unlessUnsaved(func() {
 		ui.w.Close()
