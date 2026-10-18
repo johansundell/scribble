@@ -131,14 +131,39 @@ func NormalizeProject(project string) string {
 	return strings.ToLower(strings.TrimPrefix(strings.TrimSpace(project), "#"))
 }
 
+// verbatimRe matches the Markdown a project link must not be put inside:
+// fenced code blocks, code spans, links and images (text and destination),
+// reference definitions and autolinks.
+var verbatimRe = regexp.MustCompile("(?ms)" +
+	"^ {0,3}```.*?^ {0,3}```" + `|` +
+	"^ {0,3}~~~.*?^ {0,3}~~~" + `|` +
+	"`[^`\n]*`" + `|` +
+	`!?\[[^\]\n]*\](?:\([^)\n]*\)|\[[^\]\n]*\])` + `|` +
+	`^ {0,3}\[[^\]\n]+\]:[^\n]*` + `|` +
+	`<[^>\n]*>`)
+
 // LinkifyProjectsForView rewrites #project tags (outside the title line)
-// into Markdown links with the project:// scheme. Used by GUI clients.
+// into Markdown links with the project:// scheme, leaving tags inside code,
+// links and other verbatim Markdown alone. Used by GUI clients.
 func LinkifyProjectsForView(body string) string {
 	i := titleEnd(body)
-	return body[:i] + projectRe.ReplaceAllStringFunc(body[i:], func(s string) string {
-		m := projectRe.FindStringSubmatch(s)
-		return m[1] + "[#" + m[2] + "](project://" + strings.ToLower(m[2]) + ")"
-	})
+	rest := body[i:]
+	verbatim := verbatimRe.FindAllStringIndex(rest, -1)
+	var b strings.Builder
+	b.WriteString(body[:i])
+	last := 0
+	for _, m := range projectRe.FindAllStringSubmatchIndex(rest, -1) {
+		hash, end := m[4]-1, m[1]
+		if slices.ContainsFunc(verbatim, func(v []int) bool { return v[0] <= hash && hash < v[1] }) {
+			continue
+		}
+		name := rest[m[4]:m[5]]
+		b.WriteString(rest[last:hash])
+		b.WriteString("[#" + name + "](project://" + strings.ToLower(name) + ")")
+		last = end
+	}
+	b.WriteString(rest[last:])
+	return b.String()
 }
 
 // LinkifyForView rewrites [[Title]] into a Markdown link with the note://

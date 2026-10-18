@@ -88,3 +88,27 @@ func TestLinkifyProjectsForView(t *testing.T) {
 		t.Errorf("got  %q\nwant %q", got, want)
 	}
 }
+
+func TestLinkifyProjectsForViewLeavesMarkdownIntact(t *testing.T) {
+	// Tags inside links, link destinations, reference definitions and code
+	// stay as they are; only the plain #b is linked.
+	unchanged := []string{
+		"[See #home](https://example.com)",
+		"[docs]( #overview)",
+		"![pic #x](img.png)",
+		"[ref #x][r]",
+		"[docs]: #overview",
+		"   [docs]: <#overview> \"title\"",
+		"`#code`",
+		"```\n#fenced\n```",
+		"~~~go\n#fenced\n~~~",
+		"<http://x.y/ #auto>",
+	}
+	for _, md := range unchanged {
+		body := "T\n" + md + "\n#b"
+		want := "T\n" + md + "\n[#b](project://b)"
+		if got := LinkifyProjectsForView(body); got != want {
+			t.Errorf("LinkifyProjectsForView(%q)\n got  %q\n want %q", body, got, want)
+		}
+	}
+}

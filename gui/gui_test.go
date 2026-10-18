@@ -479,33 +479,48 @@ func findLink(segs []widget.RichTextSegment, text string) *widget.HyperlinkSegme
 	return nil
 }
 
+// tapLink taps the rendered hyperlink with this text in the viewer, the way
+// a user clicks it.
+func tapLink(t *testing.T, ui *gui.UI, text string) {
+	t.Helper()
+	for _, o := range test.LaidOutObjects(ui.Viewer) {
+		if h, ok := o.(*widget.Hyperlink); ok && h.Text == text {
+			// Taps beside the text are ignored, and a link may be laid out
+			// wider than its text; aim at the middle of the text.
+			test.TapAt(h, fyne.NewPos(h.MinSize().Width/2, h.Size().Height/2))
+			return
+		}
+	}
+	t.Fatalf("the viewer shows no %q link, segments %#v", text, ui.Viewer.Segments)
+}
+
 func TestTappingProjectLinkSwitchesFilter(t *testing.T) {
 	c := newServer(t)
-	create(t, c, "# Plans\nfor #Scribble and #home\n- see #home-lab")
+	create(t, c, "# Plans\nfor #Scribble and #home\n\n- see #home-lab\n\n| where |\n| --- |\n| at #work |")
 	create(t, c, "# Bugs\n#scribble sync bug")
 	create(t, c, "# Lab\n#home-lab")
+	create(t, c, "# Job\n#work")
 
 	ui, _ := open(t, c)
-	ui.List.Select(2) // Plans
+	ui.List.Select(3) // Plans
 	if link(ui, "#Plans") != nil {
 		t.Error("the title line must not become a project link")
 	}
 
-	l := link(ui, "#Scribble")
-	if l == nil || l.OnTapped == nil {
-		t.Fatalf("no tappable #Scribble link, got segments %#v", ui.Viewer.Segments)
-	}
-	l.OnTapped()
+	tapLink(t, ui, "#Scribble")
 	if ui.Project.Selected != "scribble" {
 		t.Fatalf("project filter is %q, want scribble", ui.Project.Selected)
 	}
 	assertTitles(t, ui, "Bugs", "Plans")
 
-	link(ui, "#home-lab").OnTapped() // inside a list item
+	tapLink(t, ui, "#home-lab") // inside a list item
 	assertTitles(t, ui, "Lab", "Plans")
 	if segment(ui, "for ") == nil {
 		t.Error("switching project should keep the open note")
 	}
+
+	tapLink(t, ui, "#work") // inside a table cell
+	assertTitles(t, ui, "Job", "Plans")
 }
 
 func TestNewNoteInProjectStaysInProject(t *testing.T) {
@@ -538,11 +553,29 @@ func TestTappingTagOfUnsavedDraftSwitchesFilter(t *testing.T) {
 	ui.Editor.SetText("# Draft\nfor #brand-new")
 	test.Tap(ui.EditToggle)
 
-	link(ui, "#brand-new").OnTapped()
+	tapLink(t, ui, "#brand-new")
 	if ui.Project.Selected != "brand-new" {
 		t.Fatalf("project filter is %q, want brand-new", ui.Project.Selected)
 	}
 	assertTitles(t, ui)
+}
+
+func TestNewNoteInProjectStartsOnTitleLine(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Plans\nfirst line\nsecond line #scribble")
+
+	ui, _ := open(t, c)
+	ui.Project.SetSelected("scribble")
+	ui.List.Select(0)
+	test.Tap(ui.EditToggle)
+	ui.Editor.CursorRow, ui.Editor.CursorColumn = 2, 5 // in the note's body
+	test.Tap(ui.EditToggle)                            // back to view, no edits
+
+	test.Tap(ui.NewNote)
+	test.Type(ui.Editor, "Roadmap")
+	if ui.Editor.Text != "Roadmap\n\n#scribble\n" {
+		t.Fatalf("editor holds %q; typing should land on the title line", ui.Editor.Text)
+	}
 }
 
 func TestSavingNewTagAddsProject(t *testing.T) {

@@ -146,6 +146,9 @@ func (ui *UI) startNote() {
 		text = "\n\n#" + p + "\n"
 	}
 	ui.Editor.SetText(text)
+	// SetText only clamps the cursor; put it on the title line.
+	ui.Editor.CursorRow, ui.Editor.CursorColumn = 0, 0
+	ui.Editor.Refresh()
 	ui.showEdit()
 	ui.selectCurrent()
 }
@@ -172,8 +175,12 @@ func (ui *UI) unlessUnsaved(then func()) {
 // showView switches to view mode, rendering the editor's text with its
 // #project tags as links that switch the project filter.
 func (ui *UI) showView() {
-	ui.Viewer.ParseMarkdown(notes.LinkifyProjectsForView(ui.Editor.Text))
-	ui.hookProjectLinks(ui.Viewer.Segments)
+	// Parse off-screen and hook the links before the viewer sees the
+	// segments: hyperlink and table visuals copy OnTapped when created.
+	segs := widget.NewRichTextFromMarkdown(notes.LinkifyProjectsForView(ui.Editor.Text)).Segments
+	ui.hookProjectLinks(segs)
+	ui.Viewer.Segments = segs
+	ui.Viewer.Refresh()
 	ui.Editor.Hide()
 	ui.Viewer.Show()
 	ui.EditToggle.SetText("Edit")
@@ -181,7 +188,8 @@ func (ui *UI) showView() {
 }
 
 // hookProjectLinks makes project:// links select their project instead of
-// asking the OS to open the URL. Lists nest their segments, so it recurses.
+// asking the OS to open the URL. Lists and tables nest their segments, so
+// it recurses.
 func (ui *UI) hookProjectLinks(segs []widget.RichTextSegment) {
 	for _, s := range segs {
 		switch s := s.(type) {
@@ -189,6 +197,15 @@ func (ui *UI) hookProjectLinks(segs []widget.RichTextSegment) {
 			if s.URL != nil && s.URL.Scheme == "project" {
 				name := s.URL.Host
 				s.OnTapped = func() { ui.selectProject(name) }
+			}
+		case *widget.TableSegment:
+			for _, cell := range s.Headers {
+				ui.hookProjectLinks(cell)
+			}
+			for _, row := range s.Rows {
+				for _, cell := range row {
+					ui.hookProjectLinks(cell)
+				}
 			}
 		case interface {
 			Segments() []widget.RichTextSegment
