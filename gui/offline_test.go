@@ -17,13 +17,22 @@ import (
 )
 
 // cable fails every request while unplugged, like an unreachable server.
-type cable struct{ unplugged atomic.Bool }
+type cable struct {
+	unplugged atomic.Bool
+	// afterCreate, if set, runs once a note has been created through the
+	// cable, before the client sees the answer.
+	afterCreate func()
+}
 
 func (c *cable) RoundTrip(r *http.Request) (*http.Response, error) {
 	if c.unplugged.Load() {
 		return nil, errors.New("network is down")
 	}
-	return http.DefaultTransport.RoundTrip(r)
+	resp, err := http.DefaultTransport.RoundTrip(r)
+	if err == nil && r.Method == "POST" && r.URL.Path == "/notes" && c.afterCreate != nil {
+		c.afterCreate()
+	}
+	return resp, err
 }
 
 // plug routes c through a cable the test can unplug.
@@ -270,5 +279,37 @@ func TestSavingAgainAfterOfflineSaveWasSentIsNotAConflict(t *testing.T) {
 
 	if got := byTitle(t, c, "Ideas").Body; got != "# Ideas\nfly higher" {
 		t.Fatalf("server holds %q; status %q", got, ui.Status.Text)
+	}
+}
+
+func TestDraftOfNoteCreatedOfflineStaysStaleAgainstOtherWriters(t *testing.T) {
+	c := newServer(t)
+	cb := plug(c)
+	ui, _ := openCached(t, c, "")
+
+	cb.unplugged.Store(true)
+	test.Tap(ui.NewNote)
+	ui.Editor.SetText("# Ideas\nfly")
+	test.Tap(ui.Save)
+	test.Tap(ui.EditToggle)
+	ui.Editor.SetText("# Ideas\nmine")
+
+	other := client.New(c.BaseURL, c.Token)
+	cb.afterCreate = func() {
+		cb.afterCreate = nil
+		n := byTitle(t, other, "Ideas")
+		if _, err := other.Update(t.Context(), n.ID, "# Ideas\ntheirs", n.Revision); err != nil {
+			t.Error(err)
+		}
+	}
+	cb.unplugged.Store(false)
+	ui.Sync() // creates the note, then pulls their edit
+	test.Tap(ui.Save)
+
+	if got := byTitle(t, other, "Ideas").Body; got != "# Ideas\ntheirs" {
+		t.Fatalf("their edit was overwritten: server holds %q", got)
+	}
+	if !strings.Contains(ui.Status.Text, "changed elsewhere") {
+		t.Errorf("status says %q", ui.Status.Text)
 	}
 }

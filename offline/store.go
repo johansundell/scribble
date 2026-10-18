@@ -116,7 +116,14 @@ func DefaultPath(baseURL string) (string, error) {
 	baseURL = strings.TrimRight(baseURL, "/")
 	host := "server"
 	if u, err := url.Parse(baseURL); err == nil && u.Hostname() != "" {
-		host = u.Hostname()
+		// Only characters every file system takes: an IPv6 address
+		// has colons.
+		host = strings.Map(func(r rune) rune {
+			if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '-' {
+				return r
+			}
+			return '_'
+		}, u.Hostname())
 	}
 	sum := sha256.Sum256([]byte(baseURL))
 	return filepath.Join(dir, "scribble", host+"-"+hex.EncodeToString(sum[:8])+".json"), nil

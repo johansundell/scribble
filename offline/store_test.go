@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -464,4 +465,14 @@ func TestNoteDroppedWhileBeingCreatedIsDeletedOnTheServer(t *testing.T) {
 		t.Fatalf("server still holds %q", titles(list))
 	}
 	assertTitles(t, s.List("", ""))
+}
+
+func TestDefaultPathOfIPv6ServerIsAPortableFileName(t *testing.T) {
+	p, err := offline.DefaultPath("http://[::1]:8080")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name := filepath.Base(p); strings.ContainsAny(name, `:<>"/\\|?*`) {
+		t.Fatalf("file name %q is not valid on Windows", name)
+	}
 }

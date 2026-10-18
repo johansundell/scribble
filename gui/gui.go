@@ -627,9 +627,9 @@ func (ui *UI) synced(r offline.Report, err error) {
 }
 
 // followOpenNote keeps the open note in step with the local copy after a
-// sync: it takes the server ID of a note created offline, reopens a
-// refused edit in the editor, and shows the latest version unless the user
-// is editing.
+// sync: it reopens a refused edit in the editor, and shows the latest
+// version (under its server ID, for a note created offline) unless the
+// user is editing.
 func (ui *UI) followOpenNote() {
 	if !ui.isSaved() {
 		return
@@ -645,14 +645,11 @@ func (ui *UI) followOpenNote() {
 			ui.closeNote() // deleted elsewhere
 		}
 	case ui.Editor.Visible() || ui.hasUnsavedChanges():
-		// Keep the text being edited or previewed; a save goes on from
-		// the revision the edit started from, unless the note just got
-		// its server ID.
-		if id != ui.current.ID {
-			n.Body = ui.current.Body
-			ui.current = &n
-			ui.updateButtons()
-		}
+		// Keep the text being edited or previewed, and the revision it
+		// started from: a save goes on from there. A note created
+		// offline keeps its local ID too; Queue maps it to the server ID
+		// and the revision it was created at, not to a newer one
+		// downloaded since.
 	case n.Revision != ui.current.Revision || n.Body != ui.current.Body || n.ID != ui.current.ID:
 		ui.open(n)
 	default:
