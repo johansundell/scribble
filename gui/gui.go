@@ -5,6 +5,7 @@ package gui
 import (
 	"context"
 	"slices"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -46,6 +47,9 @@ type UI struct {
 	// current is the open note, nil when none; ID 0 for a new, unsaved
 	// note. Its working text, saved or not, is always Editor.Text.
 	current *notes.Note
+	// draftTag is the "#project" New pre-filled into the open draft, "" if
+	// none. The draft cannot be saved while that tag is still its title.
+	draftTag string
 }
 
 // New builds the main window's content for server c and loads the notes.
@@ -141,9 +145,11 @@ func (ui *UI) open(n notes.Note) {
 // the #project tag below an empty title line, so the note stays in view.
 func (ui *UI) startNote() {
 	ui.current = &notes.Note{}
+	ui.draftTag = ""
 	text := ""
 	if p := ui.activeProject(); p != "" {
-		text = "\n\n#" + p + "\n"
+		ui.draftTag = "#" + p
+		text = "\n\n" + ui.draftTag + "\n"
 	}
 	ui.Editor.SetText(text)
 	// SetText only clamps the cursor; put it on the title line.
@@ -253,9 +259,10 @@ func (ui *UI) save() {
 	if ui.current == nil {
 		return
 	}
-	if !ui.isSaved() && notes.TitleIsTag(ui.Editor.Text) {
-		// Saved like this, the tag would become the title and the note
-		// would not be in the project.
+	if !ui.isSaved() && ui.draftTag != "" && strings.EqualFold(notes.TitleLine(ui.Editor.Text), ui.draftTag) {
+		// No title typed above the pre-filled tag: saved like this, the
+		// tag would become the title and the note would not be in the
+		// project.
 		ui.Status.SetText("Type a title on the first line, above the #tag.")
 		return
 	}

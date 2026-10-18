@@ -8,6 +8,11 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/text"
 )
 
 // Note is a single Markdown note. The title is not stored separately by
@@ -131,55 +136,64 @@ func NormalizeProject(project string) string {
 	return strings.ToLower(strings.TrimPrefix(strings.TrimSpace(project), "#"))
 }
 
-// tagOnlyRe matches a line that is nothing but one #project tag.
-var tagOnlyRe = regexp.MustCompile(`^#[A-Za-z][A-Za-z0-9_-]*$`)
-
-// TitleIsTag reports whether the title line is nothing but a #project tag,
-// as in a project draft whose title was never typed. Such a tag names the
-// note instead of putting it in the project.
-func TitleIsTag(body string) bool {
+// TitleLine returns the line TitleOf takes the title from, trimmed but with
+// its '#' marks, so "#tag" and "# tag" can be told apart.
+func TitleLine(body string) string {
 	i := titleEnd(body)
-	return tagOnlyRe.MatchString(strings.TrimSpace(body[strings.LastIndex(body[:i], "\n")+1 : i]))
+	return strings.TrimSpace(body[strings.LastIndex(body[:i], "\n")+1 : i])
 }
 
-// verbatimRe matches the Markdown a project link must not be put inside:
-// fenced code blocks, code spans, reference definitions, links and images
-// (inline, full, collapsed or shortcut; text and destination) and autolinks.
-// A link's text may wrap lines but not span a blank one. Reference
-// definitions come before links so "[x]: #y" is taken whole.
-var verbatimRe = regexp.MustCompile("(?ms)" +
-	"^ {0,3}```.*?^ {0,3}```" + `|` +
-	"^ {0,3}~~~.*?^ {0,3}~~~" + `|` +
-	"`[^`\n]*`" + `|` +
-	`^ {0,3}\[[^\]\n]+\]:[^\n]*` + `|` +
-	`!?\[(?:[^\]\n]|\n[^\]\n])*\](?:\([^)\n]*\)|\[[^\]\n]*\])?` + `|` +
-	`<[^>\n]*>`)
+// markdown parses like Fyne's RichText.ParseMarkdown, so the GUI renders the
+// same structure LinkifyProjectsForView sees.
+var markdown = goldmark.New(goldmark.WithExtensions(extension.Strikethrough, extension.TaskList, extension.Table))
+
+// plainTextSpans returns the byte ranges of body that Markdown renders as
+// plain text: not code, HTML, links, images, link destinations or reference
+// definitions (those never become text nodes, or are skipped here).
+func plainTextSpans(body string) [][2]int {
+	var spans [][2]int
+	doc := markdown.Parser().Parse(text.NewReader([]byte(body)))
+	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		switch n := n.(type) {
+		case *ast.Link, *ast.Image, *ast.AutoLink, *ast.CodeSpan, *ast.RawHTML:
+			return ast.WalkSkipChildren, nil
+		case *ast.Text:
+			spans = append(spans, [2]int{n.Segment.Start, n.Segment.Stop})
+		}
+		return ast.WalkContinue, nil
+	})
+	slices.SortFunc(spans, func(a, b [2]int) int { return a[0] - b[0] })
+	return spans
+}
 
 // LinkifyProjectsForView rewrites #project tags (outside the title line)
-// into Markdown links with the project:// scheme, leaving tags inside code,
-// links and other verbatim Markdown alone. Used by GUI clients.
+// into Markdown links with the project:// scheme. Only tags in plain text
+// are rewritten, so code, links and reference definitions stay intact.
+// Used by GUI clients.
 func LinkifyProjectsForView(body string) string {
-	i := titleEnd(body)
-	rest := body[i:]
-	verbatim := verbatimRe.FindAllStringIndex(rest, -1)
+	start := titleEnd(body)
+	spans := plainTextSpans(body)
 	var b strings.Builder
-	b.WriteString(body[:i])
-	last, v := 0, 0
-	for _, m := range projectRe.FindAllStringSubmatchIndex(rest, -1) {
+	last, s := 0, 0
+	for _, m := range projectRe.FindAllStringSubmatchIndex(body, -1) {
 		hash, end := m[4]-1, m[1]
-		// Both lists are in order, so one pass over the spans suffices.
-		for v < len(verbatim) && verbatim[v][1] <= hash {
-			v++
+		// Tags and spans are both in order, so one pass over the spans
+		// suffices.
+		for s < len(spans) && spans[s][1] <= hash {
+			s++
 		}
-		if v < len(verbatim) && verbatim[v][0] <= hash {
+		if hash < start || s == len(spans) || hash < spans[s][0] {
 			continue
 		}
-		name := rest[m[4]:m[5]]
-		b.WriteString(rest[last:hash])
+		name := body[m[4]:m[5]]
+		b.WriteString(body[last:hash])
 		b.WriteString("[#" + name + "](project://" + strings.ToLower(name) + ")")
 		last = end
 	}
-	b.WriteString(rest[last:])
+	b.WriteString(body[last:])
 	return b.String()
 }
 

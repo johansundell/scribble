@@ -599,6 +599,27 @@ func TestSavingUntitledProjectDraftIsRefused(t *testing.T) {
 	}
 }
 
+func TestSavingProjectDraftWithTitleWorks(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Plans\n#scribble")
+
+	ui, _ := open(t, c)
+	ui.Project.SetSelected("scribble")
+	test.Tap(ui.NewNote)
+	test.Type(ui.Editor, "#Roadmap") // a title that looks like a tag
+	test.Tap(ui.Save)
+	if got := byTitle(t, c, "Roadmap").Body; got != "#Roadmap\n\n#scribble\n" {
+		t.Fatalf("server holds %q, status %q", got, ui.Status.Text)
+	}
+	assertTitles(t, ui, "Roadmap", "Plans")
+
+	ui.Project.SetSelected("All notes")
+	test.Tap(ui.NewNote)
+	ui.Editor.SetText("#Ideas\nbody")
+	test.Tap(ui.Save)
+	byTitle(t, c, "Ideas")
+}
+
 func TestSavingNewTagAddsProject(t *testing.T) {
 	c := newServer(t)
 	create(t, c, "# Plans\nnothing yet")
