@@ -5,7 +5,8 @@
 //	SCRIBBLE_HOTKEY  global new-note shortcut (default Ctrl+Alt+N; "none" to disable)
 //
 // They can also be set in a .env file next to the executable; variables
-// already in the environment win.
+// already in the environment win. The file is read before Fyne starts, so
+// Fyne's own variables (such as FYNE_THEME=dark) work there too.
 //
 // It keeps a copy of the notes on disk (see offline.DefaultPath), so it
 // starts instantly and works while the server is unreachable.
@@ -36,7 +37,7 @@ const syncInterval = 30 * time.Second
 var Version = "dev"
 
 func main() {
-	a := app.New()
+	a, envErr := newApp(loadEnvNextToExecutable, app.New)
 	ver := Version
 	if (ver == "" || ver == "dev") && a.Metadata().Version != "" {
 		ver = "v" + a.Metadata().Version
@@ -45,7 +46,6 @@ func main() {
 	w := a.NewWindow("Scribble " + ver)
 	w.Resize(fyne.NewSize(1000, 700))
 
-	envErr := loadEnvNextToExecutable()
 	token := os.Getenv("SCRIBBLE_TOKEN")
 	baseURL := os.Getenv("SCRIBBLE_URL")
 	if baseURL == "" {
@@ -81,6 +81,14 @@ func main() {
 		}
 	}
 	w.ShowAndRun()
+}
+
+// newApp loads the .env file, then creates the app, so variables Fyne reads
+// while starting up (such as FYNE_THEME) can be set there too. An error from
+// readEnv is returned with the app, for the window to show.
+func newApp(readEnv func() error, create func() fyne.App) (fyne.App, error) {
+	err := readEnv()
+	return create(), err
 }
 
 // loadEnvNextToExecutable is loadEnv for the directory scribble-gui runs
