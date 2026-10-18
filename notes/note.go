@@ -27,12 +27,17 @@ type Note struct {
 // TitleOf returns the title implied by a Markdown body.
 func TitleOf(body string) string {
 	for _, line := range strings.Split(body, "\n") {
-		line = strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(line), "#"))
-		if line != "" {
-			return line
+		if t := titleText(line); t != "" {
+			return t
 		}
 	}
 	return ""
+}
+
+// titleText is line without its leading '#' marks and spaces; a line that
+// is empty afterwards cannot be the title.
+func titleText(line string) string {
+	return strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(line), "#"))
 }
 
 // SetTitle replaces the title line of body, keeping any leading '#' marks.
@@ -89,14 +94,14 @@ func RewriteLinks(body, oldTitle, newTitle string) string {
 // a line or after whitespace. Group 1 is the separator, group 2 the name.
 var projectRe = regexp.MustCompile(`(?m)(^|\s)#([A-Za-z][A-Za-z0-9_-]*)`)
 
-// titleEnd returns the offset just past the title line (the first non-empty
-// line), so "# Title" is never read as a project tag.
+// titleEnd returns the offset just past the line TitleOf takes the title
+// from, so "# Title" is never read as a project tag.
 func titleEnd(body string) int {
 	off := 0
 	for {
 		line, _, more := strings.Cut(body[off:], "\n")
 		end := off + len(line)
-		if strings.TrimSpace(line) != "" || !more {
+		if titleText(line) != "" || !more {
 			return end
 		}
 		off = end + 1
@@ -118,7 +123,7 @@ func Projects(body string) []string {
 // leading '#' on project is optional).
 func HasProject(body, project string) bool {
 	_, found := slices.BinarySearch(Projects(body), NormalizeProject(project))
-	return found && project != ""
+	return found
 }
 
 // NormalizeProject turns "#Name" or "Name" into the stored form "name".

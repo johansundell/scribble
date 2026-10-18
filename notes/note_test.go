@@ -57,6 +57,7 @@ func TestProjects(t *testing.T) {
 		"T\nissue #42, url http://x.y/#anchor, a#b":        nil,
 		"T\n## Heading\n# Heading\nend #a_1.":              {"a_1"},
 		"T\n\t#tabbed\n#first-col":                         {"first-col", "tabbed"},
+		"##\n#title-after-bare-hashes\n#tag":               {"tag"},
 		"":                                                 nil,
 	}
 	for in, want := range cases {

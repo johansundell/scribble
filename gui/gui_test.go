@@ -524,9 +524,25 @@ func TestNewNoteInProjectStaysInProject(t *testing.T) {
 		t.Fatalf("editor holds %q, want the project tag pre-filled", ui.Editor.Text)
 	}
 
-	ui.Editor.SetText("Roadmap" + ui.Editor.Text)
+	test.Type(ui.Editor, "Roadmap") // the cursor starts on the title line
 	test.Tap(ui.Save)
 	assertTitles(t, ui, "Roadmap", "Plans")
+}
+
+func TestTappingTagOfUnsavedDraftSwitchesFilter(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Plans\nmilk")
+
+	ui, _ := open(t, c)
+	test.Tap(ui.NewNote)
+	ui.Editor.SetText("# Draft\nfor #brand-new")
+	test.Tap(ui.EditToggle)
+
+	link(ui, "#brand-new").OnTapped()
+	if ui.Project.Selected != "brand-new" {
+		t.Fatalf("project filter is %q, want brand-new", ui.Project.Selected)
+	}
+	assertTitles(t, ui)
 }
 
 func TestSavingNewTagAddsProject(t *testing.T) {

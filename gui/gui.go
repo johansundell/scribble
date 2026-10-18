@@ -39,9 +39,10 @@ type UI struct {
 
 	Status *widget.Label // the last error, empty when all is well
 
-	w     fyne.Window
-	c     *client.Client
-	notes []notes.Note
+	w        fyne.Window
+	c        *client.Client
+	notes    []notes.Note
+	projects []string // the server's #projects, as of the last reload
 	// current is the open note, nil when none; ID 0 for a new, unsaved
 	// note. Its working text, saved or not, is always Editor.Text.
 	current *notes.Note
@@ -94,7 +95,7 @@ func New(w fyne.Window, c *client.Client) *UI {
 	w.SetContent(container.NewBorder(nil, ui.Status, nil, nil, split))
 	w.SetCloseIntercept(ui.Close)
 	ui.showView()
-	ui.refresh()
+	ui.reload()
 	return ui
 }
 
@@ -187,7 +188,7 @@ func (ui *UI) hookProjectLinks(segs []widget.RichTextSegment) {
 		case *widget.HyperlinkSegment:
 			if s.URL != nil && s.URL.Scheme == "project" {
 				name := s.URL.Host
-				s.OnTapped = func() { ui.Project.SetSelected(name) }
+				s.OnTapped = func() { ui.selectProject(name) }
 			}
 		case interface {
 			Segments() []widget.RichTextSegment
@@ -248,7 +249,7 @@ func (ui *UI) save() {
 		return
 	}
 	ui.Status.SetText("")
-	ui.refresh()
+	ui.reload()
 	ui.open(*n)
 }
 
@@ -281,25 +282,45 @@ func (ui *UI) delete(n notes.Note) {
 		ui.Editor.SetText("")
 		ui.showView()
 	}
-	ui.refresh()
+	ui.reload()
 }
 
-// refresh reloads the project choices and the note list from the server,
-// the list filtered by the project and the search box.
-func (ui *UI) refresh() {
+// reload refreshes the project choices and the note list. Called after the
+// notes change; typing in the search box only needs refresh.
+func (ui *UI) reload() {
 	ctx, cancel := requestContext()
 	defer cancel()
 	projects, err := ui.c.Projects(ctx)
-	if ui.report(err) {
-		return
+	if !ui.report(err) {
+		ui.projects = projects
+		ui.Project.SetOptions(ui.projectOptions(ui.activeProject()))
 	}
-	// Keep the active project selectable even when no saved note has it
-	// any more (its last note deleted, or a tag only in an unsaved draft).
-	if p := ui.activeProject(); p != "" && !slices.Contains(projects, p) {
-		projects = append(projects, p)
+	ui.refresh()
+}
+
+// projectOptions is the selector's choices: allNotes, then the server's
+// projects plus extra. extra keeps a project selectable that no saved note
+// has (its last note deleted, or a tag only in an unsaved draft).
+func (ui *UI) projectOptions(extra string) []string {
+	projects := slices.Clone(ui.projects)
+	if extra != "" && !slices.Contains(projects, extra) {
+		projects = append(projects, extra)
 		slices.Sort(projects)
 	}
-	ui.Project.SetOptions(append([]string{allNotes}, projects...))
+	return append([]string{allNotes}, projects...)
+}
+
+// selectProject narrows the list to project name.
+func (ui *UI) selectProject(name string) {
+	ui.Project.SetOptions(ui.projectOptions(name))
+	ui.Project.SetSelected(name)
+}
+
+// refresh reloads the note list from the server, filtered by the project
+// and the search box.
+func (ui *UI) refresh() {
+	ctx, cancel := requestContext()
+	defer cancel()
 	list, err := ui.c.ListInProject(ctx, ui.activeProject(), ui.Search.Text)
 	if ui.report(err) {
 		return
