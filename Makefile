@@ -57,14 +57,14 @@ compile:
 	@cp fyne-cross/bin/windows-amd64/scribble-gui.exe build/scribble_$(VERSION)_windows_amd64/scribble-gui.exe
 	@rm -rf fyne-cross/
 
-	@gox -ldflags "-X 'main.Version=$(VERSION)'" \
-	-osarch="darwin/amd64" \
-	-osarch="darwin/arm64" \
-	-osarch="linux/amd64" \
-	-osarch="linux/arm64" \
-	-osarch="windows/amd64" \
-	-output "build/scribble-gui_$(VERSION)_{{.OS}}_{{.Arch}}/scribble-gui" \
-	./cmd/scribble-gui
+##	@gox -ldflags "-X 'main.Version=$(VERSION)'" \
+#	-osarch="darwin/amd64" \
+#	-osarch="darwin/arm64" \
+#	-osarch="linux/amd64" \
+#	-osarch="linux/arm64" \
+#	-osarch="windows/amd64" \
+#	-output "build/scribble-gui_$(VERSION)_{{.OS}}_{{.Arch}}/scribble-gui" \
+#	./cmd/scribble-gui
 
 install:
 	go install -ldflags "-X main.Version=$(VERSION)"
