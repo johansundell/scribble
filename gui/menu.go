@@ -76,15 +76,15 @@ func (ui *UI) forwardingItem(label string, shortcut fyne.Shortcut) *fyne.MenuIte
 }
 
 // editTarget is the widget an Edit menu item acts on: the focused one, or
-// else the text field that had focus last. Clicking the menu bar takes the
-// focus away before the item runs. A field that is hidden or behind a
-// dialog is not one the user meant.
+// else the text field or viewer that had focus last. Clicking the menu bar
+// takes the focus away before the item runs. One that is hidden or behind
+// a dialog is not one the user meant.
 func (ui *UI) editTarget() fyne.Focusable {
 	if f := ui.w.Canvas().Focused(); f != nil || ui.dialogOpen() {
 		return f
 	}
-	if ui.lastField != nil && ui.lastField.Visible() {
-		return ui.lastField
+	if ui.lastFocus != nil && ui.lastFocus.Visible() {
+		return ui.lastFocus
 	}
 	return nil
 }
@@ -151,9 +151,9 @@ type NoteList struct {
 }
 
 // FocusGained is called when the list gains focus. A clicked Edit menu item
-// then no longer acts on the text field that had focus before.
+// then no longer acts on the text field or viewer that had focus before.
 func (l *NoteList) FocusGained() {
-	l.ui.lastField = nil
+	l.ui.lastFocus = nil
 	l.List.FocusGained()
 }
 
@@ -162,6 +162,12 @@ func (l *NoteList) TypedKey(e *fyne.KeyEvent) {
 	if !l.ui.typedKey(e) {
 		l.List.TypedKey(e)
 	}
+}
+
+// editable is a widget the Edit menu acts on: a TextField or the Viewer.
+type editable interface {
+	fyne.Focusable
+	Visible() bool
 }
 
 // TextField is a text entry that remembers it had focus last, so a clicked
@@ -179,6 +185,6 @@ func newTextField(ui *UI) *TextField {
 
 // FocusGained is called when the field gains focus.
 func (f *TextField) FocusGained() {
-	f.ui.lastField = f
+	f.ui.lastFocus = f
 	f.Entry.FocusGained()
 }
