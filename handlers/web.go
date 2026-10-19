@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -36,6 +37,11 @@ func TitlePath(title string) string {
 	return AppHome + "/title/" + strings.ReplaceAll(url.PathEscape(title), ".", "%2E")
 }
 
+// ProjectPath is the list of the notes tagged #project.
+func ProjectPath(project string) string {
+	return AppHome + "?project=" + url.QueryEscape(notes.NormalizeProject(project))
+}
+
 const (
 	msgWrongPIN    = "Wrong PIN"
 	msgRateLimited = "Too many wrong PINs from this address. Try again later."
@@ -62,6 +68,34 @@ type webPage struct {
 	Message   string
 	// Edit is the editor, shown in place of the note.
 	Edit *noteEditor
+	// The list's filter: Query searches titles and bodies, and Project (a
+	// name, without '#') keeps the notes tagged with it. Projects are the
+	// ones to choose from.
+	Query    string
+	Project  string
+	Projects []string
+}
+
+// Filter is the list's filter as a query string ("?project=…&q=…"), or ""
+// with none. Links and redirects carry it, so the filter stays as the user
+// moves around.
+func (p webPage) Filter() string {
+	v := url.Values{}
+	if p.Query != "" {
+		v.Set("q", p.Query)
+	}
+	if p.Project != "" {
+		v.Set("project", p.Project)
+	}
+	if len(v) == 0 {
+		return ""
+	}
+	return "?" + v.Encode()
+}
+
+// Filtered reports whether the list is filtered.
+func (p webPage) Filtered() bool {
+	return p.Query != "" || p.Project != ""
 }
 
 // LoginPage shows the PIN entry screen, or sends someone with a valid
@@ -185,7 +219,9 @@ func (h *Handler) AppTitle(c *gin.Context) error {
 	return nil
 }
 
-// notesPage is the data for a page with the note list, and the store.
+// notesPage is the data for a page with the note list, filtered by ?q= and
+// ?project=, and the store. A project that isn't a #project name is
+// ignored.
 func (h *Handler) notesPage(c *gin.Context) (webPage, store.NoteStore, error) {
 	if h.auth == nil {
 		return webPage{}, nil, httperror.ReturnWithHTTPStatus(errWebNotConfigured, http.StatusInternalServerError)
@@ -194,9 +230,22 @@ func (h *Handler) notesPage(c *gin.Context) (webPage, store.NoteStore, error) {
 	if err != nil {
 		return webPage{}, nil, err
 	}
+	ctx := c.Request.Context()
 	p := h.appPage("Notes")
-	if p.Notes, err = ns.ListNotes(c.Request.Context(), "", ""); err != nil {
+	p.Query = strings.TrimSpace(c.Query("q"))
+	if projectTag(c.Query("project")) != "" {
+		p.Project = notes.NormalizeProject(c.Query("project"))
+	}
+	if p.Notes, err = ns.ListNotes(ctx, p.Query, p.Project); err != nil {
 		return webPage{}, nil, noteError(err)
+	}
+	if p.Projects, err = ns.Projects(ctx); err != nil {
+		return webPage{}, nil, noteError(err)
+	}
+	if p.Project != "" && !slices.Contains(p.Projects, p.Project) {
+		// No note has it any more; still show it as the one chosen.
+		p.Projects = append(p.Projects, p.Project)
+		slices.Sort(p.Projects)
 	}
 	return p, ns, nil
 }
