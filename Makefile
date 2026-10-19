@@ -112,9 +112,19 @@ release: dist #docker-push
 	github-release $(GHACCOUNT)/$(GHREPO) $(VERSION) "$$(git rev-parse --abbrev-ref HEAD)" "**Changelog**<br/>$$changelog" 'dist/*'; \
 	git pull
 
+# The web app's home-screen icons (#65), made from logo.png on white.
+# The logo fills 85% of the plain icons' width and 70% of the maskable
+# one's, which keeps it inside the circle a launcher may cut it to.
+ICON_SRC := assets/img/logo.png
+icons:
+	magick $(ICON_SRC) -resize 163x -background white -gravity center -extent 192x192 -alpha remove assets/img/icon-192.png
+	magick $(ICON_SRC) -resize 435x -background white -gravity center -extent 512x512 -alpha remove assets/img/icon-512.png
+	magick $(ICON_SRC) -resize 358x -background white -gravity center -extent 512x512 -alpha remove assets/img/icon-maskable-512.png
+	magick $(ICON_SRC) -resize 153x -background white -gravity center -extent 180x180 -alpha remove assets/img/apple-touch-icon.png
+
 # Bumps version, runs tests, commits and pushes to master, and runs make release.
 # Usage: make bump-release [BUMP=patch|minor|major|vX.Y.Z] [DRY_RUN=1]
 bump-release:
 	@DRY_RUN=$(DRY_RUN) ./scripts/bump-release.sh $(BUMP)
 
-.PHONY: build backup build-cli build-gui compile install deps dist release docker docker-push docker-run bump-release
+.PHONY: build backup build-cli build-gui compile install deps dist release docker docker-push docker-run bump-release icons

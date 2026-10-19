@@ -59,6 +59,8 @@ func GetRoutes(handler *handlers.Handler) Routes {
 		Route{Name: "LoginPage", Method: "GET", Pattern: handlers.LoginPath, HandlerFunc: handler.LoginPage, Web: true},
 		Route{Name: "Login", Method: "POST", Pattern: handlers.LoginPath, HandlerFunc: handler.Login, Web: true, AllowCrossOrigin: true},
 		Route{Name: "Logout", Method: "POST", Pattern: "/app/logout", HandlerFunc: handler.Logout, Web: true, AllowCrossOrigin: true},
+		// No session: phones fetch the manifest and icons before login (#65).
+		Route{Name: "AppManifest", Method: "GET", Pattern: handlers.ManifestPath, HandlerFunc: handler.AppManifest, Web: true},
 		Route{Name: "App", Method: "GET", Pattern: handlers.AppHome, HandlerFunc: handler.App, Web: true, UseSession: true},
 		Route{Name: "AppNote", Method: "GET", Pattern: handlers.AppHome + "/notes/:id", HandlerFunc: handler.AppNote, Web: true, UseSession: true},
 		Route{Name: "AppEdit", Method: "GET", Pattern: handlers.AppHome + "/notes/:id/edit", HandlerFunc: handler.AppEdit, Web: true, UseSession: true},

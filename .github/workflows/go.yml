@@ -28,5 +28,15 @@ jobs:
     - name: Build
       run: go build -v ./...
 
+    # The web app's phone checks (#65) drive the runner's Chrome through
+    # its chromedriver.
+    - name: Start chromedriver
+      run: |
+        "$CHROMEWEBDRIVER/chromedriver" --port=9515 &
+        for i in $(seq 1 20); do curl -sf http://localhost:9515/status && exit 0; sleep 0.5; done
+        exit 1
+
     - name: Test
       run: go test -v ./...
+      env:
+        SCRIBBLE_WEBDRIVER: http://localhost:9515

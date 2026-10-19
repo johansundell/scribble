@@ -98,6 +98,12 @@ func (p webPage) Filter() string {
 	return "?" + v.Encode()
 }
 
+// NotePane reports whether the page is about a note (or says why there is
+// none), so that phones show it in place of the list (#65).
+func (p webPage) NotePane() bool {
+	return p.Note != nil || p.Edit != nil || p.Rename != nil || p.Delete != nil || p.Message != ""
+}
+
 // Filtered reports whether the list is filtered.
 func (p webPage) Filtered() bool {
 	return p.Query != "" || p.Project != ""

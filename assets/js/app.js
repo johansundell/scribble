@@ -18,6 +18,17 @@ var RULE = /^\s*([-*])(\s*\1){2,}\s*$/;
 
 var MAC = /Mac|iPhone|iPad/.test(navigator.platform);
 
+// On phones the textarea grows with the text (#65). app.css does it with
+// field-sizing where the browser has it; grow does it elsewhere.
+var PHONE = window.matchMedia("(width < 700px)");
+var FIELD_SIZING = window.CSS && CSS.supports("field-sizing", "content");
+
+function grow(text) {
+	if (FIELD_SIZING || !PHONE.matches) return;
+	text.style.height = "auto";
+	text.style.height = text.scrollHeight + 2 + "px";
+}
+
 // previewRun counts preview requests, so an answer to an older one is dropped.
 var previewRun = 0;
 
@@ -33,10 +44,15 @@ function setup() {
 			b.title = b.title.replace("Ctrl+", "⌘");
 		});
 	}
+	var text = editorText(form);
 	// Only the two pastes from #53, as in the desktop app (#54): a URL over
 	// selected text, and spreadsheet cells.
-	installLink(editorText(form));
-	installTable(editorText(form));
+	installLink(text);
+	installTable(text);
+	text.addEventListener("input", function () {
+		grow(text);
+	});
+	grow(text);
 }
 
 function editorText(form) {

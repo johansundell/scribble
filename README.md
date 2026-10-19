@@ -198,6 +198,19 @@ The server refuses to start if the PIN isn't 6–12 digits, or if
   | `Ctrl+Shift+P` | | Switch Write / Preview, in the editor |
   | `?` | | Show the shortcuts |
   | `Esc` | | Close the shortcuts, or leave the search box |
+- **On a phone** (below 700 px wide) the app shows one screen at a time: the
+  list, or the open note with "← Notes" to go back (the search and project
+  filter stay). Edit is at the top; Rename and Delete are under **⋯**. In
+  the editor, Save, Done and Cancel sit in a bar at the bottom, above the
+  on-screen keyboard. The keyboard shortcuts are simply not used on touch
+  screens.
+- **Add to Home Screen:** in Safari on iPhone, Share → *Add to Home Screen*;
+  in Chrome on Android, ⋮ → *Add to Home screen* (or *Install app*). The
+  Scribble icon then opens `/app` without the browser bars. The app is
+  online only ([ADR 6](docs/adr/0006-web-app-is-online-only.md)): it needs a
+  connection to the server, and opened without one it shows the browser's
+  offline page. The icons are made from `assets/img/logo.png` with
+  `make icons` (ImageMagick).
 
 Why it works this way: [ADR 4](docs/adr/0004-web-app-is-server-rendered.md)
 and [ADR 5](docs/adr/0005-web-pin-login-and-shared-api-token.md).
@@ -300,6 +313,18 @@ Tests cover the link and project helpers, the SQLite note store (conflicts,
 tombstones, rename, backlinks and projects), the whole API over HTTP, and the
 Go client and the CLI against a real server. GUI tests drive the window headlessly with Fyne's test driver,
 also against a real server.
+
+The web app's phone checks (`router/web_phone_test.go`) open the login,
+list, note, editor and rename pages in Chrome's phone emulation (375×667 and
+412×915, light and dark). They check that no page scrolls sideways, that tap
+targets are at least 44 px, that the back link works and that the editor's
+action bar is on screen. They need a WebDriver server and are skipped
+without one; CI starts chromedriver. With Chrome in Docker
+(`selenium/standalone-chrome` on port 4444):
+
+```sh
+SCRIBBLE_WEBDRIVER=http://localhost:4444 SCRIBBLE_WEBDRIVER_HOST=host.docker.internal go test ./router -run TestWebPhone
+```
 
 ## Roadmap
 

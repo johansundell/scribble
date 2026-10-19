@@ -4,10 +4,22 @@
 
 <head>
 	<meta charset="UTF-8" />
-	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	{{/* Zooming stays on. viewport-fit=cover lets app.css pad for notches;
+	interactive-widget keeps the editor's action bar above Android's
+	on-screen keyboard. */}}
+	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
 	<meta name="color-scheme" content="light dark" />
+	<meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
+	<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1e293b" />
 	<link rel="stylesheet" href="/assets/css/app.css" />
 	<link rel="icon" type="image/png" href="/assets/img/favicon.png" />
+	{{/* Add to home screen (#65). Online only, so no service worker. */}}
+	<link rel="manifest" href="/app/manifest.webmanifest" />
+	<link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png" />
+	<meta name="apple-mobile-web-app-capable" content="yes" />
+	<meta name="mobile-web-app-capable" content="yes" />
+	<meta name="apple-mobile-web-app-title" content="Scribble" />
+	<meta name="apple-mobile-web-app-status-bar-style" content="default" />
 	<title>{{.Title}} – Scribble</title>
 	{{- if .LoggedIn}}
 	<script type="module" src="/assets/js/app.js"></script>
