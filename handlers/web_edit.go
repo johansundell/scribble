@@ -59,6 +59,10 @@ type noteEditor struct {
 	// Dirty says Body is not what is saved, so leaving asks first. A Draft
 	// counts too: leaving would lose it.
 	Dirty bool
+	// Rename is the rename form's path, "" when it isn't offered: for a new
+	// note, or with unsaved text (save first, like the desktop app).
+	// editor.js hides it once the text is changed.
+	Rename string
 }
 
 func newNoteEditor() *noteEditor {
@@ -107,22 +111,11 @@ func (h *Handler) AppCreate(c *gin.Context) error {
 
 // AppEdit shows the editor with the note's Markdown.
 func (h *Handler) AppEdit(c *gin.Context) error {
-	p, ns, err := h.notesPage(c)
-	if err != nil {
+	p, _, n, err := h.webNote(c)
+	if err != nil || n == nil {
 		return err
 	}
-	id, ok := webNoteID(c)
-	if !ok {
-		return h.notesMessage(c, p, "Note not found")
-	}
-	n, err := ns.GetNote(c.Request.Context(), id)
-	if errors.Is(err, store.ErrNoteNotFound) {
-		return h.notesMessage(c, p, "Note not found")
-	}
-	if err != nil {
-		return noteError(err)
-	}
-	ed := editorFor(id)
+	ed := editorFor(n.ID)
 	ed.Body, ed.Revision = n.Body, n.Revision
 	return h.renderEditor(c, http.StatusOK, p, n.Title, ed)
 }
@@ -137,7 +130,7 @@ func (h *Handler) AppSave(c *gin.Context) error {
 	}
 	id, ok := webNoteID(c)
 	if !ok {
-		return h.notesMessage(c, p, "Note not found")
+		return h.notesMessage(c, p, msgNoteNotFound)
 	}
 	body, err := formBody(c)
 	if err != nil {
@@ -178,7 +171,7 @@ func (h *Handler) editFailed(c *gin.Context, p webPage, title string, ed *noteEd
 	status := http.StatusBadRequest
 	switch {
 	case errors.Is(err, store.ErrTitleTaken):
-		status, ed.Error = http.StatusConflict, "A note titled "+notes.TitleOf(ed.Body)+" already exists."
+		status, ed.Error = http.StatusConflict, titleTaken(notes.TitleOf(ed.Body))
 	case errors.Is(err, store.ErrNoTitle):
 		ed.Error = msgNoTitle
 	case errors.Is(err, store.ErrStaleRevision):
@@ -210,6 +203,9 @@ func (h *Handler) renderEditor(c *gin.Context, status int, p webPage, title stri
 	shown := *ed
 	shown.Action += p.Filter()
 	shown.Cancel += p.Filter()
+	if ed.ID != 0 && !ed.Dirty && ed.Draft == "" {
+		shown.Rename = RenamePath(ed.ID) + p.Filter()
+	}
 	p.Title, p.Edit = title, &shown
 	return h.renderNotes(c, status, p)
 }

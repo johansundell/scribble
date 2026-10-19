@@ -43,9 +43,10 @@ func ProjectPath(project string) string {
 }
 
 const (
-	msgWrongPIN    = "Wrong PIN"
-	msgRateLimited = "Too many wrong PINs from this address. Try again later."
-	msgLocked      = "Web login is locked after too many wrong PINs. Restart the service (or wait 24 hours) to unlock it."
+	msgWrongPIN     = "Wrong PIN"
+	msgRateLimited  = "Too many wrong PINs from this address. Try again later."
+	msgLocked       = "Web login is locked after too many wrong PINs. Restart the service (or wait 24 hours) to unlock it."
+	msgNoteNotFound = "Note not found"
 )
 
 var errWebNotConfigured = errors.New("web login is not configured")
@@ -66,8 +67,11 @@ type webPage struct {
 	NoteHTML  template.HTML
 	Backlinks []notes.Note
 	Message   string
-	// Edit is the editor, shown in place of the note.
-	Edit *noteEditor
+	// Edit is the editor, and Rename and Delete their forms, shown in place
+	// of the note.
+	Edit   *noteEditor
+	Rename *noteForm
+	Delete *noteForm
 	// The list's filter: Query searches titles and bodies, and Project (a
 	// name, without '#') keeps the notes tagged with it. Projects are the
 	// ones to choose from.
@@ -160,23 +164,12 @@ func (h *Handler) App(c *gin.Context) error {
 // AppNote shows the list and the note with id :id, rendered as Markdown,
 // with the notes that link to it.
 func (h *Handler) AppNote(c *gin.Context) error {
-	p, ns, err := h.notesPage(c)
-	if err != nil {
+	p, ns, n, err := h.webNote(c)
+	if err != nil || n == nil {
 		return err
 	}
 	ctx := c.Request.Context()
-	id, ok := webNoteID(c)
-	if !ok {
-		return h.notesMessage(c, p, "Note not found")
-	}
-	n, err := ns.GetNote(ctx, id)
-	if errors.Is(err, store.ErrNoteNotFound) {
-		return h.notesMessage(c, p, "Note not found")
-	}
-	if err != nil {
-		return noteError(err)
-	}
-	if p.Backlinks, err = ns.NoteBacklinks(ctx, id); err != nil {
+	if p.Backlinks, err = ns.NoteBacklinks(ctx, n.ID); err != nil {
 		return noteError(err)
 	}
 	var lookupErr error
@@ -284,7 +277,13 @@ func (h *Handler) renderLogin(c *gin.Context, status int, msg string) error {
 }
 
 // webFuncs are the functions web templates may call.
-var webFuncs = template.FuncMap{"notePath": NotePath, "editPath": EditPath}
+var webFuncs = template.FuncMap{
+	"notePath":       NotePath,
+	"editPath":       EditPath,
+	"renamePath":     RenamePath,
+	"deletePath":     DeletePath,
+	"deleteQuestion": deleteQuestion,
+}
 
 // renderWeb renders tmplFile inside the app layout. Web pages use
 // html/template, so note text and form values are escaped.

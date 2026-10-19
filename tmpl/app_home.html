@@ -2,6 +2,7 @@
 <main class="app-main">
 	<nav class="note-list" aria-label="Notes">
 		{{- $open := 0}}{{with .Note}}{{$open = .ID}}{{end}}{{with .Edit}}{{$open = .ID}}{{end}}
+		{{- with .Rename}}{{$open = .ID}}{{end}}{{with .Delete}}{{$open = .ID}}{{end}}
 		{{- $filter := .Filter}}
 		<div class="list-actions">
 			<a class="button" href="/app/new{{$filter}}" data-filtered="new">New</a>
@@ -38,10 +39,37 @@
 		<p class="muted">{{.Message}}</p>
 		{{- else if .Edit}}
 		{{- template "editor" .Edit}}
+		{{- else if .Rename}}{{with .Rename}}
+		<form method="post" action="{{.Action}}" class="note-form" data-filtered="rename-form">
+			<h1>Rename</h1>
+			<label for="rename-title">Title</label>
+			<input type="text" id="rename-title" name="title" value="{{.Title}}" class="text-field" autocomplete="off" required autofocus />
+			<p class="editor-error" role="alert"{{if not .Error}} hidden{{end}}>{{.Error}}</p>
+			<p class="muted">[[Links]] to this note in other notes are renamed too.</p>
+			<div class="editor-buttons">
+				<button type="submit" class="button primary">Rename</button>
+				<a class="button" href="{{.Cancel}}" data-filtered="cancel">Cancel</a>
+			</div>
+		</form>
+		{{- end}}
+		{{- else if .Delete}}{{with .Delete}}
+		<form method="post" action="{{.Action}}" class="note-form" data-filtered="delete-form">
+			<p class="delete-question">{{deleteQuestion .Title}}</p>
+			<div class="editor-buttons">
+				<button type="submit" class="button danger">Delete</button>
+				<a class="button" href="{{.Cancel}}" data-filtered="cancel">Cancel</a>
+			</div>
+		</form>
+		{{- end}}
 		{{- else if .Note}}
+		{{/* Without JavaScript, Delete opens a page that asks first; note.js
+		asks with confirm() and posts. */}}
 		<div class="note-actions">
 			<a class="button" href="{{editPath .Note.ID}}{{.Filter}}" data-filtered="edit">Edit</a>
+			<a class="button" href="{{renamePath .Note.ID}}{{.Filter}}" data-filtered="rename">Rename</a>
+			<a class="button danger" href="{{deletePath .Note.ID}}{{.Filter}}" data-filtered="delete" data-confirm="{{deleteQuestion .Note.Title}}">Delete</a>
 		</div>
+		<script src="/assets/js/note.js" defer></script>
 		<article class="note-body">{{.NoteHTML}}</article>
 		{{- with .Backlinks}}
 		<aside class="backlinks" aria-labelledby="backlinks-heading">
@@ -87,6 +115,9 @@ after its start tag, so one is always written there to keep the note's own. */}}
 				<button type="submit" class="button primary" name="action" value="save">Save</button>
 				<button type="submit" class="button" name="action" value="done">Done</button>
 				<a class="button" href="{{.Cancel}}" data-filtered="cancel">Cancel</a>
+				{{- with .Rename}}
+				<a class="button" href="{{.}}" data-filtered="rename" data-rename>Rename</a>
+				{{- end}}
 			</div>
 			{{- with .Draft}}
 			<label for="draft-text" class="draft-label">Your text, not saved. Copy what you need.</label>

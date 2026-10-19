@@ -27,6 +27,13 @@
 		text.focus();
 		text.setSelectionRange(end, end);
 		form.addEventListener("submit", submit);
+		// Rename is only offered with nothing unsaved: save first.
+		var rename = form.querySelector("[data-rename]");
+		if (rename) {
+			text.addEventListener("input", function () {
+				rename.hidden = dirty();
+			});
+		}
 		var keep = form.querySelector("[data-keep-editing]");
 		if (keep) {
 			keep.addEventListener("click", function (e) {
