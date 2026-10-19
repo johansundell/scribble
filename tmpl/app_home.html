@@ -1,7 +1,10 @@
 {{define "content"}}
 <main class="app-main">
 	<nav class="note-list" aria-label="Notes">
-		{{- $open := 0}}{{with .Note}}{{$open = .ID}}{{end}}
+		{{- $open := 0}}{{with .Note}}{{$open = .ID}}{{end}}{{with .Edit}}{{$open = .ID}}{{end}}
+		<div class="list-actions">
+			<a class="button" href="/app/new">New</a>
+		</div>
 		{{- if .Notes}}
 		<ul>
 			{{- range .Notes}}
@@ -15,7 +18,12 @@
 	<section class="note-view">
 		{{- if .Message}}
 		<p class="muted">{{.Message}}</p>
+		{{- else if .Edit}}
+		{{- template "editor" .Edit}}
 		{{- else if .Note}}
+		<div class="note-actions">
+			<a class="button" href="{{editPath .Note.ID}}">Edit</a>
+		</div>
 		<article class="note-body">{{.NoteHTML}}</article>
 		{{- with .Backlinks}}
 		<aside class="backlinks" aria-labelledby="backlinks-heading">
@@ -33,3 +41,39 @@
 	</section>
 </main>
 {{end}}
+
+{{/* editor is the note editor's form. A textarea drops one newline right
+after its start tag, so one is always written there to keep the note's own. */}}
+{{define "editor"}}
+		<form method="post" action="{{.Action}}" class="editor"{{if or .Dirty .Draft}} data-dirty="true"{{end}}>
+			{{- if .Revision}}
+			<input type="hidden" name="revision" value="{{.Revision}}" />
+			{{- end}}
+			{{- with .Tag}}
+			<input type="hidden" name="tag" value="{{.}}" />
+			{{- end}}
+			<div class="session-ended" role="alert" hidden>
+				Your session has ended. Copy your text, then log in again.
+				<a href="/app/login" target="_blank" rel="noopener">Log in</a>
+			</div>
+			<p class="editor-error" role="alert"{{if not .Error}} hidden{{end}}>{{.Error}}</p>
+			{{- if .Conflict}}
+			<div class="editor-buttons conflict">
+				<a class="button" href="#note-text" data-keep-editing>Keep editing</a>
+				<button type="submit" class="button" name="action" value="reload">Reload</button>
+				<button type="submit" class="button danger" name="action" value="overwrite">Overwrite</button>
+			</div>
+			{{- end}}
+			<textarea id="note-text" name="body" class="editor-text" aria-label="Note text" autofocus>{{"\n"}}{{.Body}}</textarea>
+			<div class="editor-buttons">
+				<button type="submit" class="button primary" name="action" value="save">Save</button>
+				<button type="submit" class="button" name="action" value="done">Done</button>
+				<a class="button" href="{{.Cancel}}">Cancel</a>
+			</div>
+			{{- with .Draft}}
+			<label for="draft-text" class="draft-label">Your text, not saved. Copy what you need.</label>
+			<textarea id="draft-text" class="editor-text draft" readonly>{{"\n"}}{{.}}</textarea>
+			{{- end}}
+		</form>
+		<script src="/assets/js/editor.js" defer></script>
+{{- end}}

@@ -61,6 +61,10 @@ func GetRoutes(handler *handlers.Handler) Routes {
 		Route{Name: "Logout", Method: "POST", Pattern: "/app/logout", HandlerFunc: handler.Logout, Web: true, AllowCrossOrigin: true},
 		Route{Name: "App", Method: "GET", Pattern: handlers.AppHome, HandlerFunc: handler.App, Web: true, UseSession: true},
 		Route{Name: "AppNote", Method: "GET", Pattern: handlers.AppHome + "/notes/:id", HandlerFunc: handler.AppNote, Web: true, UseSession: true},
+		Route{Name: "AppEdit", Method: "GET", Pattern: handlers.AppHome + "/notes/:id/edit", HandlerFunc: handler.AppEdit, Web: true, UseSession: true},
+		Route{Name: "AppSave", Method: "POST", Pattern: handlers.AppHome + "/notes/:id/edit", HandlerFunc: handler.AppSave, Web: true, UseSession: true},
+		Route{Name: "AppNew", Method: "GET", Pattern: handlers.NewPath, HandlerFunc: handler.AppNew, Web: true, UseSession: true},
+		Route{Name: "AppCreate", Method: "POST", Pattern: handlers.NewPath, HandlerFunc: handler.AppCreate, Web: true, UseSession: true},
 		// *title, not :title: a title may hold a '/' (escaped as %2F).
 		Route{Name: "AppTitle", Method: "GET", Pattern: handlers.AppHome + "/title/*title", HandlerFunc: handler.AppTitle, Web: true, UseSession: true},
 	}

@@ -60,6 +60,8 @@ type webPage struct {
 	NoteHTML  template.HTML
 	Backlinks []notes.Note
 	Message   string
+	// Edit is the editor, shown in place of the note.
+	Edit *noteEditor
 }
 
 // LoginPage shows the PIN entry screen, or sends someone with a valid
@@ -129,8 +131,8 @@ func (h *Handler) AppNote(c *gin.Context) error {
 		return err
 	}
 	ctx := c.Request.Context()
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil || id < 1 {
+	id, ok := webNoteID(c)
+	if !ok {
 		return h.notesMessage(c, p, "Note not found")
 	}
 	n, err := ns.GetNote(ctx, id)
@@ -162,7 +164,8 @@ func (h *Handler) AppNote(c *gin.Context) error {
 }
 
 // AppTitle opens the note titled :title (ignoring case), which is where
-// [[links]] go. #50 will create the note when there is none.
+// [[links]] go. When there is none it opens the new-note editor with that
+// title; the note is only created when it is saved.
 func (h *Handler) AppTitle(c *gin.Context) error {
 	p, ns, err := h.notesPage(c)
 	if err != nil {
@@ -171,7 +174,9 @@ func (h *Handler) AppTitle(c *gin.Context) error {
 	title := strings.TrimPrefix(c.Param("title"), "/")
 	n, err := ns.GetNoteByTitle(c.Request.Context(), title)
 	if errors.Is(err, store.ErrNoteNotFound) {
-		return h.notesMessage(c, p, "No note titled "+title)
+		ed := newNoteEditor()
+		ed.Body = "# " + title + "\n"
+		return h.renderEditor(c, http.StatusOK, p, "New note", ed)
 	}
 	if err != nil {
 		return noteError(err)
@@ -230,7 +235,7 @@ func (h *Handler) renderLogin(c *gin.Context, status int, msg string) error {
 }
 
 // webFuncs are the functions web templates may call.
-var webFuncs = template.FuncMap{"notePath": NotePath}
+var webFuncs = template.FuncMap{"notePath": NotePath, "editPath": EditPath}
 
 // renderWeb renders tmplFile inside the app layout. Web pages use
 // html/template, so note text and form values are escaped.
