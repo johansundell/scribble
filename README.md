@@ -156,7 +156,8 @@ The server refuses to start if the PIN isn't 6–12 digits, or if
   extended. Logging out ends the session on that device only. Changing
   `SESSION_SECRET` ends every session.
 - **Per-address limit:** after 5 wrong PINs from one address within 15
-  minutes, that address gets 429 until the 15 minutes have passed.
+  minutes, that address gets 429, without the PIN being checked, until 15
+  minutes after its first wrong PIN.
 - **PIN Alert and lockout:** after 20 wrong PINs within 24 hours from any
   addresses, the service logs a warning, every logged-in page shows "N wrong
   PINs since …", and PIN login is locked for everyone with 429. Sessions that

@@ -467,13 +467,70 @@ func TestWeb_NotRequestLogged(t *testing.T) {
 		t.Errorf("web requests were request-logged: %+v", sink.entries)
 	}
 
-	for _, route := range router.WebRoutes(h) {
+	for _, route := range router.GetRoutes(h) {
+		if !route.Web {
+			if strings.HasPrefix(route.Pattern, "/app") {
+				t.Errorf("route %q under /app is not marked Web", route.Name)
+			}
+			continue
+		}
 		if route.UseLogger || route.UseAuth {
 			t.Errorf("web route %q: UseLogger=%v UseAuth=%v", route.Name, route.UseLogger, route.UseAuth)
 		}
 		if !strings.HasPrefix(route.Pattern, "/app") {
 			t.Errorf("web route %q is outside /app: %s", route.Name, route.Pattern)
 		}
+	}
+}
+
+// TestNewRouter_WebOriginCheck checks the wiring: every web POST gets the
+// same-origin check, with or without a session, unless it allows cross-origin
+// requests (only login and logout do).
+func TestNewRouter_WebOriginCheck(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	a, err := auth.New(auth.Config{PIN: webPIN, Secret: []byte("0123456789abcdef0123456789abcdef"), SessionTTL: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ok := func(c *gin.Context) error { c.String(http.StatusOK, "ok"); return nil }
+	routes := router.Routes{
+		{Name: "Open", Method: "POST", Pattern: "/app/open", HandlerFunc: ok, Web: true},
+		{Name: "Session", Method: "POST", Pattern: "/app/session", HandlerFunc: ok, Web: true, UseSession: true},
+		{Name: "Cross", Method: "POST", Pattern: "/app/cross", HandlerFunc: ok, Web: true, AllowCrossOrigin: true},
+	}
+	newRouter := func(a *auth.Authenticator) *gin.Engine {
+		r, err := router.NewRouter(router.Config{
+			Handler: mustNewHandler(t, nopStore{}, false, os.DirFS(".."), "test", "dev"),
+			Auth:    a, LogSink: &recordingSink{}, Assets: os.DirFS(".."), Routes: routes,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	post := func(r *gin.Engine, path, origin string) int {
+		req := httptest.NewRequest("POST", "http://notes.example"+path, nil)
+		req.Header.Set("Origin", origin)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		return w.Code
+	}
+
+	r := newRouter(a)
+	for path, want := range map[string]int{
+		"/app/open": http.StatusForbidden, "/app/session": http.StatusForbidden, "/app/cross": http.StatusOK,
+	} {
+		if got := post(r, path, "https://evil.example"); got != want {
+			t.Errorf("foreign POST %s = %d, want %d", path, got, want)
+		}
+	}
+	if got := post(r, "/app/open", "http://notes.example"); got != http.StatusOK {
+		t.Errorf("same-origin POST /app/open = %d, want 200", got)
+	}
+
+	// With the web app off, web routes aren't registered at all.
+	if got := post(newRouter(nil), "/app/cross", "http://notes.example"); got != http.StatusNotFound {
+		t.Errorf("web off: POST /app/cross = %d, want 404", got)
 	}
 }
 

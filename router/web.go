@@ -8,18 +8,16 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/johansundell/scribble/auth"
+	"github.com/johansundell/scribble/handlers"
 	"github.com/johansundell/scribble/httperror"
 )
 
 // RequireSession lets the request through only with a valid web app
 // session. Anyone else is sent to the PIN screen, which returns them to the
-// page they asked for.
+// page they asked for. NewRouter only adds web routes when a is set.
 func RequireSession(a *auth.Authenticator) func(HandlerFuncWithError) HandlerFuncWithError {
 	return func(inner HandlerFuncWithError) HandlerFuncWithError {
 		return func(c *gin.Context) error {
-			if a == nil {
-				return httperror.ReturnWithHTTPStatus(errors.New("web login is not configured"), http.StatusInternalServerError)
-			}
 			if !a.Session(c.Request) {
 				c.Redirect(http.StatusSeeOther, loginURL(c.Request))
 				return nil
@@ -32,10 +30,16 @@ func RequireSession(a *auth.Authenticator) func(HandlerFuncWithError) HandlerFun
 // loginURL is the PIN screen, with next set to r's page when r is a page
 // view. The slashes in next are left as they are, for readability.
 func loginURL(r *http.Request) string {
-	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		return "/app/login"
+	if !isSafeMethod(r.Method) {
+		return handlers.LoginPath
 	}
-	return "/app/login?next=" + strings.ReplaceAll(url.QueryEscape(r.URL.RequestURI()), "%2F", "/")
+	return handlers.LoginPath + "?next=" + strings.ReplaceAll(url.QueryEscape(r.URL.RequestURI()), "%2F", "/")
+}
+
+// isSafeMethod reports whether method only reads (GET or HEAD), so it needs
+// no same-origin check and can be returned to after login.
+func isSafeMethod(method string) bool {
+	return method == http.MethodGet || method == http.MethodHead
 }
 
 // SameOrigin refuses, with 403, a request whose Origin header (or, without

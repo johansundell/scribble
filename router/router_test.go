@@ -165,11 +165,20 @@ func TestGetRoutes(t *testing.T) {
 	}
 
 	expectedRoutes := map[string]struct {
-		method    string
-		pattern   string
-		useLogger bool
-		useAuth   bool
+		method     string
+		pattern    string
+		useLogger  bool
+		useAuth    bool
+		web        bool
+		useSession bool
+		allowCross bool
 	}{
+		// The web app: on only with WEB_PIN, never request-logged. Login and
+		// logout take posts from anywhere; every other web POST is origin-checked.
+		"LoginPage":   {method: "GET", pattern: "/app/login", web: true},
+		"Login":       {method: "POST", pattern: "/app/login", web: true, allowCross: true},
+		"Logout":      {method: "POST", pattern: "/app/logout", web: true, allowCross: true},
+		"App":         {method: "GET", pattern: "/app", web: true, useSession: true},
 		"HealthCheck": {method: "GET", pattern: "/", useLogger: false, useAuth: false},
 		"Healthz":     {method: "GET", pattern: "/healthz", useLogger: false, useAuth: false},
 		"Ping":        {method: "GET", pattern: "/ping/:argument", useLogger: true, useAuth: false},
@@ -208,6 +217,10 @@ func TestGetRoutes(t *testing.T) {
 		}
 		if route.UseAuth != expected.useAuth {
 			t.Errorf("Route %q: expected UseAuth=%v, got %v", route.Name, expected.useAuth, route.UseAuth)
+		}
+		if route.Web != expected.web || route.UseSession != expected.useSession || route.AllowCrossOrigin != expected.allowCross {
+			t.Errorf("Route %q: expected Web=%v UseSession=%v AllowCrossOrigin=%v, got %v %v %v", route.Name,
+				expected.web, expected.useSession, expected.allowCross, route.Web, route.UseSession, route.AllowCrossOrigin)
 		}
 		if route.HandlerFunc == nil {
 			t.Errorf("Route %q: HandlerFunc should not be nil", route.Name)
@@ -645,7 +658,14 @@ func TestNewRouter_Debug(t *testing.T) {
 				routes++
 			}
 		}
-		if want := len(router.GetRoutes(mustNewHandler(t, nopStore{}, false, fstest.MapFS{}, "test", "dev"))); routes != want {
+		// Web routes are skipped without an authenticator (WEB_PIN unset).
+		want := 0
+		for _, route := range router.GetRoutes(mustNewHandler(t, nopStore{}, false, fstest.MapFS{}, "test", "dev")) {
+			if !route.Web {
+				want++
+			}
+		}
+		if routes != want {
 			t.Errorf("Expected %d route lines, got %d: %v", want, routes, tl.messages)
 		}
 		found := false

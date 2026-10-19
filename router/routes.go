@@ -53,17 +53,12 @@ func GetRoutes(handler *handlers.Handler) Routes {
 		Route{Name: "RenameNote", Method: "POST", Pattern: "/notes/:id/rename", HandlerFunc: handler.RenameNote, UseAuth: true},
 		Route{Name: "NoteChanges", Method: "GET", Pattern: "/changes", HandlerFunc: handler.NoteChanges, UseAuth: true},
 		Route{Name: "ListProjects", Method: "GET", Pattern: "/projects", HandlerFunc: handler.ListProjects, UseAuth: true},
-	}
-}
-
-// WebRoutes returns the web app's routes, which NewRouter adds only when
-// WEB_PIN is set. They log in with the PIN, not AUTH_TOKEN, and are never
-// request-logged: the log would copy PINs and note bodies.
-func WebRoutes(handler *handlers.Handler) Routes {
-	return Routes{
-		Route{Name: "LoginPage", Method: "GET", Pattern: "/app/login", HandlerFunc: handler.LoginPage},
-		Route{Name: "Login", Method: "POST", Pattern: "/app/login", HandlerFunc: handler.Login},
-		Route{Name: "Logout", Method: "POST", Pattern: "/app/logout", HandlerFunc: handler.Logout},
-		Route{Name: "App", Method: "GET", Pattern: "/app", HandlerFunc: handler.App, UseSession: true},
+		// The web app (Web: registered only when WEB_PIN is set). It logs in
+		// with the PIN, not AUTH_TOKEN, and is never request-logged: the log
+		// would copy PINs and note bodies.
+		Route{Name: "LoginPage", Method: "GET", Pattern: handlers.LoginPath, HandlerFunc: handler.LoginPage, Web: true},
+		Route{Name: "Login", Method: "POST", Pattern: handlers.LoginPath, HandlerFunc: handler.Login, Web: true, AllowCrossOrigin: true},
+		Route{Name: "Logout", Method: "POST", Pattern: "/app/logout", HandlerFunc: handler.Logout, Web: true, AllowCrossOrigin: true},
+		Route{Name: "App", Method: "GET", Pattern: handlers.AppHome, HandlerFunc: handler.App, Web: true, UseSession: true},
 	}
 }

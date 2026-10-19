@@ -14,14 +14,17 @@ import (
 )
 
 // The web app at /app (ADR 4, ADR 5). The router only registers these
-// routes when WEB_PIN is set, and checks the session before AppHome.
+// routes when WEB_PIN is set, and checks the session before App.
 
-// AppHome is where a login lands.
-const AppHome = "/app"
+// AppHome is where a login lands, and LoginPath the PIN screen.
+const (
+	AppHome   = "/app"
+	LoginPath = "/app/login"
+)
 
 const (
 	msgWrongPIN    = "Wrong PIN"
-	msgRateLimited = "Too many wrong PINs. Try again in 15 minutes."
+	msgRateLimited = "Too many wrong PINs from this address. Try again later."
 	msgLocked      = "Web login is locked after too many wrong PINs. Restart the service (or wait 24 hours) to unlock it."
 )
 
@@ -84,7 +87,7 @@ func (h *Handler) Logout(c *gin.Context) error {
 		return httperror.ReturnWithHTTPStatus(errWebNotConfigured, http.StatusInternalServerError)
 	}
 	h.auth.EndSession(c.Writer)
-	c.Redirect(http.StatusSeeOther, "/app/login")
+	c.Redirect(http.StatusSeeOther, LoginPath)
 	return nil
 }
 
