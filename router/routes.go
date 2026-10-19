@@ -68,6 +68,7 @@ func GetRoutes(handler *handlers.Handler) Routes {
 		Route{Name: "AppDeleteForm", Method: "GET", Pattern: handlers.AppHome + "/notes/:id/delete", HandlerFunc: handler.AppDeleteForm, Web: true, UseSession: true},
 		Route{Name: "AppDelete", Method: "POST", Pattern: handlers.AppHome + "/notes/:id/delete", HandlerFunc: handler.AppDelete, Web: true, UseSession: true},
 		Route{Name: "AppNew", Method: "GET", Pattern: handlers.NewPath, HandlerFunc: handler.AppNew, Web: true, UseSession: true},
+		Route{Name: "AppPreview", Method: "POST", Pattern: handlers.PreviewPath, HandlerFunc: handler.AppPreview, Web: true, UseSession: true},
 		Route{Name: "AppCreate", Method: "POST", Pattern: handlers.NewPath, HandlerFunc: handler.AppCreate, Web: true, UseSession: true},
 		// *title, not :title: a title may hold a '/' (escaped as %2F).
 		Route{Name: "AppTitle", Method: "GET", Pattern: handlers.AppHome + "/title/*title", HandlerFunc: handler.AppTitle, Web: true, UseSession: true},

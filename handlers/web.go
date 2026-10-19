@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"html/template"
 	"net/http"
@@ -172,6 +173,16 @@ func (h *Handler) AppNote(c *gin.Context) error {
 	if p.Backlinks, err = ns.NoteBacklinks(ctx, n.ID); err != nil {
 		return noteError(err)
 	}
+	if p.NoteHTML, err = renderNoteBody(ctx, ns, n.Body); err != nil {
+		return err
+	}
+	p.Title, p.Note = n.Title, n
+	return h.renderNotes(c, http.StatusOK, p)
+}
+
+// renderNoteBody renders body as the note view shows it, looking up in ns
+// which [[links]] go to a note.
+func renderNoteBody(ctx context.Context, ns store.NoteStore, body string) (template.HTML, error) {
 	var lookupErr error
 	exists := func(title string) bool {
 		_, err := ns.GetNoteByTitle(ctx, title)
@@ -180,14 +191,14 @@ func (h *Handler) AppNote(c *gin.Context) error {
 		}
 		return err == nil
 	}
-	if p.NoteHTML, err = renderNote(n.Body, exists); err != nil {
-		return httperror.ReturnWithHTTPStatus(err, http.StatusInternalServerError)
+	out, err := renderNote(body, exists)
+	if err != nil {
+		return "", httperror.ReturnWithHTTPStatus(err, http.StatusInternalServerError)
 	}
 	if lookupErr != nil {
-		return noteError(lookupErr)
+		return "", noteError(lookupErr)
 	}
-	p.Title, p.Note = n.Title, n
-	return h.renderNotes(c, http.StatusOK, p)
+	return out, nil
 }
 
 // AppTitle opens the note titled :title (ignoring case), which is where

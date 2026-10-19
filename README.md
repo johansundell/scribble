@@ -173,6 +173,14 @@ The server refuses to start if the PIN isn't 6–12 digits, or if
   proxies, so nobody else can pick their own address.
 - Web pages are never request-logged and are sent with
   `Cache-Control: no-store`.
+- **The editor** is GitHub-style: a formatting toolbar, Write / Preview
+  tabs, `Ctrl+B` / `Ctrl+I` / `Ctrl+K` (Cmd on macOS) for bold, italic and
+  link, `Ctrl+Shift+P` to switch tabs, lists that continue on Enter, and
+  smart paste (a URL over selected text makes a link, spreadsheet cells make
+  a table). Preview renders the text the way the saved note shows. Without
+  JavaScript it is a plain textarea, and saving still works. The toolbar and
+  paste come from GitHub's `markdown-toolbar-element` and `paste-markdown`
+  (MIT), vendored in `assets/js/vendor/`.
 
 Why it works this way: [ADR 4](docs/adr/0004-web-app-is-server-rendered.md)
 and [ADR 5](docs/adr/0005-web-pin-login-and-shared-api-token.md).
