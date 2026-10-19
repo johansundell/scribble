@@ -1,0 +1,31 @@
+{{/* app is the web app's page layout. Each page defines "content". */}}
+{{define "app"}}<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<meta name="color-scheme" content="light dark" />
+	<link rel="stylesheet" href="/assets/css/app.css" />
+	<link rel="icon" type="image/png" href="/assets/img/favicon.png" />
+	<title>{{.Title}} – Scribble</title>
+</head>
+
+<body class="web">
+	<header class="app-header">
+		<span class="app-name">Scribble</span>
+		{{- if .LoggedIn}}
+		<form method="post" action="/app/logout" class="logout-form">
+			<button type="submit" class="button">Log out</button>
+		</form>
+		{{- end}}
+	</header>
+	{{- with .Alert}}
+	<p class="pin-alert" role="alert">{{.Count}} wrong PINs since {{.First.Local.Format "2006-01-02 15:04"}}. If that wasn't you, change WEB_PIN.</p>
+	{{- end}}
+	{{template "content" .}}
+	<footer class="app-footer">Scribble {{.Version}}</footer>
+</body>
+
+</html>
+{{end}}

@@ -78,3 +78,47 @@ func TestAppSettingsValidate_FileMaker(t *testing.T) {
 		})
 	}
 }
+
+func TestAppSettingsValidate_Web(t *testing.T) {
+	const secret = "0123456789abcdef0123456789abcdef"
+	valid := func() AppSettings {
+		return AppSettings{Port: ":8080", Timeout: 10 * time.Second, Storage: StorageSQLite, AuthToken: "token",
+			Web: WebSettings{PIN: "123456", SessionSecret: secret, SessionTimeout: 168 * time.Hour}}
+	}
+	tests := []struct {
+		name    string
+		modify  func(*AppSettings)
+		wantErr string
+	}{
+		{"valid", func(*AppSettings) {}, ""},
+		{"12 digits", func(s *AppSettings) { s.Web.PIN = "123456789012" }, ""},
+		{"web off ignores the rest", func(s *AppSettings) { s.Web = WebSettings{SessionSecret: "short"} }, ""},
+		{"4 digits", func(s *AppSettings) { s.Web.PIN = "1234" }, "WEB_PIN"},
+		{"13 digits", func(s *AppSettings) { s.Web.PIN = "1234567890123" }, "WEB_PIN"},
+		{"not digits", func(s *AppSettings) { s.Web.PIN = "12345a" }, "WEB_PIN"},
+		{"non-ASCII digits", func(s *AppSettings) { s.Web.PIN = "١٢٣٤٥٦" }, "WEB_PIN"},
+		{"missing secret", func(s *AppSettings) { s.Web.SessionSecret = "" }, "SESSION_SECRET"},
+		{"short secret", func(s *AppSettings) { s.Web.SessionSecret = secret[:31] }, "SESSION_SECRET"},
+		{"secret equals token", func(s *AppSettings) { s.AuthToken = secret }, "SESSION_SECRET"},
+		{"no timeout", func(s *AppSettings) { s.Web.SessionTimeout = 0 }, "WEB_SESSION_TIMEOUT"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s := valid()
+			tc.modify(&s)
+			err := s.Validate()
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("expected an error mentioning %q, got %v", tc.wantErr, err)
+			}
+			if strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), s.Web.PIN) {
+				t.Errorf("error message leaks the PIN or the secret: %v", err)
+			}
+		})
+	}
+}

@@ -34,6 +34,21 @@ func TestStart_DatabaseInitializationErrorReturnsError(t *testing.T) {
 	}
 }
 
+func TestNewWebAuth(t *testing.T) {
+	a, err := newWebAuth(types.WebSettings{})
+	if err != nil || a != nil {
+		t.Errorf("web off: got %v, %v; want nil, nil", a, err)
+	}
+
+	a, err = newWebAuth(types.WebSettings{PIN: "123456", SessionSecret: "0123456789abcdef0123456789abcdef", SessionTimeout: time.Hour})
+	if err != nil || a == nil {
+		t.Fatalf("web on: got %v, %v", a, err)
+	}
+	if err := a.Login("127.0.0.1", "123456"); err != nil {
+		t.Errorf("the configured PIN doesn't log in: %v", err)
+	}
+}
+
 func TestEnsureAuthToken(t *testing.T) {
 	orig := settings.AuthToken
 	defer func() { settings.AuthToken = orig }()

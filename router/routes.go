@@ -55,3 +55,15 @@ func GetRoutes(handler *handlers.Handler) Routes {
 		Route{Name: "ListProjects", Method: "GET", Pattern: "/projects", HandlerFunc: handler.ListProjects, UseAuth: true},
 	}
 }
+
+// WebRoutes returns the web app's routes, which NewRouter adds only when
+// WEB_PIN is set. They log in with the PIN, not AUTH_TOKEN, and are never
+// request-logged: the log would copy PINs and note bodies.
+func WebRoutes(handler *handlers.Handler) Routes {
+	return Routes{
+		Route{Name: "LoginPage", Method: "GET", Pattern: "/app/login", HandlerFunc: handler.LoginPage},
+		Route{Name: "Login", Method: "POST", Pattern: "/app/login", HandlerFunc: handler.Login},
+		Route{Name: "Logout", Method: "POST", Pattern: "/app/logout", HandlerFunc: handler.Logout},
+		Route{Name: "App", Method: "GET", Pattern: "/app", HandlerFunc: handler.App, UseSession: true},
+	}
+}

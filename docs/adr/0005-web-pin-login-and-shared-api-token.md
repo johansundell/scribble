@@ -1,6 +1,6 @@
 # 5. Web login with a PIN, plus one shared API token
 
-- **Status:** Accepted (the web login is not built yet)
+- **Status:** Accepted (built in #47)
 - **Tickets:** #47
 
 ## Context

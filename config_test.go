@@ -277,3 +277,39 @@ func TestLoadSettings_Timeout(t *testing.T) {
 		t.Errorf("expected an invalid TIMEOUT to become 0 for Validate to reject, got %v", got)
 	}
 }
+
+func TestLoadSettings_Web(t *testing.T) {
+	load := func(content string) types.AppSettings {
+		defer unsetEnv("WEB_PIN", "SESSION_SECRET", "WEB_SESSION_TIMEOUT", "TRUSTED_PROXIES", "COOKIE_SECURE")()
+		tmpEnv, err := os.CreateTemp("", ".env.*")
+		if err != nil {
+			t.Fatalf("Failed to create temp env file: %v", err)
+		}
+		defer os.Remove(tmpEnv.Name())
+		tmpEnv.WriteString(content)
+		tmpEnv.Close()
+		loadSettings(tmpEnv.Name())
+		return settings
+	}
+	defer loadSettings()
+
+	got := load("PORT=:9999\n")
+	if got.Web.PIN != "" || got.Web.SessionTimeout != 168*time.Hour || !got.Web.CookieSecure || len(got.TrustedProxies) != 0 {
+		t.Errorf("defaults: Web = %+v, TrustedProxies = %q", got.Web, got.TrustedProxies)
+	}
+
+	got = load("WEB_PIN=123456\nSESSION_SECRET=s3cret\nWEB_SESSION_TIMEOUT=12h\nTRUSTED_PROXIES= 127.0.0.1, 10.0.0.0/8 ,\nCOOKIE_SECURE=false\n")
+	if got.Web.PIN != "123456" || got.Web.SessionSecret != "s3cret" || got.Web.SessionTimeout != 12*time.Hour || got.Web.CookieSecure {
+		t.Errorf("loaded Web = %+v", got.Web)
+	}
+	if len(got.TrustedProxies) != 2 || got.TrustedProxies[0] != "127.0.0.1" || got.TrustedProxies[1] != "10.0.0.0/8" {
+		t.Errorf("TrustedProxies = %q", got.TrustedProxies)
+	}
+
+	if got := load("WEB_SESSION_TIMEOUT=soon\n"); got.Web.SessionTimeout != 0 {
+		t.Errorf("expected an invalid WEB_SESSION_TIMEOUT to become 0 for Validate to reject, got %v", got.Web.SessionTimeout)
+	}
+	if got := load("COOKIE_SECURE=nope\n"); !got.Web.CookieSecure {
+		t.Error("expected an invalid COOKIE_SECURE to keep the safe default true")
+	}
+}

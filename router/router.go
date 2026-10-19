@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/johansundell/scribble/auth"
 	"github.com/johansundell/scribble/handlers"
 	"github.com/johansundell/scribble/httperror"
 	"github.com/johansundell/scribble/logging"
@@ -32,6 +33,10 @@ type Route struct {
 	HandlerFunc HandlerFuncWithError
 	UseLogger   bool
 	UseAuth     bool
+	// UseSession requires a web app session; anyone else is sent to the PIN
+	// screen. A POST (or any method but GET and HEAD) must also come from
+	// the same origin. Only for WebRoutes.
+	UseSession bool
 }
 
 // Routes is a collection of Route definitions
@@ -48,8 +53,11 @@ type LogSink interface {
 
 // Config contains the dependencies and settings required to construct a router
 type Config struct {
-	Handler  *handlers.Handler
-	LogSink  LogSink // Required when any route has UseLogger
+	Handler *handlers.Handler
+	LogSink LogSink // Required when any route has UseLogger
+	// Auth turns on the web app at /app; nil leaves every /app path a 404.
+	// Pass the same one to the Handler with handlers.WithAuth.
+	Auth     *auth.Authenticator
 	Settings types.AppSettings
 	Assets   fs.FS
 	Version  string
@@ -67,6 +75,13 @@ func NewRouter(cfg Config) (*gin.Engine, error) {
 	router := gin.New()
 	router.Use(gin.Recovery())
 
+	// ClientIP keys the PIN rate limiter, so forwarding headers are only
+	// believed from configured proxies; otherwise anyone could pick their
+	// own address with X-Forwarded-For. gin trusts every sender by default.
+	if err := router.SetTrustedProxies(cfg.Settings.TrustedProxies); err != nil {
+		return nil, fmt.Errorf("invalid TRUSTED_PROXIES: %w", err)
+	}
+
 	if cfg.Version != "" {
 		router.Use(func(c *gin.Context) {
 			c.Header("X-Version", cfg.Version)
@@ -83,6 +98,13 @@ func NewRouter(cfg Config) (*gin.Engine, error) {
 	})
 
 	routes := GetRoutes(cfg.Handler)
+	web := map[string]bool{}
+	if cfg.Auth != nil {
+		for _, route := range WebRoutes(cfg.Handler) {
+			web[route.Name] = true
+			routes = append(routes, route)
+		}
+	}
 
 	l := logging.OrStd(cfg.Logger)
 	debug := cfg.Settings.Debug
@@ -97,8 +119,24 @@ func NewRouter(cfg Config) (*gin.Engine, error) {
 		if route.UseLogger && cfg.LogSink == nil {
 			return nil, fmt.Errorf("log sink must be configured for logged route %q", route.Name)
 		}
+		if web[route.Name] && route.UseLogger {
+			return nil, fmt.Errorf("web route %q must not be request-logged", route.Name)
+		}
+		if route.UseSession && !web[route.Name] {
+			return nil, fmt.Errorf("route %q needs a web session but is not a web route", route.Name)
+		}
 
 		fn := route.HandlerFunc
+
+		if web[route.Name] {
+			if route.UseSession {
+				fn = RequireSession(cfg.Auth)(fn)
+				if route.Method != http.MethodGet && route.Method != http.MethodHead {
+					fn = SameOrigin(fn)
+				}
+			}
+			fn = noStore(fn)
+		}
 
 		// Apply Logger Middleware first (innermost), so it only runs after auth passes.
 		// Wrapping order is inside-out: the last wrapper applied is the first to execute.
