@@ -217,6 +217,7 @@ body.web:has(.app-main) {
 
 .note-body table {
 	border-collapse: collapse;
+	overflow-wrap: normal;
 }
 
 .note-body th,
@@ -228,6 +229,10 @@ body.web:has(.app-main) {
 .note-body img {
 	max-width: 100%;
 	height: auto;
+}
+
+.note-body ul:has(> li > input[type="checkbox"]) {
+	padding-left: 0.5rem;
 }
 
 .note-body li:has(> input[type="checkbox"]) {
