@@ -43,6 +43,8 @@
 				text.focus();
 			});
 		}
+		// app.js adds the Markdown toolbar to each new editor.
+		document.dispatchEvent(new Event("editor:ready"));
 	}
 
 	function show(selector, msg) {

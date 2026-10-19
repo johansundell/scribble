@@ -189,6 +189,7 @@ func TestGetRoutes(t *testing.T) {
 		"AppDeleteForm": {method: "GET", pattern: "/app/notes/:id/delete", web: true, useSession: true},
 		"AppDelete":     {method: "POST", pattern: "/app/notes/:id/delete", web: true, useSession: true},
 		"AppCreate":     {method: "POST", pattern: "/app/new", web: true, useSession: true},
+		"AppPreview":    {method: "POST", pattern: "/app/preview", web: true, useSession: true},
 		"HealthCheck":   {method: "GET", pattern: "/", useLogger: false, useAuth: false},
 		"Healthz":       {method: "GET", pattern: "/healthz", useLogger: false, useAuth: false},
 		"Ping":          {method: "GET", pattern: "/ping/:argument", useLogger: true, useAuth: false},
