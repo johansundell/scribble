@@ -99,7 +99,9 @@ GOOS=windows CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc \
 
 See `docs/service-template.md` for all server settings (`AUTH_TOKEN`, `PORT`,
 `SQLITE_PATH`, ...), installing as a system service, and Docker.
-`docs/deploy-vps.md` sets up automatic deploys to a VPS: each published
+`docs/install-vps.md` installs the server on a new VPS behind nginx, with
+the token, the web app and `TRUSTED_PROXIES` set up.
+`docs/deploy-vps.md` then sets up automatic deploys: each published
 release is installed by `scripts/deploy.sh`, which rolls back if `/healthz`
 does not answer.
 
@@ -147,7 +149,8 @@ TRUSTED_PROXIES=127.0.0.1   # behind nginx on the same host
 The server refuses to start if the PIN isn't 6–12 digits, or if
 `SESSION_SECRET` is missing, shorter than 32 characters or the same as
 `AUTH_TOKEN`. See `docs/service-template.md` for `WEB_SESSION_TIMEOUT` and
-`COOKIE_SECURE`.
+`COOKIE_SECURE`. For a whole new server, follow
+[`docs/install-vps.md`](docs/install-vps.md).
 
 - **The PIN is for the browser only.** The API, the CLI and the desktop app
   keep using `AUTH_TOKEN`, and the API never accepts the PIN. The PIN opens
