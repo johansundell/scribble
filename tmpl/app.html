@@ -11,6 +11,7 @@
 	<title>{{.Title}} – Scribble</title>
 	{{- if .LoggedIn}}
 	<script type="module" src="/assets/js/app.js"></script>
+	<script type="module" src="/assets/js/shortcuts.js"></script>
 	{{- end}}
 </head>
 
@@ -35,7 +36,7 @@
 	</footer>
 	{{- if .LoggedIn}}
 	{{/* The shortcuts overlay (#52). shortcuts.js opens it with ? or the
-	footer link, and writes ⌘ for Ctrl on macOS. */}}
+	footer link, and writes ⌘ for Ctrl and ⌥ for Alt on macOS. */}}
 	<dialog id="shortcuts" class="shortcuts" aria-labelledby="shortcuts-heading">
 		<div class="shortcuts-body">
 			<h2 id="shortcuts-heading">Keyboard shortcuts</h2>
@@ -43,7 +44,7 @@
 				<tbody>
 					<tr><td><kbd data-mod>Ctrl</kbd>+<kbd>S</kbd></td><td>Save and stay in the editor</td></tr>
 					<tr><td><kbd data-mod>Ctrl</kbd>+<kbd>E</kbd></td><td>Edit or view the open note</td></tr>
-					<tr><td><kbd>Alt</kbd>+<kbd>N</kbd>, or <kbd>n</kbd></td><td>New note</td></tr>
+					<tr><td><kbd data-alt>Alt</kbd>+<kbd>N</kbd>, or <kbd>n</kbd></td><td>New note</td></tr>
 					<tr><td><kbd>/</kbd></td><td>Search</td></tr>
 					<tr><td><kbd>F2</kbd></td><td>Rename the open note</td></tr>
 					<tr><td><kbd>?</kbd></td><td>Show these shortcuts</td></tr>

@@ -17,7 +17,7 @@ func TestWebShortcuts_Overlay(t *testing.T) {
 		// Every shortcut from #52, the editor's from #53 too.
 		"<kbd data-mod>Ctrl</kbd>+<kbd>S</kbd>",
 		"<kbd data-mod>Ctrl</kbd>+<kbd>E</kbd>",
-		"<kbd>Alt</kbd>+<kbd>N</kbd>",
+		"<kbd data-alt>Alt</kbd>+<kbd>N</kbd>",
 		"<kbd>n</kbd>",
 		"<kbd>/</kbd>",
 		"<kbd>F2</kbd>",
@@ -27,6 +27,7 @@ func TestWebShortcuts_Overlay(t *testing.T) {
 		"<kbd data-mod>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>",
 		"<kbd>?</kbd>",
 		"<kbd>Esc</kbd>",
+		`<script type="module" src="/assets/js/shortcuts.js">`,
 		`data-shortcut="new"`,
 		`data-shortcut="search"`,
 	)
@@ -50,7 +51,7 @@ func TestWebShortcuts_Targets(t *testing.T) {
 	// Its editor: Ctrl+S saves, Ctrl+E goes back to the note, F2 renames.
 	wantBody(t, e.do(get(editPath(n), c)), http.StatusOK,
 		`value="save" data-shortcut="save"`,
-		fmt.Sprintf(`href="/app/notes/%d" data-filtered="cancel" data-shortcut="view"`, n.ID),
+		fmt.Sprintf(`href="/app/notes/%d" data-filtered="cancel" data-shortcut="view">Cancel`, n.ID),
 		`data-filtered="rename" data-rename data-shortcut="rename"`,
 	)
 

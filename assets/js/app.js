@@ -1,8 +1,6 @@
 // The web app's Markdown editor (#53): GitHub's toolbar and smart paste, the
 // Write / Preview tabs, the formatting shortcuts and lists that continue on
-// Enter. Without it the editor is the plain textarea from #50. The keyboard
-// shortcuts (#52) come with it.
-import "./shortcuts.js";
+// Enter. Without it the editor is the plain textarea from #50.
 import "./vendor/markdown-toolbar-element/markdown-toolbar-element.js";
 import { installLink, installTable } from "./vendor/paste-markdown/paste-markdown.js";
 

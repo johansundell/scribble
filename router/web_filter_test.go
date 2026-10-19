@@ -100,7 +100,7 @@ func TestWebFilter_SurvivesNavigation(t *testing.T) {
 	w = e.do(get(fmt.Sprintf("/app/notes/%d/edit?q=nginx&project=work", a.ID), c))
 	wantBody(t, w, http.StatusOK,
 		fmt.Sprintf(`action="/app/notes/%d/edit%s"`, a.ID, filter),
-		fmt.Sprintf(`href="/app/notes/%d%s" data-filtered="cancel"`, a.ID, filter),
+		fmt.Sprintf(`href="/app/notes/%d%s" data-filtered="cancel" data-shortcut="view">Cancel`, a.ID, filter),
 	)
 	save := url.Values{"body": {"# Alpha\n#work nginx!"}, "revision": {"1"}, "action": {"save"}}
 	wantRedirect(t, e.do(postForm(fmt.Sprintf("/app/notes/%d/edit?q=nginx&project=work", a.ID), save, c)),

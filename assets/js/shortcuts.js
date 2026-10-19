@@ -5,7 +5,8 @@
 
 var MAC = /Mac|iPhone|iPad/.test(navigator.platform);
 
-function target(name) {
+// shortcutEl is the element marked data-shortcut="name", if it is shown.
+function shortcutEl(name) {
 	var el = document.querySelector('[data-shortcut="' + name + '"]');
 	return el && !el.hidden ? el : null;
 }
@@ -19,6 +20,13 @@ function overlay() {
 	return document.getElementById("shortcuts");
 }
 
+// press clicks the named element, and reports whether there was one.
+function press(name) {
+	var el = shortcutEl(name);
+	if (el) el.click();
+	return !!el;
+}
+
 function openOverlay() {
 	var d = overlay();
 	if (d && !d.open) d.showModal();
@@ -30,25 +38,21 @@ function run(e) {
 	var key = e.key.toLowerCase();
 	var el;
 	if (mod && !e.shiftKey && !e.altKey) {
-		if (key === "s" && (el = target("save"))) {
+		if (key === "s" && (el = shortcutEl("save"))) {
 			// Never the browser's "Save page", even while a save is running.
 			if (!el.disabled) el.form.requestSubmit(el);
 			return true;
 		}
-		if (key === "e" && (el = target("view") || target("edit"))) {
-			el.click();
-			return true;
-		}
+		if (key === "e") return press("view") || press("edit");
 		return false;
 	}
-	// Ctrl+N opens a browser window. Option+N on macOS is a dead key.
-	if (e.altKey && !mod && (key === "n" || (e.key === "Dead" && e.code === "KeyN"))) {
-		el = target("new");
-		if (el) el.click();
-		return !!el;
+	// Ctrl+N opens a browser window. Option+N on macOS is a dead key, which
+	// types accents (ñ) in a text field.
+	if (e.altKey && !mod && (key === "n" || (e.key === "Dead" && e.code === "KeyN" && !typing(e.target)))) {
+		return press("new");
 	}
 	if (mod || e.altKey) return false;
-	if (e.key === "Escape" && e.target === target("search")) {
+	if (e.key === "Escape" && e.target === shortcutEl("search")) {
 		// Leaves the search box, keeping the filter.
 		e.target.blur();
 		return true;
@@ -56,19 +60,15 @@ function run(e) {
 	if (typing(e.target)) return false;
 	switch (e.key) {
 		case "n":
-			el = target("new");
-			if (el) el.click();
-			return !!el;
+			return press("new");
 		case "/":
-			el = target("search");
+			el = shortcutEl("search");
 			if (!el) return false;
 			el.focus();
 			el.select();
 			return true;
 		case "F2":
-			el = target("rename");
-			if (el) el.click();
-			return !!el;
+			return press("rename");
 		case "?":
 			openOverlay();
 			return !!overlay();
@@ -98,6 +98,9 @@ function setup() {
 	if (MAC) {
 		document.querySelectorAll("#shortcuts kbd[data-mod]").forEach(function (k) {
 			k.textContent = "⌘";
+		});
+		document.querySelectorAll("#shortcuts kbd[data-alt]").forEach(function (k) {
+			k.textContent = "⌥";
 		});
 	}
 	document.querySelectorAll("[data-shortcuts-open]").forEach(function (b) {
