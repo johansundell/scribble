@@ -727,7 +727,9 @@ body.web:has(.app-main) {
 	}
 
 	/* The textarea fills the screen between the bars and grows with the
-	   text (app.js does it where field-sizing is missing). */
+	   text (app.js does it where field-sizing is missing). 22rem is
+	   roughly the header, the top bar, the tabs, the toolbar and the
+	   action bar together. */
 	.editor-text {
 		min-height: max(10rem, calc(100dvh - 22rem));
 		field-sizing: content;
@@ -762,8 +764,8 @@ body.web:has(.app-main) {
 	}
 
 	/* Save, Done and Cancel stay on screen, above the on-screen keyboard
-	   (interactive-widget in app.html) and the home indicator. Rename is
-	   under the note's ⋯ menu instead. */
+	   (interactive-widget in app.html) and the home indicator. Rename
+	   isn't offered here: it is under ⋯ on the note's page. */
 	.editor-actions {
 		position: sticky;
 		bottom: 0;

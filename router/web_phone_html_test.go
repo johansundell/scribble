@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestWebMobile_Head(t *testing.T) {
+func TestWebPhoneHTML_Head(t *testing.T) {
 	e := newWebEnv(t)
 	c := e.login(t)
 	for _, path := range []string{"/app/login", "/app"} {
@@ -32,7 +32,7 @@ func TestWebMobile_Head(t *testing.T) {
 	}
 }
 
-func TestWebMobile_Manifest(t *testing.T) {
+func TestWebPhoneHTML_Manifest(t *testing.T) {
 	e := newWebEnv(t)
 	// No session: the home-screen icon is fetched before login.
 	w := e.do(get("/app/manifest.webmanifest"))
@@ -95,7 +95,7 @@ func wantPNG(t *testing.T, e *webEnv, path, size string) {
 	}
 }
 
-func TestWebMobile_Panes(t *testing.T) {
+func TestWebPhoneHTML_Panes(t *testing.T) {
 	e := newWebEnv(t)
 	c := e.login(t)
 	n := e.note(t, "# Alpha\n#work")
@@ -110,15 +110,20 @@ func TestWebMobile_Panes(t *testing.T) {
 	// Every page about a note shows the note pane, with a back link that
 	// keeps the filter.
 	back := `<a class="button back-link" href="/app?project=work&amp;q=al" data-filtered="back">← Notes</a>`
-	for _, path := range []string{
-		fmt.Sprintf("/app/notes/%d", n.ID), editPath(n), renamePath(n), deletePath(n), "/app/new", "/app/notes/999",
+	for path, status := range map[string]int{
+		fmt.Sprintf("/app/notes/%d", n.ID): http.StatusOK,
+		editPath(n):                        http.StatusOK,
+		renamePath(n):                      http.StatusOK,
+		deletePath(n):                      http.StatusOK,
+		"/app/new":                         http.StatusOK,
+		"/app/notes/999":                   http.StatusNotFound,
 	} {
 		w := e.do(get(path+"?project=work&q=al", c))
-		wantBody(t, w, w.Code, `<main class="app-main has-note">`, back, `<span class="note-bar-title">`)
+		wantBody(t, w, status, `<main class="app-main has-note">`, back, `<span class="note-bar-title">`)
 	}
 }
 
-func TestWebMobile_NoteMenu(t *testing.T) {
+func TestWebPhoneHTML_NoteMenu(t *testing.T) {
 	e := newWebEnv(t)
 	c := e.login(t)
 	n := e.note(t, "# Alpha")
@@ -134,7 +139,7 @@ func TestWebMobile_NoteMenu(t *testing.T) {
 	)
 }
 
-func TestWebMobile_EditorBar(t *testing.T) {
+func TestWebPhoneHTML_EditorBar(t *testing.T) {
 	e := newWebEnv(t)
 	c := e.login(t)
 	n := e.note(t, "# Alpha")

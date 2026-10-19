@@ -19,7 +19,8 @@ var RULE = /^\s*([-*])(\s*\1){2,}\s*$/;
 var MAC = /Mac|iPhone|iPad/.test(navigator.platform);
 
 // On phones the textarea grows with the text (#65). app.css does it with
-// field-sizing where the browser has it; grow does it elsewhere.
+// field-sizing where the browser has it; grow does it elsewhere. PHONE is
+// app.css's phone breakpoint.
 var PHONE = window.matchMedia("(width < 700px)");
 var FIELD_SIZING = window.CSS && CSS.supports("field-sizing", "content");
 

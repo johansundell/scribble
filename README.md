@@ -314,7 +314,7 @@ tombstones, rename, backlinks and projects), the whole API over HTTP, and the
 Go client and the CLI against a real server. GUI tests drive the window headlessly with Fyne's test driver,
 also against a real server.
 
-The web app's phone checks (`router/web_phone_test.go`) open the login,
+The web app's phone checks (`router/web_phone_browser_test.go`) open the login,
 list, note, editor and rename pages in Chrome's phone emulation (375×667 and
 412×915, light and dark). They check that no page scrolls sideways, that tap
 targets are at least 44 px, that the back link works and that the editor's
@@ -323,7 +323,7 @@ without one; CI starts chromedriver. With Chrome in Docker
 (`selenium/standalone-chrome` on port 4444):
 
 ```sh
-SCRIBBLE_WEBDRIVER=http://localhost:4444 SCRIBBLE_WEBDRIVER_HOST=host.docker.internal go test ./router -run TestWebPhone
+SCRIBBLE_WEBDRIVER=http://localhost:4444 SCRIBBLE_WEBDRIVER_HOST=host.docker.internal go test ./router -run TestWebPhoneBrowser
 ```
 
 ## Roadmap

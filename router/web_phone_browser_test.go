@@ -37,7 +37,7 @@ var phoneNote = "# A note with wide parts\n#work, see [[Beta]].\n\n" +
 	"```\nfunc aVeryLongLineOfCode() { return strings.Repeat(\"this line is much wider than a phone\", 3) }\n```\n\n" +
 	strings.Repeat("A line of text to make the note longer than the screen.\n\n", 40)
 
-func TestWebPhone(t *testing.T) {
+func TestWebPhoneBrowser(t *testing.T) {
 	wd := os.Getenv("SCRIBBLE_WEBDRIVER")
 	if wd == "" {
 		t.Skip("SCRIBBLE_WEBDRIVER is not set")
@@ -69,7 +69,7 @@ func TestWebPhone(t *testing.T) {
 	// From 700 px up, both panes show, as before.
 	t.Run("wide", func(t *testing.T) {
 		d := newDriver(t, wd, 1024, 768, 1, false)
-		d.login(t, srv)
+		d.login(srv)
 		d.open(fmt.Sprintf("%s/app/notes/%d", srv, n.ID))
 		for _, sel := range []string{".note-list", ".note-view", ".note-actions .wide-only"} {
 			if !d.visible(sel) {
@@ -87,21 +87,21 @@ func TestWebPhone(t *testing.T) {
 func checkPhone(t *testing.T, d *webDriver, srv string, n *notes.Note) {
 	// Login.
 	d.open(srv + "/app/login")
-	d.checkPage(t, "login")
-	d.login(t, srv)
+	d.checkPage("login")
+	d.login(srv)
 
 	// The list, alone.
 	list := srv + "/app?project=work"
 	d.open(list)
-	d.checkPage(t, "list")
+	d.checkPage("list")
 	if !d.visible(".note-list") || d.visible(".note-view") {
 		t.Error("list: want only the list")
 	}
 
 	// A note, alone, with its ⋯ menu and the back link.
 	d.click(fmt.Sprintf(`.note-list a[href^="/app/notes/%d"]`, n.ID))
-	d.waitPath(t, fmt.Sprintf("/app/notes/%d?project=work", n.ID))
-	d.checkPage(t, "note")
+	d.waitPath(fmt.Sprintf("/app/notes/%d?project=work", n.ID))
+	d.checkPage("note")
 	if d.visible(".note-list") || !d.visible(".note-body") {
 		t.Error("note: want only the note")
 	}
@@ -112,13 +112,13 @@ func checkPhone(t *testing.T, d *webDriver, srv string, n *notes.Note) {
 	if !d.visible(`[data-filtered="rename-more"]`) || !d.visible(`[data-filtered="delete-more"]`) {
 		t.Error("note: ⋯ doesn't show Rename and Delete")
 	}
-	d.checkPage(t, "note menu")
+	d.checkPage("note menu")
 	d.click(".back-link")
-	d.waitPath(t, "/app?project=work")
+	d.waitPath("/app?project=work")
 
 	// The editor: the action bar is on screen, the toolbar one row.
 	d.open(fmt.Sprintf("%s/app/notes/%d/edit", srv, n.ID))
-	d.checkPage(t, "editor")
+	d.checkPage("editor")
 	var bar struct{ Top, Bottom, Height float64 }
 	d.execInto(&bar, `var r = document.querySelector(".editor-actions").getBoundingClientRect();
 		return {top: r.top, bottom: r.bottom, height: innerHeight}`)
@@ -148,7 +148,7 @@ func checkPhone(t *testing.T, d *webDriver, srv string, n *notes.Note) {
 
 	// Rename.
 	d.open(fmt.Sprintf("%s/app/notes/%d/rename", srv, n.ID))
-	d.checkPage(t, "rename")
+	d.checkPage("rename")
 	if !d.visible(".back-link") {
 		t.Error("rename: no back link")
 	}
@@ -311,8 +311,8 @@ func (d *webDriver) visible(sel string) bool {
 }
 
 // waitPath waits until the page is at want (path and query).
-func (d *webDriver) waitPath(t *testing.T, want string) {
-	t.Helper()
+func (d *webDriver) waitPath(want string) {
+	d.t.Helper()
 	var got string
 	for i := 0; i < 50; i++ {
 		d.execInto(&got, `return location.pathname + location.search`)
@@ -321,25 +321,25 @@ func (d *webDriver) waitPath(t *testing.T, want string) {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	t.Fatalf("at %q, want %q", got, want)
+	d.t.Fatalf("at %q, want %q", got, want)
 }
 
-func (d *webDriver) login(t *testing.T, srv string) {
-	t.Helper()
+func (d *webDriver) login(srv string) {
+	d.t.Helper()
 	d.open(srv + "/app/login")
 	d.exec(`document.getElementById("pin").value = arguments[0]; document.querySelector(".pin-form").requestSubmit()`, webPIN)
-	d.waitPath(t, "/app")
+	d.waitPath("/app")
 }
 
 // checkPage checks that the page doesn't scroll sideways and that every tap
 // target on it is at least 44×44 px. Links in a note's text only need the
 // height: they flow with the words.
-func (d *webDriver) checkPage(t *testing.T, page string) {
-	t.Helper()
+func (d *webDriver) checkPage(page string) {
+	d.t.Helper()
 	var wide struct{ Scroll, Width float64 }
 	d.execInto(&wide, `return {scroll: document.documentElement.scrollWidth, width: innerWidth}`)
 	if wide.Scroll > wide.Width {
-		t.Errorf("%s: scrolls sideways (%v px wide on a %v px screen)", page, wide.Scroll, wide.Width)
+		d.t.Errorf("%s: scrolls sideways (%v px wide on a %v px screen)", page, wide.Scroll, wide.Width)
 	}
 	var small []string
 	d.execInto(&small, `var small = [];
@@ -356,7 +356,7 @@ func (d *webDriver) checkPage(t *testing.T, page string) {
 		});
 		return small`)
 	for _, s := range small {
-		t.Errorf("%s: tap target under 44 px: %s", page, s)
+		d.t.Errorf("%s: tap target under 44 px: %s", page, s)
 	}
 }
 
