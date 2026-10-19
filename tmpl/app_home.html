@@ -5,7 +5,7 @@
 		{{- if .Notes}}
 		<ul>
 			{{- range .Notes}}
-			<li><a href="/app/notes/{{.ID}}"{{if eq .ID $open}} aria-current="page"{{end}}>{{.Title}}</a></li>
+			<li><a href="{{notePath .ID}}"{{if eq .ID $open}} aria-current="page"{{end}}>{{.Title}}</a></li>
 			{{- end}}
 		</ul>
 		{{- else}}
@@ -22,7 +22,7 @@
 			<h2 id="backlinks-heading">Linked from</h2>
 			<ul>
 				{{- range .}}
-				<li><a href="/app/notes/{{.ID}}">{{.Title}}</a></li>
+				<li><a href="{{notePath .ID}}">{{.Title}}</a></li>
 				{{- end}}
 			</ul>
 		</aside>

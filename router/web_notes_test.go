@@ -131,13 +131,15 @@ func TestWebNotes_Links(t *testing.T) {
 	c := e.login(t)
 	target := e.note(t, "# Target Note")
 	slash := e.note(t, "# A/B")
-	n := e.note(t, "# Source\nsee [[target note]], [[A/B]] and [[Missing One]]\n\n`[[In code]]`")
+	dots := e.note(t, "# ..")
+	n := e.note(t, "# Source\nsee [[target note]], [[A/B]], [[..]] and [[Missing One]]\n\n`[[In code]]`")
 
 	w := e.do(get(fmt.Sprintf("/app/notes/%d", n.ID), c))
 	body := w.Body.String()
 	wantBody(t, w, http.StatusOK,
 		`<a href="/app/title/target%20note">target note</a>`,
 		`<a href="/app/title/A%2FB">A/B</a>`,
+		`<a href="/app/title/%2E%2E">..</a>`,
 		`<a href="/app/title/Missing%20One" class="missing">Missing One</a>`,
 		"<code>[[In code]]</code>",
 	)
@@ -147,6 +149,7 @@ func TestWebNotes_Links(t *testing.T) {
 	wantRedirect(t, e.do(get("/app/title/target%20note", c)), fmt.Sprintf("/app/notes/%d", target.ID))
 	wantRedirect(t, e.do(get("/app/title/TARGET%20NOTE", c)), fmt.Sprintf("/app/notes/%d", target.ID))
 	wantRedirect(t, e.do(get("/app/title/A%2FB", c)), fmt.Sprintf("/app/notes/%d", slash.ID))
+	wantRedirect(t, e.do(get("/app/title/%2E%2E", c)), fmt.Sprintf("/app/notes/%d", dots.ID))
 
 	w = e.do(get("/app/title/Missing%20One", c))
 	wantBody(t, w, http.StatusNotFound, "No note titled Missing One", "Log out", noteLink(target))

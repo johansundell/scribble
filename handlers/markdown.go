@@ -37,11 +37,10 @@ func renderNote(body string, exists func(title string) bool) (template.HTML, err
 	return template.HTML(buf.String()), nil
 }
 
-// TitlePath is the web app page that opens the note titled title.
-func TitlePath(title string) string {
-	return AppHome + "/title/" + url.PathEscape(title)
-}
+// linkSchemes are the URL schemes a link in a note may use.
+var linkSchemes = []string{"http", "https", "mailto"}
 
+// fixLinks points [[links]] at the web app and drops unsafe links.
 func fixLinks(doc ast.Node, source []byte, exists func(string) bool) {
 	var drop []ast.Node
 	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
@@ -56,11 +55,11 @@ func fixLinks(doc ast.Node, source []byte, exists func(string) bool) {
 				if !exists(title) {
 					n.SetAttributeString("class", []byte("missing"))
 				}
-			} else if !allowedURL(string(n.Destination), "http", "https", "mailto") {
+			} else if !allowedURL(string(n.Destination), linkSchemes...) {
 				drop = append(drop, n)
 			}
 		case *ast.AutoLink:
-			if n.AutoLinkType == ast.AutoLinkURL && !allowedURL(string(n.URL(source)), "http", "https", "mailto") {
+			if n.AutoLinkType == ast.AutoLinkURL && !allowedURL(string(n.URL(source)), linkSchemes...) {
 				drop = append(drop, n)
 			}
 		case *ast.Image:
@@ -114,10 +113,10 @@ func (escapedHTML) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 }
 
 func renderHTMLBlock(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
-	n := node.(*ast.HTMLBlock)
 	if !entering {
 		return ast.WalkContinue, nil
 	}
+	n := node.(*ast.HTMLBlock)
 	_, _ = w.WriteString(`<p class="raw-html">`)
 	lines := n.Lines()
 	for i := range lines.Len() {
