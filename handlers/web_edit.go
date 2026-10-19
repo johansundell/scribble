@@ -207,9 +207,10 @@ func savedRedirect(c *gin.Context, p webPage, id int64) {
 // renderEditor shows ed in place of the note. Its form and Cancel keep the
 // list's filter.
 func (h *Handler) renderEditor(c *gin.Context, status int, p webPage, title string, ed *noteEditor) error {
-	ed.Action += p.Filter()
-	ed.Cancel += p.Filter()
-	p.Title, p.Edit = title, ed
+	shown := *ed
+	shown.Action += p.Filter()
+	shown.Cancel += p.Filter()
+	p.Title, p.Edit = title, &shown
 	return h.renderNotes(c, status, p)
 }
 
