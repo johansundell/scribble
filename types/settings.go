@@ -53,17 +53,19 @@ func (w WebSettings) Enabled() bool { return w.PIN != "" }
 const minSessionSecret = 32
 
 type AppSettings struct {
-	Debug          bool              `json:"debug"`
-	Port           string            `json:"port"`
-	UseFileSystem  bool              `json:"useFileSystem"`
-	Timeout        time.Duration     `json:"timeout"` // TIMEOUT, in whole seconds
-	Storage        string            `json:"storage"`
-	AuthToken      string            `json:"authToken"`
-	SqlitePath     string            `json:"sqlitePath"`
-	MySQL          MySQLSettings     `json:"mysql"`
-	FileMaker      FileMakerSettings `json:"filemaker"`
-	Web            WebSettings       `json:"web"`
-	TrustedProxies []string          `json:"trustedProxies"` // TRUSTED_PROXIES; empty trusts no proxy
+	Debug               bool              `json:"debug"`
+	Port                string            `json:"port"`
+	UseFileSystem       bool              `json:"useFileSystem"`
+	Timeout             time.Duration     `json:"timeout"` // TIMEOUT, in whole seconds
+	Storage             string            `json:"storage"`
+	AuthToken           string            `json:"authToken"`
+	SqlitePath          string            `json:"sqlitePath"`
+	BackupDir           string            `json:"backupDir"`
+	BackupRetentionDays int               `json:"backupRetentionDays"`
+	MySQL               MySQLSettings     `json:"mysql"`
+	FileMaker           FileMakerSettings `json:"filemaker"`
+	Web                 WebSettings       `json:"web"`
+	TrustedProxies      []string          `json:"trustedProxies"` // TRUSTED_PROXIES; empty trusts no proxy
 }
 
 // Validate verifies required settings and returns an error when configuration is invalid.

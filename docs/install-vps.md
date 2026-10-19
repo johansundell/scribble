@@ -135,4 +135,5 @@ The first prints the same JSON as in step 3. The second prints `[]` (no notes ye
 ## Next
 
 - Turn on automatic deploys of new releases: [`deploy-vps.md`](deploy-vps.md).
+- Schedule daily backups of the notes: [`deploy-vps.md`, step 9](deploy-vps.md#9-schedule-daily-backups), and copy them off the server (see [Backups](../README.md#backups) in the README).
 - To change a setting, edit `/opt/scribble/.env` and run `sudo systemctl restart scribble-server`. Changing `WEB_PIN` or `SESSION_SECRET` this way also clears a web login lockout. Changing `SESSION_SECRET` logs every browser out.

@@ -22,6 +22,12 @@ var embeddedTemplates embed.FS
 var embeddedAssets embed.FS
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "backup" {
+		// Reads .env like the service does, so SQLITE_PATH and BACKUP_DIR match it.
+		loadSettings()
+		os.Exit(runBackup(os.Args[2:], settings, os.Stdout, os.Stderr))
+	}
+
 	svcFlag := flag.String("service", "", "Control the system service.")
 	flag.Parse()
 

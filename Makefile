@@ -12,6 +12,13 @@ VERSION := v0.0.8
 build:
 	go build -ldflags "-X 'main.Version=$(VERSION)'"
 
+# Backs up the database with a freshly built binary (scribble-server backup). It reads
+# SQLITE_PATH, BACKUP_DIR and RETENTION_DAYS from .env; pass flags with ARGS,
+# e.g. make backup ARGS="-dir /srv/backups" or ARGS=-cron-snippet.
+backup: build
+	./$(NAME) backup $(ARGS)
+
+
 # The command-line client (build/ holds both for `make compile`).
 build-cli:
 	go build -ldflags "-X 'main.Version=$(VERSION)'" -o scribble ./cmd/scribble
@@ -110,4 +117,4 @@ release: dist #docker-push
 bump-release:
 	@DRY_RUN=$(DRY_RUN) ./scripts/bump-release.sh $(BUMP)
 
-.PHONY: build build-cli build-gui compile install deps dist release docker docker-push docker-run bump-release
+.PHONY: build backup build-cli build-gui compile install deps dist release docker docker-push docker-run bump-release

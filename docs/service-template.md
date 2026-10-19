@@ -177,6 +177,8 @@ The application is configured via environment variables. You can set these in a 
 | `TIMEOUT` | int | `15` | Request timeout in seconds. |
 | `STORAGE` | string | `sqlite` | Storage backend for request logs: `sqlite`, `mysql` or `filemaker`. |
 | `SQLITE_PATH` | string | `<binary dir>/<nameOfService>.db` | Path to SQLite database file (`STORAGE=sqlite`). Set it when using `go run .`, whose binary dir is temporary. |
+| `BACKUP_DIR` | string | `backups` beside the database | Where `scribble-server backup` stores its `scribble_<timestamp>.db.gz` archives. The `-dir` flag overrides it. |
+| `RETENTION_DAYS` | int | `7` | After each backup, `scribble-server backup` deletes archives older than this many days. The newest archive is always kept, however old. The `-retention-days` flag overrides it. |
 | `AUTH_TOKEN` | string | random per start | Token required for protected endpoints. When unset, a temporary token is generated and logged (see [Authentication token](#authentication-token)). |
 | `WEB_PIN` | string | - | The PIN for the web app at `/app`: 6–12 digits. **Unset means the web app is off** and every `/app` path answers 404. The JSON API never accepts it. |
 | `SESSION_SECRET` | string | - | The key that signs the web app's session cookie: at least 32 characters, and not equal to `AUTH_TOKEN`. Required when `WEB_PIN` is set. Generate it with `openssl rand -base64 33`. Changing it ends every session. |

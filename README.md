@@ -177,6 +177,74 @@ The server refuses to start if the PIN isn't 6–12 digits, or if
 Why it works this way: [ADR 4](docs/adr/0004-web-app-is-server-rendered.md)
 and [ADR 5](docs/adr/0005-web-pin-login-and-shared-api-token.md).
 
+## Backups
+
+`scribble-server backup` takes a consistent snapshot of the database while the service keeps running, checks it with `PRAGMA integrity_check` and stores it gzipped as `scribble_<timestamp>.db.gz`. The timestamp is UTC, for example `scribble_20261019T030000Z.db.gz`. It then deletes archives older than the retention, but always keeps the newest one. It prints the new archive's path, and lists deleted archives on stderr.
+
+```bash
+./scribble-server backup                               # SQLITE_PATH, BACKUP_DIR and RETENTION_DAYS from .env
+./scribble-server backup -dir /srv/backups -retention-days 14
+make backup ARGS="-dir /srv/backups"                   # builds first, then runs ./scribble-server backup
+```
+
+| Flag | Variable | Default |
+|---|---|---|
+| `-db` | `SQLITE_PATH` | the service's database |
+| `-dir` | `BACKUP_DIR` | `backups` beside the database |
+| `-retention-days` | `RETENTION_DAYS` | `7` |
+
+If the backup fails, nothing is deleted. If the retention value is wrong, the backup is still stored, nothing is deleted, and the command exits 1.
+
+Backups in the same folder as the database don't survive a lost disk or server. Copy them somewhere else as well, for example with `rsync` from another machine. Copying `scribble-server.db` directly while the service runs is not enough: SQLite runs in WAL mode, so recent changes can still be in the `-wal` file next to it.
+
+**Daily backups.** `./scribble-server backup -cron-snippet` prints a crontab line that runs the backup every day at 03:00, with any other flags you give. The line changes to the binary's folder first, so the backup reads the same `.env` as the service, and `-db` and `-dir` become absolute paths. Output goes to the system log (`journalctl -t scribble-backup`). On a VPS, see [docs/deploy-vps.md](docs/deploy-vps.md#9-schedule-daily-backups). With Docker, run the backup in the container from the host's crontab:
+
+```cron
+0 3 * * * cd /path/to/scribble && docker compose exec -T scribble-server ./scribble-server backup 2>&1 | logger -t scribble-backup
+```
+
+**Restoring a backup.** Stop the service, unpack the archive next to the database and move it into its place, delete the old database's `-wal` and `-shm` files so SQLite doesn't mix them in, and start the service again. The commands below unpack to a separate file first, and keep a copy of the current database in case you picked the wrong archive.
+
+On a VPS (systemd service, database at `/opt/scribble/scribble-server.db`). Put the archive's name in `ARCHIVE`:
+
+```bash
+ARCHIVE=/opt/scribble/backups/scribble_20261019T030000Z.db.gz
+sudo systemctl stop scribble-server
+sudo sh -ec '
+  cd /opt/scribble
+  trap "rm -f scribble-server.db.restore" EXIT
+  gunzip -c "$1" > scribble-server.db.restore
+  if [ -f scribble-server.db ]; then
+    cp -p scribble-server.db scribble-server.db.before-restore
+    chown --reference=scribble-server.db scribble-server.db.restore
+    chmod --reference=scribble-server.db scribble-server.db.restore
+  fi
+  mv scribble-server.db.restore scribble-server.db
+  rm -f scribble-server.db-wal scribble-server.db-shm
+' sh "$ARCHIVE"
+sudo systemctl start scribble-server
+```
+
+With Docker, from an archive on the host:
+
+```bash
+docker compose stop scribble-server
+docker compose run --rm -T --no-deps scribble-server sh -ec '
+  cd /app/data
+  trap "rm -f restore.db.gz scribble-server.db.restore" EXIT
+  cat > restore.db.gz
+  gunzip -c restore.db.gz > scribble-server.db.restore
+  if [ -f scribble-server.db ]; then cp scribble-server.db scribble-server.db.before-restore; fi
+  mv scribble-server.db.restore scribble-server.db
+  rm -f scribble-server.db-wal scribble-server.db-shm
+' < ./backups/scribble_20261019T030000Z.db.gz
+docker compose start scribble-server
+```
+
+If the archive is damaged, `gunzip` stops the restore with an error before the database is touched. Otherwise the previous database is kept as `scribble-server.db.before-restore`.
+
+Then check `/healthz` and that notes are what you expect.
+
 ## Layout
 
 ```
@@ -224,7 +292,7 @@ also against a real server.
 - [x] Import from Tomboy `.note` XML (`scribble import <path...>`)
 - [x] Automatic deploys: each published release is installed on the VPS,
       with a rollback if `/healthz` doesn't answer (#44)
-- [ ] Backups: `scribble-server backup` snapshots the database while it
+- [x] Backups: `scribble-server backup` snapshots the database while it
       runs, keeps 7 days, and runs daily from cron (#62)
 - [ ] API level and minimum client version, so the server can tell
       desktop apps and CLIs that are too old to upgrade (#57)
