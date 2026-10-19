@@ -181,6 +181,23 @@ The server refuses to start if the PIN isn't 6–12 digits, or if
   JavaScript it is a plain textarea, and saving still works. The toolbar and
   paste come from GitHub's `markdown-toolbar-element` and `paste-markdown`
   (MIT), vendored in `assets/js/vendor/`.
+- **Keyboard shortcuts** follow the desktop menu bar where browsers allow (on
+  macOS, Ctrl is Cmd). Single keys work only when the focus isn't in a text
+  field, so typing `n` or `/` into a note just types it. New, leaving the
+  editor and Rename ask about unsaved changes first. `?`, or "Keyboard
+  shortcuts" at the bottom of the page, lists them:
+
+  | Web | Desktop | Action |
+  |---|---|---|
+  | `Ctrl+S` | `Ctrl+S` | Save and stay in the editor (not the browser's "Save page") |
+  | `Ctrl+E` | `Ctrl+E` | Edit or view the open note |
+  | `Alt+N`, or `n` | `Ctrl+N` | New note (browsers keep `Ctrl+N` for a new window) |
+  | `/` | `Ctrl+F` | Focus the search box (`Ctrl+F` stays the browser's find) |
+  | `F2` | `F2` | Rename the open note |
+  | `Ctrl+B` / `Ctrl+I` / `Ctrl+K` | | Bold / italic / link, in the editor |
+  | `Ctrl+Shift+P` | | Switch Write / Preview, in the editor |
+  | `?` | | Show the shortcuts |
+  | `Esc` | | Close the shortcuts, or leave the search box |
 
 Why it works this way: [ADR 4](docs/adr/0004-web-app-is-server-rendered.md)
 and [ADR 5](docs/adr/0005-web-pin-login-and-shared-api-token.md).
