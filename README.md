@@ -1,3 +1,4 @@
+[![Deploy](https://github.com/johansundell/scribble/actions/workflows/deploy.yml/badge.svg)](https://github.com/johansundell/scribble/actions/workflows/deploy.yml)
 # scribble
 
 A small self-hosted notes system in the spirit of Tomboy: plain Markdown notes,
