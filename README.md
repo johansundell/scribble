@@ -170,13 +170,20 @@ also against a real server.
 - [x] Import from Tomboy `.note` XML (`scribble import <path...>`)
 - [x] Automatic deploys: each published release is installed on the VPS,
       with a rollback if `/healthz` doesn't answer (#44)
+- [ ] Backups: `scribble-server backup` snapshots the database while it
+      runs, keeps 7 days, and runs daily from cron (#62)
 - [ ] API level and minimum client version, so the server can tell
       desktop apps and CLIs that are too old to upgrade (#57)
 - [ ] Note history: every change keeps the old text, with restore and
       undelete on the server (#55) and `scribble history / diff / restore /
       undelete` in the CLI (#56)
 - [ ] Web app at `/app`: log in with a PIN, then browse, search, read,
-      edit, rename and delete notes like in the desktop app (#46)
+      edit, rename and delete notes like in the desktop app (#46), on
+      phones too, with "Add to Home Screen" (#65)
 - [ ] GitHub-style Markdown editing (toolbar, `Ctrl+B` / `Ctrl+I` /
       `Ctrl+K`, lists that continue on Enter, smart paste) in the web app
       (#53) and the desktop app (#54)
+- [ ] FileMaker replica: SQLite stays the master, and a two-way sync keeps
+      a FileMaker copy of the notes up to date, also after FileMaker has
+      been down (#66). Notes can be browsed in FileMaker, and edits made
+      there are queued for the sync (#67)
