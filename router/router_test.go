@@ -178,6 +178,7 @@ func TestGetRoutes(t *testing.T) {
 		"LoginPage":     {method: "GET", pattern: "/app/login", web: true},
 		"Login":         {method: "POST", pattern: "/app/login", web: true, allowCross: true},
 		"Logout":        {method: "POST", pattern: "/app/logout", web: true, allowCross: true},
+		"AppManifest":   {method: "GET", pattern: "/app/manifest.webmanifest", web: true},
 		"App":           {method: "GET", pattern: "/app", web: true, useSession: true},
 		"AppNote":       {method: "GET", pattern: "/app/notes/:id", web: true, useSession: true},
 		"AppTitle":      {method: "GET", pattern: "/app/title/*title", web: true, useSession: true},

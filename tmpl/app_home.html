@@ -1,5 +1,7 @@
 {{define "content"}}
-<main class="app-main">
+{{/* Below 700 px only one pane shows (#65): the note pane on pages about
+a note, the list otherwise. */}}
+<main class="app-main{{if .NotePane}} has-note{{end}}">
 	<nav class="note-list" aria-label="Notes">
 		{{- $open := 0}}{{with .Note}}{{$open = .ID}}{{end}}{{with .Edit}}{{$open = .ID}}{{end}}
 		{{- with .Rename}}{{$open = .ID}}{{end}}{{with .Delete}}{{$open = .ID}}{{end}}
@@ -35,6 +37,33 @@
 	</nav>
 	<script src="/assets/js/list.js" defer></script>
 	<section class="note-view">
+		{{- if .NotePane}}
+		{{/* The note pane's top bar. On phones it holds the way back to the
+		list, the title and the note's actions; from 700 px up only the
+		actions show, as before. */}}
+		<div class="note-bar">
+			<a class="button back-link" href="/app{{.Filter}}" data-filtered="back">← Notes</a>
+			<span class="note-bar-title">{{.Title}}</span>
+			{{- if and .Note (not .Message)}}
+			{{/* Without JavaScript, Delete opens a page that asks first; note.js
+			asks with confirm() and posts. Rename and Delete are under ⋯ on
+			phones, a <details> so it opens without JavaScript. */}}
+			<div class="note-actions">
+				<a class="button" href="{{editPath .Note.ID}}{{.Filter}}" data-filtered="edit" data-shortcut="edit">Edit</a>
+				<a class="button wide-only" href="{{renamePath .Note.ID}}{{.Filter}}" data-filtered="rename" data-shortcut="rename">Rename</a>
+				<a class="button danger wide-only" href="{{deletePath .Note.ID}}{{.Filter}}" data-filtered="delete" data-confirm="{{deleteQuestion .Note.Title}}">Delete</a>
+				<details class="more-menu">
+					<summary class="button" aria-label="More actions">⋯</summary>
+					<div class="more-items">
+						<a class="button" href="{{renamePath .Note.ID}}{{.Filter}}" data-filtered="rename-more">Rename</a>
+						<a class="button danger" href="{{deletePath .Note.ID}}{{.Filter}}" data-filtered="delete-more" data-confirm="{{deleteQuestion .Note.Title}}">Delete</a>
+					</div>
+				</details>
+			</div>
+			<script src="/assets/js/note.js" defer></script>
+			{{- end}}
+		</div>
+		{{- end}}
 		{{- if .Message}}
 		<p class="muted">{{.Message}}</p>
 		{{- else if .Edit}}
@@ -62,14 +91,6 @@
 		</form>
 		{{- end}}
 		{{- else if .Note}}
-		{{/* Without JavaScript, Delete opens a page that asks first; note.js
-		asks with confirm() and posts. */}}
-		<div class="note-actions">
-			<a class="button" href="{{editPath .Note.ID}}{{.Filter}}" data-filtered="edit" data-shortcut="edit">Edit</a>
-			<a class="button" href="{{renamePath .Note.ID}}{{.Filter}}" data-filtered="rename" data-shortcut="rename">Rename</a>
-			<a class="button danger" href="{{deletePath .Note.ID}}{{.Filter}}" data-filtered="delete" data-confirm="{{deleteQuestion .Note.Title}}">Delete</a>
-		</div>
-		<script src="/assets/js/note.js" defer></script>
 		<article class="note-body">{{.NoteHTML}}</article>
 		{{- with .Backlinks}}
 		<aside class="backlinks" aria-labelledby="backlinks-heading">
@@ -138,7 +159,8 @@ after its start tag, so one is always written there to keep the note's own. */}}
 			</div>
 			<textarea id="note-text" name="body" class="editor-text" aria-label="Note text" autofocus>{{"\n"}}{{.Body}}</textarea>
 			<div id="note-preview" class="note-body editor-preview" role="tabpanel" aria-labelledby="tab-preview" hidden></div>
-			<div class="editor-buttons">
+			{{/* On phones this bar sticks to the bottom of the screen. */}}
+			<div class="editor-buttons editor-actions">
 				<button type="submit" class="button primary" name="action" value="save" data-shortcut="save">Save</button>
 				<button type="submit" class="button" name="action" value="done">Done</button>
 				<a class="button" href="{{.Cancel}}" data-filtered="cancel"{{if .ID}} data-shortcut="view"{{end}}>Cancel</a>
