@@ -45,9 +45,11 @@ type AppSettings struct {
 	Timeout       time.Duration     `json:"timeout"` // TIMEOUT, in whole seconds
 	Storage       string            `json:"storage"`
 	AuthToken     string            `json:"authToken"`
-	SqlitePath    string            `json:"sqlitePath"`
-	MySQL MySQLSettings     `json:"mysql"`
-	FileMaker     FileMakerSettings `json:"filemaker"`
+	SqlitePath          string            `json:"sqlitePath"`
+	BackupDir           string            `json:"backupDir"`
+	BackupRetentionDays int               `json:"backupRetentionDays"`
+	MySQL               MySQLSettings     `json:"mysql"`
+	FileMaker           FileMakerSettings `json:"filemaker"`
 }
 
 // Validate verifies required settings and returns an error when configuration is invalid.

@@ -173,7 +173,44 @@ From now on, `make release` also deploys:
 
 **Pre-releases** (releases marked "This is a pre-release" on GitHub) are not deployed.
 
-**To go back to an older version**, run the workflow by hand (step 7) with the older tag. The older version must have `/healthz`, or the health check fails and the deploy rolls back to the current one.
+## 9. Schedule daily backups
+
+`scribble-server backup` snapshots the database while the service runs, and deletes archives older than 7 days, but always keeps the newest one. The [README](../README.md#backups) describes the options and how to restore a backup.
+
+Run it as the same user as the service, so it can read the database and its `.env`. Check the user:
+
+```bash
+systemctl show scribble-server -p User
+```
+
+An empty `User=` means root. The steps below assume root; for another user, use `sudo -u <user>` and `sudo crontab -u <user> -e` instead.
+
+Take a first backup by hand:
+
+```bash
+sudo /opt/scribble/scribble-server backup
+```
+
+**Check:** it prints the archive path, for example `/opt/scribble/backups/scribble_20261019T030000Z.db.gz`. The archives go to a `backups` folder beside the database unless `BACKUP_DIR` is set in `/opt/scribble/.env`.
+
+Print the crontab line and add it to root's crontab:
+
+```bash
+sudo /opt/scribble/scribble-server backup -cron-snippet
+sudo crontab -e
+```
+
+The line looks like this. It runs at 03:00 server time and sends its output to the system log:
+
+```cron
+0 3 * * * cd /opt/scribble && /opt/scribble/scribble-server backup 2>&1 | logger -t scribble-backup
+```
+
+The line changes to `/opt/scribble` first, so the backup reads `/opt/scribble/.env` like the service does. Flags you give with `-cron-snippet` are copied into the line, for example `-retention-days 14`, with `-db` and `-dir` made absolute. `deploy.sh` replaces the binary at the same path, so the line keeps working after each release.
+
+**Check:** the next morning, `journalctl -t scribble-backup` shows the new archive path, and `sudo ls /opt/scribble/backups` lists it.
+
+The archives are on the same disk as the database. Copy them off the server too, for example with `rsync` from another machine.
 
 ## Troubleshooting
 
@@ -184,4 +221,6 @@ From now on, `make release` also deploys:
 - **`sudo: a password is required`.** The sudoers path must match exactly: `/opt/scribble/deploy.sh`.
 - **SSH on a port other than 22.** Change the `ssh` line in the workflow to `ssh -p <port> -o BatchMode=yes deploy@"$HOST" "$TAG"`, and make sure `scribble_known_hosts` was made with `ssh-keyscan -p <port>`.
 - **`rolling back`.** The new version started but `/healthz` didn't answer with 200. The previous binary is running again. Run `journalctl -u scribble-server -n 100` on the server for the reason. Then fix the problem and release again, or run the workflow by hand with the same tag.
+- **No `scribble-backup` lines in the journal.** Check that `cron` runs (`systemctl status cron`) and that the line is in the crontab of the service's user (`sudo crontab -l` for root, `sudo crontab -u <user> -l` for another user). Run the line by hand to see its output.
+- **`backup failed: database: … no such file or directory`.** The backup can't find the database. It reads `SQLITE_PATH` from `/opt/scribble/.env`, the same as the service. Check that the service and the backup run as the same user, and that the crontab line starts with `cd /opt/scribble &&`.
 - **`curl: (22) … 404` after many retries.** The release has no file for this server's architecture. Check that `make release` built `linux_amd64` (or `linux_arm64` on an ARM VPS).

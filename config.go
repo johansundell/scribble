@@ -60,6 +60,11 @@ func loadSettings(filenames ...string) {
 	if settings.SqlitePath == "" {
 		settings.SqlitePath = filepath.Join(utils.GetBinaryBasePath(), nameOfService+".db")
 	}
+	settings.BackupDir = os.Getenv("BACKUP_DIR")
+	settings.BackupRetentionDays = 7
+	if v := os.Getenv("RETENTION_DAYS"); v != "" {
+		settings.BackupRetentionDays, _ = strconv.Atoi(v)
+	}
 	settings.AuthToken = os.Getenv("AUTH_TOKEN")
 
 	settings.MySQL.Username = os.Getenv("MYSQL_USERNAME")
