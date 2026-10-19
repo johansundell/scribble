@@ -17,5 +17,5 @@ The web app at `/app` should work like the desktop app in a browser, on phones t
 ## Consequences
 
 - The web app is part of the Go codebase and its tests, and ships in the same binary.
-- The basics work without JavaScript (the PIN screen does).
+- The PIN screen works without JavaScript.
 - Rich client features, like an offline mode, would be hard to add later. That is accepted ([ADR 6](0006-web-app-is-online-only.md)).

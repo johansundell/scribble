@@ -18,7 +18,7 @@ This is a single-context repo: there is no `GLOSSARY-MAP.md` and no per-context 
 │   ├── 0001-notes-are-plain-markdown.md
 │   ├── 0002-sync-with-seq-and-tombstones.md
 │   └── ...
-└── (Go packages: notes/, store/, handlers/, client/, offline/, gui/, cmd/)
+└── ...
 ```
 
 ## Writing ADRs and glossary entries

@@ -9,7 +9,7 @@ The desktop app keeps an offline copy of the notes and queues edits while the se
 
 ## Decision
 
-The web app has **no offline cache and no queued edits**. Every page is read from the server. If the server can't be reached when saving, the editor keeps the text and says so. Working offline stays the desktop app's job.
+The web app has **no offline copy and no queued edits**. Every page is read from the server. If the server can't be reached when saving, the editor keeps the text and says so. Working offline stays the desktop app's job.
 
 ## Consequences
 

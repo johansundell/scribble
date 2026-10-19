@@ -5,7 +5,7 @@
 
 ## Context
 
-The server deploys itself on every release ([ADR 9](0009-releases-deploy-themselves.md)), so it is almost always the newest piece. The risk is old clients: a desktop app or CLI on another machine that was never updated. Desktop apps are updated by hand from the release page (the link is in Help → About). There is no auto-updater. Clients already installed know nothing about any version check.
+The server deploys itself on every release ([ADR 9](0009-releases-deploy-themselves.md)), so it is almost always the newest piece. The risk is old clients: a desktop app or CLI on another machine that was never updated. Desktop apps are updated by hand from the GitHub release page. Help → About links to the project, and #57 adds a link to the latest release. There is no auto-updater. Clients already installed know nothing about any version check.
 
 ## Decision
 
