@@ -97,7 +97,7 @@ docker-push: docker
 docker-run:
 	VERSION=$(VERSION) docker compose up -d --build
 
-release: dist docker-push
+release: dist #docker-push
 	@latest_tag=$$(git describe --tags `git rev-list --tags --max-count=1`); \
 	comparison="$$latest_tag..HEAD"; \
 	if [ -z "$$latest_tag" ]; then comparison=""; fi; \
