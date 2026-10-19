@@ -150,13 +150,7 @@ func TestWebNotes_Links(t *testing.T) {
 	wantRedirect(t, e.do(get("/app/title/TARGET%20NOTE", c)), fmt.Sprintf("/app/notes/%d", target.ID))
 	wantRedirect(t, e.do(get("/app/title/A%2FB", c)), fmt.Sprintf("/app/notes/%d", slash.ID))
 	wantRedirect(t, e.do(get("/app/title/%2E%2E", c)), fmt.Sprintf("/app/notes/%d", dots.ID))
-
-	w = e.do(get("/app/title/Missing%20One", c))
-	wantBody(t, w, http.StatusNotFound, "No note titled Missing One", "Log out", noteLink(target))
-
-	// The title is escaped.
-	w = e.do(get("/app/title/%3Cb%3Ex", c))
-	wantBody(t, w, http.StatusNotFound, "No note titled &lt;b&gt;x")
+	// A missing note opens the new-note editor: TestWebEdit_MissingLinkPrefill.
 }
 
 func TestWebNotes_Backlinks(t *testing.T) {
