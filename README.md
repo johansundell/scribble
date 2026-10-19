@@ -168,3 +168,15 @@ also against a real server.
 - [ ] GUI: conflict resolution
 - [x] Global hotkey / tray icon for "instant new note"
 - [x] Import from Tomboy `.note` XML (`scribble import <path...>`)
+- [x] Automatic deploys: each published release is installed on the VPS,
+      with a rollback if `/healthz` doesn't answer (#44)
+- [ ] API level and minimum client version, so the server can tell
+      desktop apps and CLIs that are too old to upgrade (#57)
+- [ ] Note history: every change keeps the old text, with restore and
+      undelete on the server (#55) and `scribble history / diff / restore /
+      undelete` in the CLI (#56)
+- [ ] Web app at `/app`: log in with the token, then browse, search, read,
+      edit, rename and delete notes like in the desktop app (#46)
+- [ ] GitHub-style Markdown editing (toolbar, `Ctrl+B` / `Ctrl+I` /
+      `Ctrl+K`, lists that continue on Enter, smart paste) in the web app
+      (#53) and the desktop app (#54)
