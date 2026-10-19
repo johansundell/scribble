@@ -65,6 +65,7 @@ stderr as `scribble: <message>`.
 | `autolink <title>` | turn mentions of other note titles into `[[links]]` |
 | `import <path...>` | import Tomboy `.note` XML files or directories |
 | `rm <title>` | delete a note |
+| `completion [bash]` | output shell completion script |
 
 Lists (`ls`, `search`, `backlinks`, `projects <name>`) print one title per
 line, so they work with `grep`, `head`, `xargs` and so on. `ls` and `search`
@@ -210,6 +211,22 @@ Deletes a note.
 
 ```sh
 scribble rm "Shopping list"
+```
+
+### completion
+
+Outputs the shell completion script for bash. Does not require `SCRIBBLE_TOKEN`.
+
+```sh
+# Load in your current shell:
+source <(scribble completion)
+
+# Install permanently for the current user:
+mkdir -p ~/.local/share/bash-completion/completions
+scribble completion > ~/.local/share/bash-completion/completions/scribble
+
+# Or system-wide (requires root):
+sudo scribble completion > /etc/bash_completion.d/scribble
 ```
 
 ## Saving shell commands to a note
