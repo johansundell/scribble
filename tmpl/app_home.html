@@ -45,7 +45,7 @@
 {{/* editor is the note editor's form. A textarea drops one newline right
 after its start tag, so one is always written there to keep the note's own. */}}
 {{define "editor"}}
-		<form method="post" action="{{.Action}}" class="editor"{{if .Dirty}} data-dirty="true"{{end}}>
+		<form method="post" action="{{.Action}}" class="editor"{{if or .Dirty .Draft}} data-dirty="true"{{end}}>
 			{{- if .Revision}}
 			<input type="hidden" name="revision" value="{{.Revision}}" />
 			{{- end}}

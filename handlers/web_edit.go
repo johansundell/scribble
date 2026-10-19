@@ -45,7 +45,8 @@ type noteEditor struct {
 	Action string
 	Cancel string
 	Body   string
-	// Revision is the one the edit started from, sent back as base_revision.
+	// Revision is the one the edit started from, posted as "revision" and
+	// passed to the store as the base revision.
 	Revision int64
 	// Tag is the #project a new note was prefilled with, "" if none.
 	Tag   string
@@ -55,7 +56,8 @@ type noteEditor struct {
 	// Draft is the user's text, shown read-only below the latest version
 	// after Reload.
 	Draft string
-	// Dirty says Body is not what is saved, so leaving asks first.
+	// Dirty says Body is not what is saved, so leaving asks first. A Draft
+	// counts too: leaving would lose it.
 	Dirty bool
 }
 

@@ -268,7 +268,8 @@ func TestWebEdit_Conflict(t *testing.T) {
 	// Reload shows the latest version, with my text read-only below it.
 	w = e.do(postForm(editPath(n), with("reload"), c))
 	body := w.Body.String()
-	wantBody(t, w, http.StatusOK, "# Shared\ntheirs</textarea>", `name="revision" value="2"`, "readonly", "# Shared\nmine</textarea>")
+	// Leaving still asks: my text is not saved anywhere.
+	wantBody(t, w, http.StatusOK, "# Shared\ntheirs</textarea>", `name="revision" value="2"`, "readonly", "# Shared\nmine</textarea>", `data-dirty="true"`)
 	if strings.Index(body, "theirs</textarea>") > strings.Index(body, "mine</textarea>") {
 		t.Error("my text is not below the latest version")
 	}
