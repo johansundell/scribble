@@ -171,6 +171,7 @@ func TestGetRoutes(t *testing.T) {
 		useAuth   bool
 	}{
 		"HealthCheck": {method: "GET", pattern: "/", useLogger: false, useAuth: false},
+		"Healthz":     {method: "GET", pattern: "/healthz", useLogger: false, useAuth: false},
 		"Ping":        {method: "GET", pattern: "/ping/:argument", useLogger: true, useAuth: false},
 		"Pong":        {method: "POST", pattern: "/pong", useLogger: true, useAuth: true},
 		"GetLogs":     {method: "GET", pattern: "/logs/:from/:to", useLogger: false, useAuth: true},
@@ -292,6 +293,37 @@ func TestNewRouter_FileSystemModeNilAssetsSucceeds(t *testing.T) {
 	}
 	if r == nil {
 		t.Fatal("Expected non-nil router")
+	}
+}
+
+// TestNewRouter_Healthz checks that /healthz answers without a token, which
+// scripts/deploy.sh relies on after a restart.
+func TestNewRouter_Healthz(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	h := mustNewHandler(t, nopStore{}, false, fstest.MapFS{}, "test", "v1.2.3")
+	r, err := router.NewRouter(router.Config{
+		Handler:  h,
+		LogSink:  &recordingSink{},
+		Settings: types.AppSettings{AuthToken: "secret-token", UseFileSystem: true},
+		Version:  "v1.2.3",
+	})
+	if err != nil {
+		t.Fatalf("NewRouter: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/healthz", nil)
+	req.Header.Set("Accept", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+	for _, want := range []string{`"dbStatus":"OK"`, `"version":"v1.2.3"`} {
+		if !strings.Contains(w.Body.String(), want) {
+			t.Errorf("Expected body to contain %s, got %s", want, w.Body.String())
+		}
 	}
 }
 
