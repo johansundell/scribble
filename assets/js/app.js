@@ -2,7 +2,7 @@
 // Write / Preview tabs, the formatting shortcuts and lists that continue on
 // Enter. Without it the editor is the plain textarea from #50.
 import "./vendor/markdown-toolbar-element/markdown-toolbar-element.js";
-import { subscribe } from "./vendor/paste-markdown/paste-markdown.js";
+import { installLink, installTable } from "./vendor/paste-markdown/paste-markdown.js";
 
 var LOADING = "Loading preview…";
 var UNAVAILABLE = "Preview unavailable";
@@ -13,9 +13,12 @@ var FORMAT_KEYS = { b: "md-bold", i: "md-italic", k: "md-link" };
 
 // A list item: indent, marker ("-", "*" or "1."), an optional task box, text.
 var LIST_ITEM = /^(\s*)([-*]|(\d+)\.) (\[[ xX]\] )?(.*)$/;
+// A thematic break such as "* * *" or "- - -", which is not a list item.
+var RULE = /^\s*([-*])(\s*\1){2,}\s*$/;
 
-// previewRun counts preview requests, so an answer to an older one is
-// dropped.
+var MAC = /Mac|iPhone|iPad/.test(navigator.platform);
+
+// previewRun counts preview requests, so an answer to an older one is dropped.
 var previewRun = 0;
 
 // setup enhances the editor on the page once. editor.js asks again after it
@@ -25,7 +28,15 @@ function setup() {
 	if (!form || form.dataset.markdown) return;
 	form.dataset.markdown = "true";
 	form.querySelector("[data-md-bar]").hidden = false;
-	subscribe(form.querySelector("#note-text"));
+	if (MAC) {
+		form.querySelectorAll(".md-button[title]").forEach(function (b) {
+			b.title = b.title.replace("Ctrl+", "⌘");
+		});
+	}
+	// Only the two pastes from #53, as in the desktop app (#54): a URL over
+	// selected text, and spreadsheet cells.
+	installLink(editorText(form));
+	installTable(editorText(form));
 }
 
 function editorText(form) {
@@ -88,9 +99,10 @@ function continueList(text) {
 	var end = text.value.indexOf("\n", at);
 	if (end < 0) end = text.value.length;
 	if (at !== end) return false;
-	var m = LIST_ITEM.exec(text.value.slice(start, at));
-	if (!m) return false;
-	if (m[5] === "") {
+	var line = text.value.slice(start, at);
+	var m = LIST_ITEM.exec(line);
+	if (!m || RULE.test(line)) return false;
+	if (m[5].trim() === "") {
 		// An empty item ends the list: its marker goes.
 		text.setSelectionRange(start, at);
 		insert(text, "");
@@ -126,12 +138,9 @@ document.addEventListener("keydown", function (e) {
 	if (!form || !form.dataset.markdown || e.isComposing) return;
 	var mod = e.ctrlKey || e.metaKey;
 	var key = e.key.toLowerCase();
-	if (mod && e.shiftKey && !e.altKey && key === "p") {
-		e.preventDefault();
-		showTab(form, editorText(form).hidden ? "write" : "preview");
-		return;
-	}
-	if (e.target.closest("[role=tablist]") && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+	// With two tabs, either arrow key in the tab list goes to the other one.
+	var arrow = e.target.closest("[role=tablist]") && (e.key === "ArrowLeft" || e.key === "ArrowRight");
+	if ((mod && e.shiftKey && !e.altKey && key === "p") || arrow) {
 		e.preventDefault();
 		showTab(form, editorText(form).hidden ? "write" : "preview");
 		return;

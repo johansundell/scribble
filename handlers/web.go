@@ -173,16 +173,16 @@ func (h *Handler) AppNote(c *gin.Context) error {
 	if p.Backlinks, err = ns.NoteBacklinks(ctx, n.ID); err != nil {
 		return noteError(err)
 	}
-	if p.NoteHTML, err = renderStoredLinks(ctx, ns, n.Body); err != nil {
+	if p.NoteHTML, err = renderNoteBody(ctx, ns, n.Body); err != nil {
 		return err
 	}
 	p.Title, p.Note = n.Title, n
 	return h.renderNotes(c, http.StatusOK, p)
 }
 
-// renderStoredLinks renders body like renderNote, looking up in ns which
-// [[links]] go to a note.
-func renderStoredLinks(ctx context.Context, ns store.NoteStore, body string) (template.HTML, error) {
+// renderNoteBody renders body as the note view shows it, looking up in ns
+// which [[links]] go to a note.
+func renderNoteBody(ctx context.Context, ns store.NoteStore, body string) (template.HTML, error) {
 	var lookupErr error
 	exists := func(title string) bool {
 		_, err := ns.GetNoteByTitle(ctx, title)

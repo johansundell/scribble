@@ -24,7 +24,7 @@ func (h *Handler) AppPreview(c *gin.Context) error {
 	if err != nil {
 		return err
 	}
-	out, err := renderStoredLinks(c.Request.Context(), ns, body)
+	out, err := renderNoteBody(c.Request.Context(), ns, body)
 	if err != nil {
 		return err
 	}
