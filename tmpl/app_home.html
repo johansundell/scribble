@@ -1,10 +1,35 @@
 {{define "content"}}
 <main class="app-main">
 	<nav class="note-list" aria-label="Notes">
-		<p class="muted">No notes to show yet.</p>
+		{{- $open := 0}}{{with .Note}}{{$open = .ID}}{{end}}
+		{{- if .Notes}}
+		<ul>
+			{{- range .Notes}}
+			<li><a href="/app/notes/{{.ID}}"{{if eq .ID $open}} aria-current="page"{{end}}>{{.Title}}</a></li>
+			{{- end}}
+		</ul>
+		{{- else}}
+		<p class="muted">No notes yet.</p>
+		{{- end}}
 	</nav>
 	<section class="note-view">
-		<p class="muted">No note selected.</p>
+		{{- if .Message}}
+		<p class="muted">{{.Message}}</p>
+		{{- else if .Note}}
+		<article class="note-body">{{.NoteHTML}}</article>
+		{{- with .Backlinks}}
+		<aside class="backlinks" aria-labelledby="backlinks-heading">
+			<h2 id="backlinks-heading">Linked from</h2>
+			<ul>
+				{{- range .}}
+				<li><a href="/app/notes/{{.ID}}">{{.Title}}</a></li>
+				{{- end}}
+			</ul>
+		</aside>
+		{{- end}}
+		{{- else}}
+		<p class="muted">Select a note.</p>
+		{{- end}}
 	</section>
 </main>
 {{end}}

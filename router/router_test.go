@@ -179,6 +179,8 @@ func TestGetRoutes(t *testing.T) {
 		"Login":       {method: "POST", pattern: "/app/login", web: true, allowCross: true},
 		"Logout":      {method: "POST", pattern: "/app/logout", web: true, allowCross: true},
 		"App":         {method: "GET", pattern: "/app", web: true, useSession: true},
+		"AppNote":     {method: "GET", pattern: "/app/notes/:id", web: true, useSession: true},
+		"AppTitle":    {method: "GET", pattern: "/app/title/*title", web: true, useSession: true},
 		"HealthCheck": {method: "GET", pattern: "/", useLogger: false, useAuth: false},
 		"Healthz":     {method: "GET", pattern: "/healthz", useLogger: false, useAuth: false},
 		"Ping":        {method: "GET", pattern: "/ping/:argument", useLogger: true, useAuth: false},

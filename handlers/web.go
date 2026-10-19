@@ -6,11 +6,14 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/johansundell/scribble/auth"
 	"github.com/johansundell/scribble/httperror"
+	"github.com/johansundell/scribble/notes"
+	"github.com/johansundell/scribble/store"
 )
 
 // The web app at /app (ADR 4, ADR 5). The router only registers these
@@ -39,6 +42,13 @@ type webPage struct {
 	// Login page only.
 	Error string
 	Next  string
+	// Notes pages only. Note is the open one, if any; Message replaces it
+	// when there is nothing to show.
+	Notes     []notes.Note
+	Note      *notes.Note
+	NoteHTML  template.HTML
+	Backlinks []notes.Note
+	Message   string
 }
 
 // LoginPage shows the PIN entry screen, or sends someone with a valid
@@ -91,12 +101,90 @@ func (h *Handler) Logout(c *gin.Context) error {
 	return nil
 }
 
-// App shows the app's layout. The note list and the note come later (#48).
+// App lists the notes, with none open.
 func (h *Handler) App(c *gin.Context) error {
-	if h.auth == nil {
-		return httperror.ReturnWithHTTPStatus(errWebNotConfigured, http.StatusInternalServerError)
+	p, err := h.notesPage(c)
+	if err != nil {
+		return err
 	}
-	return h.renderWeb(c, http.StatusOK, "app_home.html", h.appPage("Notes"))
+	return h.renderWeb(c, http.StatusOK, "app_home.html", p)
+}
+
+// AppNote shows the list and the note with id :id, rendered as Markdown,
+// with the notes that link to it.
+func (h *Handler) AppNote(c *gin.Context) error {
+	p, err := h.notesPage(c)
+	if err != nil {
+		return err
+	}
+	ns, _ := h.noteStore() // notesPage checked it
+	ctx := c.Request.Context()
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return h.noteNotFound(c, p)
+	}
+	n, err := ns.GetNote(ctx, id)
+	if errors.Is(err, store.ErrNoteNotFound) {
+		return h.noteNotFound(c, p)
+	}
+	if err != nil {
+		return noteError(err)
+	}
+	p.Backlinks, err = ns.NoteBacklinks(ctx, id)
+	if err != nil {
+		return noteError(err)
+	}
+	exists := func(title string) bool {
+		_, err := ns.GetNoteByTitle(ctx, title)
+		return err == nil
+	}
+	if p.NoteHTML, err = renderNote(n.Body, exists); err != nil {
+		return httperror.ReturnWithHTTPStatus(err, http.StatusInternalServerError)
+	}
+	p.Title, p.Note = n.Title, n
+	return h.renderWeb(c, http.StatusOK, "app_home.html", p)
+}
+
+// AppTitle opens the note titled :title (ignoring case), which is where
+// [[links]] go. #50 will create the note when there is none.
+func (h *Handler) AppTitle(c *gin.Context) error {
+	p, err := h.notesPage(c)
+	if err != nil {
+		return err
+	}
+	ns, _ := h.noteStore()
+	title := strings.TrimPrefix(c.Param("title"), "/")
+	n, err := ns.GetNoteByTitle(c.Request.Context(), title)
+	if errors.Is(err, store.ErrNoteNotFound) {
+		p.Message = "No note titled " + title
+		return h.renderWeb(c, http.StatusNotFound, "app_home.html", p)
+	}
+	if err != nil {
+		return noteError(err)
+	}
+	c.Redirect(http.StatusSeeOther, AppHome+"/notes/"+strconv.FormatInt(n.ID, 10))
+	return nil
+}
+
+// notesPage is the data for a page with the note list.
+func (h *Handler) notesPage(c *gin.Context) (webPage, error) {
+	if h.auth == nil {
+		return webPage{}, httperror.ReturnWithHTTPStatus(errWebNotConfigured, http.StatusInternalServerError)
+	}
+	ns, err := h.noteStore()
+	if err != nil {
+		return webPage{}, err
+	}
+	p := h.appPage("Notes")
+	if p.Notes, err = ns.ListNotes(c.Request.Context(), "", ""); err != nil {
+		return webPage{}, noteError(err)
+	}
+	return p, nil
+}
+
+func (h *Handler) noteNotFound(c *gin.Context, p webPage) error {
+	p.Message = "Note not found"
+	return h.renderWeb(c, http.StatusNotFound, "app_home.html", p)
 }
 
 // appPage is the data for a page behind the login, with the PIN Alert when

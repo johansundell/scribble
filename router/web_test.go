@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -15,6 +16,7 @@ import (
 	"github.com/johansundell/scribble/auth"
 	"github.com/johansundell/scribble/handlers"
 	"github.com/johansundell/scribble/router"
+	"github.com/johansundell/scribble/store"
 	"github.com/johansundell/scribble/types"
 )
 
@@ -42,10 +44,11 @@ type webEnv struct {
 	auth  *auth.Authenticator
 	clock *webClock
 	log   *testLogger
+	store *store.SQLStore
 }
 
-// newWebEnv builds a router with the web app on, the real templates and
-// assets, and an injectable clock.
+// newWebEnv builds a router with the web app on, a real SQLite store, the
+// real templates and assets, and an injectable clock.
 func newWebEnv(t *testing.T, trustedProxies ...string) *webEnv {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
@@ -62,13 +65,18 @@ func newWebEnv(t *testing.T, trustedProxies ...string) *webEnv {
 	if err != nil {
 		t.Fatalf("auth.New: %v", err)
 	}
-	return &webEnv{r: newWebRouter(t, a, tl, trustedProxies), auth: a, clock: clk, log: tl}
+	s, err := store.NewSQLite(filepath.Join(t.TempDir(), "web.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	return &webEnv{r: newWebRouter(t, s, a, tl, trustedProxies), auth: a, clock: clk, log: tl, store: s}
 }
 
-func newWebRouter(t *testing.T, a *auth.Authenticator, l router.Logger, trustedProxies []string) *gin.Engine {
+func newWebRouter(t *testing.T, s store.Store, a *auth.Authenticator, l router.Logger, trustedProxies []string) *gin.Engine {
 	t.Helper()
 	repo := os.DirFS("..")
-	h, err := handlers.NewHandler(nopStore{}, false, repo, "test", "v9.8.7", handlers.WithAuth(a))
+	h, err := handlers.NewHandler(s, false, repo, "test", "v9.8.7", handlers.WithAuth(a))
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}

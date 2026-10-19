@@ -1,0 +1,144 @@
+package handlers
+
+import (
+	"bytes"
+	"html"
+	"html/template"
+	"net/url"
+	"strings"
+
+	"github.com/johansundell/scribble/notes"
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/renderer"
+	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
+)
+
+// webMarkdown renders notes for the web app: GFM, with raw HTML shown as
+// text (never passed through) by escapedHTML.
+var webMarkdown = goldmark.New(
+	goldmark.WithExtensions(extension.GFM),
+	goldmark.WithRendererOptions(renderer.WithNodeRenderers(util.Prioritized(escapedHTML{}, 100))),
+)
+
+// renderNote renders body as HTML. [[links]] point at /app/title/<title>,
+// with class "missing" when exists says there is no such note. Links to
+// anything but http(s) and mailto are dropped, keeping their text.
+func renderNote(body string, exists func(title string) bool) (template.HTML, error) {
+	source := []byte(notes.LinkifyForView(body))
+	doc := webMarkdown.Parser().Parse(text.NewReader(source))
+	fixLinks(doc, source, exists)
+	var buf bytes.Buffer
+	if err := webMarkdown.Renderer().Render(&buf, source, doc); err != nil {
+		return "", err
+	}
+	return template.HTML(buf.String()), nil
+}
+
+// TitlePath is the web app page that opens the note titled title.
+func TitlePath(title string) string {
+	return AppHome + "/title/" + url.PathEscape(title)
+}
+
+func fixLinks(doc ast.Node, source []byte, exists func(string) bool) {
+	var drop []ast.Node
+	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		switch n := n.(type) {
+		case *ast.Link:
+			u, err := url.Parse(string(n.Destination))
+			if title, ok := notes.LinkTitle(u); ok && err == nil {
+				n.Destination = []byte(TitlePath(title))
+				if !exists(title) {
+					n.SetAttributeString("class", []byte("missing"))
+				}
+			} else if !allowedURL(string(n.Destination), "http", "https", "mailto") {
+				drop = append(drop, n)
+			}
+		case *ast.AutoLink:
+			if n.AutoLinkType == ast.AutoLinkURL && !allowedURL(string(n.URL(source)), "http", "https", "mailto") {
+				drop = append(drop, n)
+			}
+		case *ast.Image:
+			if !allowedURL(string(n.Destination), "http", "https") {
+				drop = append(drop, n)
+			}
+		}
+		return ast.WalkContinue, nil
+	})
+	for _, n := range drop {
+		unwrap(n, source)
+	}
+}
+
+// unwrap replaces a link or image with its text.
+func unwrap(n ast.Node, source []byte) {
+	parent := n.Parent()
+	if a, ok := n.(*ast.AutoLink); ok {
+		parent.ReplaceChild(parent, n, ast.NewString(a.Label(source)))
+		return
+	}
+	for c := n.FirstChild(); c != nil; {
+		next := c.NextSibling()
+		parent.InsertBefore(parent, n, c)
+		c = next
+	}
+	parent.RemoveChild(parent, n)
+}
+
+// allowedURL reports whether raw is an absolute URL with one of schemes.
+func allowedURL(raw string, schemes ...string) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return false
+	}
+	for _, s := range schemes {
+		if u.Scheme == s {
+			return true
+		}
+	}
+	return false
+}
+
+// escapedHTML renders raw HTML in a note as the text it is, so a note can
+// never run script in the page.
+type escapedHTML struct{}
+
+func (escapedHTML) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
+	reg.Register(ast.KindHTMLBlock, renderHTMLBlock)
+	reg.Register(ast.KindRawHTML, renderRawHTML)
+}
+
+func renderHTMLBlock(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
+	n := node.(*ast.HTMLBlock)
+	if !entering {
+		return ast.WalkContinue, nil
+	}
+	_, _ = w.WriteString(`<p class="raw-html">`)
+	lines := n.Lines()
+	for i := range lines.Len() {
+		line := lines.At(i)
+		_, _ = w.WriteString(html.EscapeString(string(line.Value(source))))
+	}
+	if n.HasClosure() {
+		_, _ = w.WriteString(html.EscapeString(string(n.ClosureLine.Value(source))))
+	}
+	_, _ = w.WriteString("</p>\n")
+	return ast.WalkContinue, nil
+}
+
+func renderRawHTML(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
+	if !entering {
+		return ast.WalkSkipChildren, nil
+	}
+	n := node.(*ast.RawHTML)
+	for i := range n.Segments.Len() {
+		seg := n.Segments.At(i)
+		_, _ = w.WriteString(html.EscapeString(string(seg.Value(source))))
+	}
+	return ast.WalkSkipChildren, nil
+}
