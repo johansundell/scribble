@@ -141,7 +141,11 @@ cmd/scribble/                    CLI
 gui/                             Fyne GUI: windows and widgets
 cmd/scribble-gui/                GUI entry point (reads SCRIBBLE_URL / SCRIBBLE_TOKEN / SCRIBBLE_HOTKEY)
 docs/service-template.md         the template's own docs
+GLOSSARY.md                      the words used for notes, sync, history and the replica
+docs/adr/                        why things are as they are: one short decision record each
 ```
+
+See [`GLOSSARY.md`](GLOSSARY.md) and [`docs/adr/`](docs/adr/).
 
 ## Development
 

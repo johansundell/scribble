@@ -4,39 +4,28 @@ How the engineering skills should consume this repo's domain documentation when 
 
 ## Before exploring, read these
 
-- **`GLOSSARY.md`** at the repo root, or
-- **`GLOSSARY-MAP.md`** at the repo root if it exists: it points at one `GLOSSARY.md` per context. Read each one relevant to the topic.
-- **`docs/adr/`**: read ADRs that touch the area you're about to work in. In multi-context repos, also check `src/<context>/docs/adr/` for context-scoped decisions.
+- **`GLOSSARY.md`** at the repo root: the domain terms (note, title, link, revision, seq, tombstone, version, replica, ...).
+- **`docs/adr/`**: read ADRs that touch the area you're about to work in.
 
-If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved.
+This is a single-context repo: there is no `GLOSSARY-MAP.md` and no per-context `docs/adr/`.
 
 ## File structure
-
-Single-context repo (most repos):
 
 ```
 /
 ├── GLOSSARY.md
 ├── docs/adr/
-│   ├── 0001-event-sourced-orders.md
-│   └── 0002-postgres-for-write-model.md
-└── src/
+│   ├── 0001-notes-are-plain-markdown.md
+│   ├── 0002-sync-with-seq-and-tombstones.md
+│   └── ...
+└── ...
 ```
 
-Multi-context repo (presence of `GLOSSARY-MAP.md` at the root):
+## Writing ADRs and glossary entries
 
-```
-/
-├── GLOSSARY-MAP.md
-├── docs/adr/                          ← system-wide decisions
-└── src/
-    ├── ordering/
-    │   ├── GLOSSARY.md
-    │   └── docs/adr/                  ← context-specific decisions
-    └── billing/
-        ├── GLOSSARY.md
-        └── docs/adr/
-```
+- **ADRs** are short files, `docs/adr/NNNN-<slug>.md`, numbered in order. Each has Status, the ticket(s) it comes from, Context, Decision and Consequences: a few paragraphs, not an essay.
+- An ADR can be "Accepted" before its code is written. If a ticket changes the decision while it is being built, update the ADR in that ticket's PR. If a later decision replaces it, set its Status to "Superseded by ADR N" rather than deleting it.
+- **`GLOSSARY.md`** has one line or short paragraph per term, in alphabetical order. Add a term when a ticket introduces one, in that ticket's PR.
 
 ## Use the glossary's vocabulary
 
@@ -48,4 +37,4 @@ If the concept you need isn't in the glossary yet, that's a signal: either you'r
 
 If your output contradicts an existing ADR, surface it explicitly rather than silently overriding:
 
-> _Contradicts ADR-0007 (event-sourced orders), but worth reopening because…_
+> _Contradicts ADR 6 (the web app is online only), but worth reopening because…_
