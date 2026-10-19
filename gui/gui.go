@@ -4,6 +4,7 @@ package gui
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -368,15 +369,35 @@ func (ui *UI) unlessUnsaved(then func()) {
 	d.Show()
 }
 
+// parseMarkdown builds a RichText from markdown text. Swappable for testing.
+var parseMarkdown = widget.NewRichTextFromMarkdown
+
+// parseMarkdownSafe parses markdown content into RichText segments,
+// recovering from any panic in Fyne's renderer and returning an error.
+func parseMarkdownSafe(content string) (segs []widget.RichTextSegment, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("markdown parser: %v", r)
+		}
+	}()
+	return parseMarkdown(content).Segments, nil
+}
+
 // showView switches to view mode, rendering the editor's text with its
 // [[links]] as links that open the note and its #project tags as links that
 // switch the project filter.
 func (ui *UI) showView() {
 	// [[links]] first, or "[[Plan #2]]" would lose its tag to a project
-	// link. Parse off-screen and hook the links before the viewer sees the
-	// segments: hyperlink and table visuals copy OnTapped when created.
-	md := notes.LinkifyProjectsForView(notes.LinkifyForView(ui.Editor.Text))
-	segs := widget.NewRichTextFromMarkdown(md).Segments
+	// link. Flatten task items so inline formatting does not panic Fyne's
+	// markdown renderer or get cut short. Parse off-screen and hook the
+	// links before the viewer sees the segments: hyperlink and table
+	// visuals copy OnTapped when created.
+	md := notes.FlattenTaskItemsForView(notes.LinkifyProjectsForView(notes.LinkifyForView(ui.Editor.Text)))
+	segs, err := parseMarkdownSafe(md)
+	if err != nil {
+		ui.Status.SetText("Failed to render note as Markdown; showing raw text.")
+		segs = []widget.RichTextSegment{&widget.TextSegment{Text: ui.Editor.Text}}
+	}
 	ui.hookLinks(segs)
 	ui.Viewer.Segments = segs
 	ui.Viewer.Refresh()
