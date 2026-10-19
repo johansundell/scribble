@@ -98,6 +98,9 @@ GOOS=windows CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc \
 
 See `docs/service-template.md` for all server settings (`AUTH_TOKEN`, `PORT`,
 `SQLITE_PATH`, ...), installing as a system service, and Docker.
+`docs/deploy-vps.md` sets up automatic deploys to a VPS: each published
+release is installed by `scripts/deploy.sh`, which rolls back if `/healthz`
+does not answer.
 
 ## API
 
@@ -105,6 +108,10 @@ All note endpoints need `Authorization: Bearer <AUTH_TOKEN>`. They are
 deliberately **not** request-logged (the template's request log stores full
 bodies, which would copy every note into it). Errors are plain-text status
 text, like the rest of the service.
+
+`GET /healthz` (also `GET /`) needs no token. It reports the version and the
+storage status, as JSON when the request sends `Accept: application/json`,
+and answers **503** when the storage does not respond.
 
 | Method | Path | Notes |
 | --- | --- | --- |

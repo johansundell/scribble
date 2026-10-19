@@ -1,0 +1,42 @@
+# Deploys each published release to the VPS (docs/deploy-vps.md). The
+# server's scripts/deploy.sh does the work; this job only tells it which tag
+# to install. Run it by hand from the Actions tab to redeploy any tag.
+
+name: Deploy
+
+on:
+  release:
+    types: [ published ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to deploy (e.g. v0.0.9)
+        required: true
+
+# Never run two deploys at once; a newer one waits for the running one.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+
+  deploy:
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    environment: production
+    # deploy.sh gives up on its own after about 25 minutes; this is a backstop
+    # for a hung SSH session.
+    timeout-minutes: 40
+    steps:
+    - name: Deploy over SSH
+      env:
+        TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        HOST: ${{ secrets.DEPLOY_HOST }}
+        SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      run: |
+        install -m 700 -d ~/.ssh
+        printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
+        printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+        ssh -o BatchMode=yes deploy@"$HOST" "$TAG"

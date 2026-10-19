@@ -13,6 +13,13 @@ func GetRoutes(handler *handlers.Handler) Routes {
 			Pattern:     "/",
 			HandlerFunc: handler.HealthCheck,
 		},
+		// The same check on the path deploy scripts and monitors expect.
+		Route{
+			Name:        "Healthz",
+			Method:      "GET",
+			Pattern:     "/healthz",
+			HandlerFunc: handler.HealthCheck,
+		},
 		Route{
 			Name:        "Ping",
 			Method:      "GET",
