@@ -2,19 +2,37 @@
 <main class="app-main">
 	<nav class="note-list" aria-label="Notes">
 		{{- $open := 0}}{{with .Note}}{{$open = .ID}}{{end}}{{with .Edit}}{{$open = .ID}}{{end}}
+		{{- $filter := .Filter}}
 		<div class="list-actions">
-			<a class="button" href="/app/new">New</a>
+			<a class="button" href="/app/new{{$filter}}" data-filtered="new">New</a>
 		</div>
-		{{- if .Notes}}
-		<ul>
-			{{- range .Notes}}
-			<li><a href="{{notePath .ID}}"{{if eq .ID $open}} aria-current="page"{{end}}>{{.Title}}</a></li>
+		{{/* Without JavaScript the form is sent with Enter or Filter; list.js
+		filters while typing and swaps in the list, so the open note stays. */}}
+		<form class="list-filter" method="get" action="/app" role="search">
+			<input type="search" name="q" value="{{.Query}}" class="search-field" placeholder="Search" aria-label="Search notes" autocomplete="off" />
+			<select name="project" class="project-select" aria-label="Project">
+				<option value="">All notes</option>
+				{{- range .Projects}}
+				<option value="{{.}}"{{if eq . $.Project}} selected{{end}}>#{{.}}</option>
+				{{- end}}
+			</select>
+			<button type="submit" class="button filter-submit">Filter</button>
+		</form>
+		<div class="note-items">
+			{{- if .Notes}}
+			<ul>
+				{{- range .Notes}}
+				<li><a href="{{notePath .ID}}{{$filter}}"{{if eq .ID $open}} aria-current="page"{{end}}>{{.Title}}</a></li>
+				{{- end}}
+			</ul>
+			{{- else if .Filtered}}
+			<p class="muted">No notes match.</p>
+			{{- else}}
+			<p class="muted">No notes yet.</p>
 			{{- end}}
-		</ul>
-		{{- else}}
-		<p class="muted">No notes yet.</p>
-		{{- end}}
+		</div>
 	</nav>
+	<script src="/assets/js/list.js" defer></script>
 	<section class="note-view">
 		{{- if .Message}}
 		<p class="muted">{{.Message}}</p>
@@ -22,7 +40,7 @@
 		{{- template "editor" .Edit}}
 		{{- else if .Note}}
 		<div class="note-actions">
-			<a class="button" href="{{editPath .Note.ID}}">Edit</a>
+			<a class="button" href="{{editPath .Note.ID}}{{.Filter}}" data-filtered="edit">Edit</a>
 		</div>
 		<article class="note-body">{{.NoteHTML}}</article>
 		{{- with .Backlinks}}
@@ -30,7 +48,7 @@
 			<h2 id="backlinks-heading">Linked from</h2>
 			<ul>
 				{{- range .}}
-				<li><a href="{{notePath .ID}}">{{.Title}}</a></li>
+				<li><a href="{{notePath .ID}}{{$.Filter}}" data-filtered="backlink-{{.ID}}">{{.Title}}</a></li>
 				{{- end}}
 			</ul>
 		</aside>
@@ -45,7 +63,7 @@
 {{/* editor is the note editor's form. A textarea drops one newline right
 after its start tag, so one is always written there to keep the note's own. */}}
 {{define "editor"}}
-		<form method="post" action="{{.Action}}" class="editor"{{if or .Dirty .Draft}} data-dirty="true"{{end}}>
+		<form method="post" action="{{.Action}}" class="editor" data-filtered="editor"{{if or .Dirty .Draft}} data-dirty="true"{{end}}>
 			{{- if .Revision}}
 			<input type="hidden" name="revision" value="{{.Revision}}" />
 			{{- end}}
@@ -68,7 +86,7 @@ after its start tag, so one is always written there to keep the note's own. */}}
 			<div class="editor-buttons">
 				<button type="submit" class="button primary" name="action" value="save">Save</button>
 				<button type="submit" class="button" name="action" value="done">Done</button>
-				<a class="button" href="{{.Cancel}}">Cancel</a>
+				<a class="button" href="{{.Cancel}}" data-filtered="cancel">Cancel</a>
 			</div>
 			{{- with .Draft}}
 			<label for="draft-text" class="draft-label">Your text, not saved. Copy what you need.</label>

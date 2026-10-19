@@ -24,10 +24,11 @@ var webMarkdown = goldmark.New(
 )
 
 // renderNote renders body as HTML. [[links]] point at /app/title/<title>,
-// with class "missing" when exists says there is no such note. Links to
-// anything but http(s) and mailto are dropped, keeping their text.
+// with class "missing" when exists says there is no such note, and #project
+// tags at that project's list. Links to anything but http(s) and mailto are
+// dropped, keeping their text.
 func renderNote(body string, exists func(title string) bool) (template.HTML, error) {
-	source := []byte(notes.LinkifyForView(body))
+	source := []byte(notes.LinkifyProjectsForView(notes.LinkifyForView(body)))
 	doc := webMarkdown.Parser().Parse(text.NewReader(source))
 	fixLinks(doc, source, exists)
 	var buf bytes.Buffer
@@ -40,7 +41,8 @@ func renderNote(body string, exists func(title string) bool) (template.HTML, err
 // linkSchemes are the URL schemes a link in a note may use.
 var linkSchemes = []string{"http", "https", "mailto"}
 
-// fixLinks points [[links]] at the web app and drops unsafe links.
+// fixLinks points [[links]] and #project tags at the web app and drops
+// unsafe links.
 func fixLinks(doc ast.Node, source []byte, exists func(string) bool) {
 	var drop []ast.Node
 	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
@@ -55,6 +57,8 @@ func fixLinks(doc ast.Node, source []byte, exists func(string) bool) {
 				if !exists(title) {
 					n.SetAttributeString("class", []byte("missing"))
 				}
+			} else if err == nil && u.Scheme == "project" && projectTag(u.Host) != "" {
+				n.Destination = []byte(ProjectPath(u.Host))
 			} else if !allowedURL(string(n.Destination), linkSchemes...) {
 				drop = append(drop, n)
 			}

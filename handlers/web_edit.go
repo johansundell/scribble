@@ -73,7 +73,7 @@ func (h *Handler) AppNew(c *gin.Context) error {
 		return err
 	}
 	ed := newNoteEditor()
-	if ed.Tag = projectTag(c.Query("project")); ed.Tag != "" {
+	if ed.Tag = projectTag(p.Project); ed.Tag != "" {
 		ed.Body = "\n\n" + ed.Tag + "\n"
 	}
 	return h.renderEditor(c, http.StatusOK, p, "New note", ed)
@@ -101,7 +101,7 @@ func (h *Handler) AppCreate(c *gin.Context) error {
 	if err != nil {
 		return h.editFailed(c, p, "New note", ed, err)
 	}
-	h.savedRedirect(c, n.ID)
+	savedRedirect(c, p, n.ID)
 	return nil
 }
 
@@ -168,11 +168,7 @@ func (h *Handler) AppSave(c *gin.Context) error {
 	if _, err := ns.UpdateNote(ctx, id, body, base); err != nil {
 		return h.editFailed(c, p, title, ed, err)
 	}
-	if action == actionOverwrite {
-		c.Redirect(http.StatusSeeOther, NotePath(id))
-		return nil
-	}
-	h.savedRedirect(c, id)
+	savedRedirect(c, p, id)
 	return nil
 }
 
@@ -198,17 +194,21 @@ func (h *Handler) editFailed(c *gin.Context, p webPage, title string, ed *noteEd
 	return h.renderEditor(c, status, p, title, ed)
 }
 
-// savedRedirect goes on from a saved note: its editor for Save, its page
-// for Done.
-func (h *Handler) savedRedirect(c *gin.Context, id int64) {
+// savedRedirect goes on from a saved note, keeping the list's filter: its
+// editor for Save, its page for Done and Overwrite.
+func savedRedirect(c *gin.Context, p webPage, id int64) {
 	to := NotePath(id)
 	if c.PostForm("action") == actionSave {
 		to = EditPath(id)
 	}
-	c.Redirect(http.StatusSeeOther, to)
+	c.Redirect(http.StatusSeeOther, to+p.Filter())
 }
 
+// renderEditor shows ed in place of the note. Its form and Cancel keep the
+// list's filter.
 func (h *Handler) renderEditor(c *gin.Context, status int, p webPage, title string, ed *noteEditor) error {
+	ed.Action += p.Filter()
+	ed.Cancel += p.Filter()
 	p.Title, p.Edit = title, ed
 	return h.renderNotes(c, status, p)
 }

@@ -196,7 +196,40 @@ body.web:has(.app-main) {
 	margin-bottom: 0.5rem;
 }
 
-.note-list > .muted {
+/* Search and project filter above the list. */
+.list-filter {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	margin-bottom: 0.5rem;
+}
+
+.search-field,
+.project-select {
+	flex: 1 1 8rem;
+	min-width: 0;
+	min-height: 44px;
+	padding: 0 0.75rem;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: var(--surface);
+	color: var(--text);
+	/* 16px or more, so phones don't zoom in on focus. */
+	font: inherit;
+	font-size: 1rem;
+}
+
+.search-field:focus-visible,
+.project-select:focus-visible {
+	outline: 3px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.list-filter [hidden] {
+	display: none;
+}
+
+.note-items > .muted {
 	padding: 0 0.5rem;
 }
 
