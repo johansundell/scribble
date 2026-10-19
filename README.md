@@ -175,7 +175,7 @@ also against a real server.
 - [ ] Note history: every change keeps the old text, with restore and
       undelete on the server (#55) and `scribble history / diff / restore /
       undelete` in the CLI (#56)
-- [ ] Web app at `/app`: log in with the token, then browse, search, read,
+- [ ] Web app at `/app`: log in with a PIN, then browse, search, read,
       edit, rename and delete notes like in the desktop app (#46)
 - [ ] GitHub-style Markdown editing (toolbar, `Ctrl+B` / `Ctrl+I` /
       `Ctrl+K`, lists that continue on Enter, smart paste) in the web app
