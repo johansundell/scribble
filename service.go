@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/johansundell/scribble/auth"
 	"github.com/johansundell/scribble/handlers"
 	"github.com/johansundell/scribble/logging"
 	"github.com/johansundell/scribble/logqueue"
@@ -117,7 +118,17 @@ func (p *program) run(startup chan<- error) error {
 		logQueue.Close(ctx)
 	}()
 
-	handler, err := handlers.NewHandler(st, settings.UseFileSystem, embeddedTemplates, nameOfService, Version)
+	webAuth, err := newWebAuth(settings.Web)
+	if err != nil {
+		logError("failed to set up web login: %v", err)
+		startup <- err
+		return err
+	}
+	if webAuth != nil {
+		logInfo("web app is on at /app")
+	}
+
+	handler, err := handlers.NewHandler(st, settings.UseFileSystem, embeddedTemplates, nameOfService, Version, handlers.WithAuth(webAuth))
 	if err != nil {
 		logError("failed to create handlers: %v", err)
 		startup <- err
@@ -131,6 +142,7 @@ func (p *program) run(startup chan<- error) error {
 	routerEngine, err := router.NewRouter(router.Config{
 		Handler:  handler,
 		LogSink:  logQueue,
+		Auth:     webAuth,
 		Settings: settings,
 		Assets:   embeddedAssets,
 		Version:  Version,
@@ -235,6 +247,21 @@ func (p *program) Stop(s service.Service) error {
 	p.stopOnce.Do(func() { close(p.exit) })
 	<-p.done
 	return p.runErr
+}
+
+// newWebAuth sets up the web app's PIN login, or returns nil when WEB_PIN is
+// unset and the web app is off. Validate has checked the settings already.
+func newWebAuth(w types.WebSettings) (*auth.Authenticator, error) {
+	if !w.Enabled() {
+		return nil, nil
+	}
+	return auth.New(auth.Config{
+		PIN:          w.PIN,
+		Secret:       []byte(w.SessionSecret),
+		SessionTTL:   w.SessionTimeout,
+		SecureCookie: w.CookieSecure,
+		Logger:       appLogger(),
+	})
 }
 
 // ensureAuthToken generates a temporary random token when AUTH_TOKEN is not

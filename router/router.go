@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/johansundell/scribble/auth"
 	"github.com/johansundell/scribble/handlers"
 	"github.com/johansundell/scribble/httperror"
 	"github.com/johansundell/scribble/logging"
@@ -32,6 +33,17 @@ type Route struct {
 	HandlerFunc HandlerFuncWithError
 	UseLogger   bool
 	UseAuth     bool
+	// Web marks a web app route under /app. It is registered only when
+	// WEB_PIN is set, is never request-logged, is sent with
+	// Cache-Control: no-store, and a POST (any method but GET and HEAD) must
+	// come from the same origin unless AllowCrossOrigin is set.
+	Web bool
+	// UseSession requires a web app session; anyone else is sent to the PIN
+	// screen. Web routes only.
+	UseSession bool
+	// AllowCrossOrigin skips the same-origin check. Only login and logout
+	// set it (#47). Web routes only.
+	AllowCrossOrigin bool
 }
 
 // Routes is a collection of Route definitions
@@ -48,12 +60,16 @@ type LogSink interface {
 
 // Config contains the dependencies and settings required to construct a router
 type Config struct {
-	Handler  *handlers.Handler
-	LogSink  LogSink // Required when any route has UseLogger
+	Handler *handlers.Handler
+	LogSink LogSink // Required when any route has UseLogger
+	// Auth turns on the web app at /app; nil leaves every /app path a 404.
+	// Pass the same one to the Handler with handlers.WithAuth.
+	Auth     *auth.Authenticator
 	Settings types.AppSettings
 	Assets   fs.FS
 	Version  string
 	Logger   Logger // Optional: defaults to standard logger when nil
+	Routes   Routes // Optional: defaults to GetRoutes(Handler) when nil
 }
 
 // NewRouter creates a new web handler with middleware and registered routes
@@ -66,6 +82,13 @@ func NewRouter(cfg Config) (*gin.Engine, error) {
 
 	router := gin.New()
 	router.Use(gin.Recovery())
+
+	// ClientIP keys the PIN rate limiter, so forwarding headers are only
+	// believed from configured proxies; otherwise anyone could pick their
+	// own address with X-Forwarded-For. gin trusts every sender by default.
+	if err := router.SetTrustedProxies(cfg.Settings.TrustedProxies); err != nil {
+		return nil, fmt.Errorf("invalid TRUSTED_PROXIES: %w", err)
+	}
 
 	if cfg.Version != "" {
 		router.Use(func(c *gin.Context) {
@@ -82,7 +105,10 @@ func NewRouter(cfg Config) (*gin.Engine, error) {
 		c.String(http.StatusMethodNotAllowed, http.StatusText(http.StatusMethodNotAllowed))
 	})
 
-	routes := GetRoutes(cfg.Handler)
+	routes := cfg.Routes
+	if routes == nil {
+		routes = GetRoutes(cfg.Handler)
+	}
 
 	l := logging.OrStd(cfg.Logger)
 	debug := cfg.Settings.Debug
@@ -91,14 +117,34 @@ func NewRouter(cfg Config) (*gin.Engine, error) {
 	}
 
 	for _, route := range routes {
+		if route.Web && cfg.Auth == nil {
+			continue // WEB_PIN is unset: the web app is off and /app is a 404
+		}
 		if route.UseAuth && cfg.Settings.AuthToken == "" {
 			return nil, fmt.Errorf("AUTH_TOKEN must be configured for route %q", route.Name)
 		}
 		if route.UseLogger && cfg.LogSink == nil {
 			return nil, fmt.Errorf("log sink must be configured for logged route %q", route.Name)
 		}
+		if route.Web && route.UseLogger {
+			return nil, fmt.Errorf("web route %q must not be request-logged", route.Name)
+		}
+		if (route.UseSession || route.AllowCrossOrigin) && !route.Web {
+			return nil, fmt.Errorf("route %q uses web app options but is not a web route", route.Name)
+		}
 
 		fn := route.HandlerFunc
+
+		// Web wrappers run outermost first: no-store, origin, session.
+		if route.Web {
+			if route.UseSession {
+				fn = RequireSession(cfg.Auth)(fn)
+			}
+			if !isSafeMethod(route.Method) && !route.AllowCrossOrigin {
+				fn = SameOrigin(fn)
+			}
+			fn = noStore(fn)
+		}
 
 		// Apply Logger Middleware first (innermost), so it only runs after auth passes.
 		// Wrapping order is inside-out: the last wrapper applied is the first to execute.

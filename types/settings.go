@@ -38,18 +38,34 @@ type FileMakerSettings struct {
 	InsecureSkipVerify bool          `json:"insecureSkipVerify"`
 }
 
+// WebSettings configures the web app at /app. An empty PIN turns it off.
+type WebSettings struct {
+	PIN            string        `json:"pin"`            // WEB_PIN
+	SessionSecret  string        `json:"sessionSecret"`  // SESSION_SECRET
+	SessionTimeout time.Duration `json:"sessionTimeout"` // WEB_SESSION_TIMEOUT
+	CookieSecure   bool          `json:"cookieSecure"`   // COOKIE_SECURE
+}
+
+// Enabled reports whether the web app is turned on.
+func (w WebSettings) Enabled() bool { return w.PIN != "" }
+
+// minSessionSecret is the shortest SESSION_SECRET accepted.
+const minSessionSecret = 32
+
 type AppSettings struct {
-	Debug         bool              `json:"debug"`
-	Port          string            `json:"port"`
-	UseFileSystem bool              `json:"useFileSystem"`
-	Timeout       time.Duration     `json:"timeout"` // TIMEOUT, in whole seconds
-	Storage       string            `json:"storage"`
-	AuthToken     string            `json:"authToken"`
+	Debug               bool              `json:"debug"`
+	Port                string            `json:"port"`
+	UseFileSystem       bool              `json:"useFileSystem"`
+	Timeout             time.Duration     `json:"timeout"` // TIMEOUT, in whole seconds
+	Storage             string            `json:"storage"`
+	AuthToken           string            `json:"authToken"`
 	SqlitePath          string            `json:"sqlitePath"`
 	BackupDir           string            `json:"backupDir"`
 	BackupRetentionDays int               `json:"backupRetentionDays"`
 	MySQL               MySQLSettings     `json:"mysql"`
 	FileMaker           FileMakerSettings `json:"filemaker"`
+	Web                 WebSettings       `json:"web"`
+	TrustedProxies      []string          `json:"trustedProxies"` // TRUSTED_PROXIES; empty trusts no proxy
 }
 
 // Validate verifies required settings and returns an error when configuration is invalid.
@@ -84,5 +100,42 @@ func (s AppSettings) Validate() error {
 	default:
 		return fmt.Errorf("STORAGE must be one of %s, got %q", strings.Join(StorageBackends, ", "), s.Storage)
 	}
+	return s.validateWeb()
+}
+
+// validateWeb checks the web app settings when WEB_PIN is set. The messages
+// never include the PIN or the secret, since they end up in the service log.
+func (s AppSettings) validateWeb() error {
+	w := s.Web
+	if !w.Enabled() {
+		return nil
+	}
+	if !isPIN(w.PIN) {
+		return fmt.Errorf("WEB_PIN must be 6 to 12 digits (0-9), or unset to turn the web app off")
+	}
+	if w.SessionSecret == "" {
+		return fmt.Errorf("SESSION_SECRET must be set when WEB_PIN is set; generate one with: openssl rand -base64 33")
+	}
+	if len(w.SessionSecret) < minSessionSecret {
+		return fmt.Errorf("SESSION_SECRET must be at least %d characters; generate one with: openssl rand -base64 33", minSessionSecret)
+	}
+	if w.SessionSecret == s.AuthToken {
+		return fmt.Errorf("SESSION_SECRET must not be the same as AUTH_TOKEN")
+	}
+	if w.SessionTimeout <= 0 {
+		return fmt.Errorf("WEB_SESSION_TIMEOUT must be a positive duration such as 168h")
+	}
 	return nil
+}
+
+func isPIN(pin string) bool {
+	if len(pin) < 6 || len(pin) > 12 {
+		return false
+	}
+	for _, r := range pin {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }

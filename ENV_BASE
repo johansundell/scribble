@@ -10,6 +10,15 @@ STORAGE=sqlite
 SQLITE_PATH=""
 # leave empty to generate a temporary token on each start
 AUTH_TOKEN=""
+# web app at /app: a 6-12 digit PIN; empty turns the web app off
+WEB_PIN=""
+# signs the web session cookie; at least 32 characters: openssl rand -base64 33
+SESSION_SECRET=""
+WEB_SESSION_TIMEOUT="168h"
+# proxies whose X-Forwarded-For is believed, e.g. 127.0.0.1 for nginx on this host
+TRUSTED_PROXIES=""
+# false only for local testing over plain HTTP
+COOKIE_SECURE=true
 MYSQL_USERNAME=""
 MYSQL_PASSWORD=""
 MYSQL_HOST="127.0.0.1"

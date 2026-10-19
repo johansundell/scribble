@@ -99,7 +99,9 @@ GOOS=windows CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc \
 
 See `docs/service-template.md` for all server settings (`AUTH_TOKEN`, `PORT`,
 `SQLITE_PATH`, ...), installing as a system service, and Docker.
-`docs/deploy-vps.md` sets up automatic deploys to a VPS: each published
+`docs/install-vps.md` installs the server on a new VPS behind nginx, with
+the token, the web app and `TRUSTED_PROXIES` set up.
+`docs/deploy-vps.md` then sets up automatic deploys: each published
 release is installed by `scripts/deploy.sh`, which rolls back if `/healthz`
 does not answer.
 
@@ -129,6 +131,51 @@ and answers **503** when the storage does not respond.
 Notes need `STORAGE=sqlite` (the default). With `mysql` or `filemaker`, request
 logs still work but the notes endpoints answer **501**, and the service logs a
 warning at startup.
+
+## Web app
+
+The server can also serve a web app at `/app`, for a browser or a phone. It
+logs in with a PIN instead of the token. So far it has the PIN screen, logout
+and the page layout; the notes come next (#46).
+
+It is off until `WEB_PIN` is set. To turn it on, add to the server's `.env`:
+
+```sh
+WEB_PIN=<6-12 digits>
+SESSION_SECRET=<the output of: openssl rand -base64 33>
+TRUSTED_PROXIES=127.0.0.1   # behind nginx on the same host
+```
+
+The server refuses to start if the PIN isn't 6–12 digits, or if
+`SESSION_SECRET` is missing, shorter than 32 characters or the same as
+`AUTH_TOKEN`. See `docs/service-template.md` for `WEB_SESSION_TIMEOUT` and
+`COOKIE_SECURE`. For a whole new server, follow
+[`docs/install-vps.md`](docs/install-vps.md).
+
+- **The PIN is for the browser only.** The API, the CLI and the desktop app
+  keep using `AUTH_TOKEN`, and the API never accepts the PIN. The PIN opens
+  every note for reading and writing, like the token.
+- **Sessions** last 7 days from login (`WEB_SESSION_TIMEOUT`) and are never
+  extended. Logging out ends the session on that device only. Changing
+  `SESSION_SECRET` ends every session.
+- **Per-address limit:** after 5 wrong PINs from one address within 15
+  minutes, that address gets 429, without the PIN being checked, until 15
+  minutes after its first wrong PIN.
+- **PIN Alert and lockout:** after 20 wrong PINs within 24 hours from any
+  addresses, the service logs a warning, every logged-in page shows "N wrong
+  PINs since …", and PIN login is locked for everyone with 429. Sessions that
+  already exist keep working. The lock lifts after 24 hours or when the
+  service restarts; the alert stays until the restart. If the wrong PINs
+  weren't yours, change `WEB_PIN` and restart.
+- **Behind nginx**, set `TRUSTED_PROXIES=127.0.0.1` so the per-address limit
+  sees the visitor's address from `X-Forwarded-For`. Without it, every
+  visitor shares nginx's address. The header is believed only from the listed
+  proxies, so nobody else can pick their own address.
+- Web pages are never request-logged and are sent with
+  `Cache-Control: no-store`.
+
+Why it works this way: [ADR 4](docs/adr/0004-web-app-is-server-rendered.md)
+and [ADR 5](docs/adr/0005-web-pin-login-and-shared-api-token.md).
 
 ## Backups
 
@@ -203,6 +250,8 @@ Then check `/healthz` and that notes are what you expect.
 ```
 main.go, service.go, config.go   service lifecycle (from the template)
 router/, handlers/, store/       routes, handlers, storage (notes: handlers/notes.go, store/notes.go)
+auth/                            the web app's PIN login, session cookie and guessing limits
+tmpl/, assets/                   page templates (web app: app.html), CSS and the PIN keypad script
 notes/                           Note type, [[link]] and #project helpers (no server deps)
 client/                          Go API client
 offline/                         the GUI's local copy of the notes and its sync
