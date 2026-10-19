@@ -211,3 +211,42 @@ Deletes a note.
 ```sh
 scribble rm "Shopping list"
 ```
+
+## Saving shell commands to a note
+
+`append` creates the note the first time and adds to its end after that, so
+it is a simple way to keep commands you ran for later.
+
+### With a key binding (Ctrl+R, then Ctrl+X S)
+
+Add this to `~/.bashrc`:
+
+```bash
+# Save the current input line to the "Commands" note without running it.
+bind -x '"\C-xs": printf "%s\n" "$READLINE_LINE" | scribble append Commands'
+```
+
+Press Ctrl+R to find a command in your history, then press Ctrl+X S. Bash
+gives the line to the binding in `$READLINE_LINE`, so nothing is quoted or
+expanded. The line stays on your prompt: run it, edit it, or clear it with
+Ctrl+C. The first time, when the note does not exist yet, `scribble` prints
+`created "Commands"` above your prompt.
+
+### With the editor (Ctrl+X Ctrl+E)
+
+Ctrl+X Ctrl+E opens the current line in `$EDITOR`. When you save and quit,
+bash runs the edited text. Wrap the command in a quoted heredoc, so that bash
+saves it exactly as written:
+
+```bash
+scribble append Commands <<'EOF'
+awk '{print $1}' access.log | sort | uniq -c | sort -rn | head
+EOF
+```
+
+Do not wrap it in `echo "..."`. In double quotes, bash expands `$(...)`,
+backticks and `$VARS`, so parts of the command can run, and the note gets
+the expanded text. `echo '...'` breaks on commands that contain a `'`.
+
+To show the command as a code block in the GUI, put a `` ```sh `` fence
+inside the heredoc.
