@@ -112,7 +112,7 @@ func TestWebRename_Delete(t *testing.T) {
 	e := newWebEnv(t)
 	c := e.login(t)
 	n := e.note(t, "# Doomed <b>\n#work")
-	kept := e.note(t, "# Kept\n#work")
+	e.note(t, "# Kept\n#work")
 
 	w := e.do(get(deletePath(n)+"?project=work", c))
 	wantBody(t, w, http.StatusOK,
@@ -130,7 +130,6 @@ func TestWebRename_Delete(t *testing.T) {
 	}
 	w = e.do(get("/app?project=work", c))
 	wantListed(t, w.Body.String(), []string{"Kept"}, []string{"Doomed"})
-	_ = kept
 
 	// Deleting it again, or an unknown note: 404 inside the layout.
 	wantBody(t, e.do(postForm(deletePath(n), nil, c)), http.StatusNotFound, "Note not found", "Log out")

@@ -111,22 +111,11 @@ func (h *Handler) AppCreate(c *gin.Context) error {
 
 // AppEdit shows the editor with the note's Markdown.
 func (h *Handler) AppEdit(c *gin.Context) error {
-	p, ns, err := h.notesPage(c)
-	if err != nil {
+	p, _, n, err := h.webNote(c)
+	if err != nil || n == nil {
 		return err
 	}
-	id, ok := webNoteID(c)
-	if !ok {
-		return h.notesMessage(c, p, "Note not found")
-	}
-	n, err := ns.GetNote(c.Request.Context(), id)
-	if errors.Is(err, store.ErrNoteNotFound) {
-		return h.notesMessage(c, p, "Note not found")
-	}
-	if err != nil {
-		return noteError(err)
-	}
-	ed := editorFor(id)
+	ed := editorFor(n.ID)
 	ed.Body, ed.Revision = n.Body, n.Revision
 	return h.renderEditor(c, http.StatusOK, p, n.Title, ed)
 }
@@ -141,7 +130,7 @@ func (h *Handler) AppSave(c *gin.Context) error {
 	}
 	id, ok := webNoteID(c)
 	if !ok {
-		return h.notesMessage(c, p, "Note not found")
+		return h.notesMessage(c, p, msgNoteNotFound)
 	}
 	body, err := formBody(c)
 	if err != nil {
@@ -182,7 +171,7 @@ func (h *Handler) editFailed(c *gin.Context, p webPage, title string, ed *noteEd
 	status := http.StatusBadRequest
 	switch {
 	case errors.Is(err, store.ErrTitleTaken):
-		status, ed.Error = http.StatusConflict, "A note titled "+notes.TitleOf(ed.Body)+" already exists."
+		status, ed.Error = http.StatusConflict, titleTaken(notes.TitleOf(ed.Body))
 	case errors.Is(err, store.ErrNoTitle):
 		ed.Error = msgNoTitle
 	case errors.Is(err, store.ErrStaleRevision):

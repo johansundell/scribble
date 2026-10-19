@@ -39,6 +39,12 @@ type noteForm struct {
 	Error string
 }
 
+// titleTaken is the message for a save or rename to a title another note
+// has.
+func titleTaken(title string) string {
+	return "A note titled " + title + " already exists."
+}
+
 // deleteQuestion is what Delete asks, on the page and in the confirm()
 // dialog.
 func deleteQuestion(title string) string {
@@ -47,7 +53,7 @@ func deleteQuestion(title string) string {
 
 // AppRenameForm shows the rename form with the note's title.
 func (h *Handler) AppRenameForm(c *gin.Context) error {
-	p, n, err := h.webNote(c)
+	p, _, n, err := h.webNote(c)
 	if err != nil || n == nil {
 		return err
 	}
@@ -57,12 +63,8 @@ func (h *Handler) AppRenameForm(c *gin.Context) error {
 // AppRename renames the note, rewriting [[links]] to it in other notes,
 // and shows it.
 func (h *Handler) AppRename(c *gin.Context) error {
-	p, n, err := h.webNote(c)
+	p, ns, n, err := h.webNote(c)
 	if err != nil || n == nil {
-		return err
-	}
-	ns, err := h.noteStore()
-	if err != nil {
 		return err
 	}
 	title := strings.TrimSpace(c.PostForm("title"))
@@ -72,13 +74,13 @@ func (h *Handler) AppRename(c *gin.Context) error {
 		c.Redirect(http.StatusSeeOther, NotePath(n.ID)+p.Filter())
 		return nil
 	case errors.Is(err, store.ErrTitleTaken):
-		return h.renderRename(c, http.StatusConflict, p, n, title, "A note titled "+title+" already exists.")
+		return h.renderRename(c, http.StatusConflict, p, n, title, titleTaken(title))
 	case errors.Is(err, store.ErrNoTitle) && title == "":
 		return h.renderRename(c, http.StatusBadRequest, p, n, title, msgEmptyTitle)
 	case errors.Is(err, store.ErrNoTitle):
 		return h.renderRename(c, http.StatusBadRequest, p, n, title, msgTitleBracket)
 	case errors.Is(err, store.ErrNoteNotFound):
-		return h.notesMessage(c, p, "Note not found")
+		return h.notesMessage(c, p, msgNoteNotFound)
 	}
 	return noteError(err)
 }
@@ -86,7 +88,7 @@ func (h *Handler) AppRename(c *gin.Context) error {
 // AppDeleteForm asks before deleting. With JavaScript, note.js asks with
 // confirm() instead and posts straight away.
 func (h *Handler) AppDeleteForm(c *gin.Context) error {
-	p, n, err := h.webNote(c)
+	p, _, n, err := h.webNote(c)
 	if err != nil || n == nil {
 		return err
 	}
@@ -104,11 +106,11 @@ func (h *Handler) AppDelete(c *gin.Context) error {
 	}
 	id, ok := webNoteID(c)
 	if !ok {
-		return h.notesMessage(c, p, "Note not found")
+		return h.notesMessage(c, p, msgNoteNotFound)
 	}
 	err = ns.DeleteNote(c.Request.Context(), id)
 	if errors.Is(err, store.ErrNoteNotFound) {
-		return h.notesMessage(c, p, "Note not found")
+		return h.notesMessage(c, p, msgNoteNotFound)
 	}
 	if err != nil {
 		return noteError(err)
@@ -117,25 +119,26 @@ func (h *Handler) AppDelete(c *gin.Context) error {
 	return nil
 }
 
-// webNote is the page data and the note :id. With no such note it has
-// already shown "Note not found" and returns a nil note.
-func (h *Handler) webNote(c *gin.Context) (webPage, *notes.Note, error) {
+// webNote is the page data, the store and the note :id. With no such note
+// it has already shown "Note not found" and returns a nil note, so callers
+// return err when n is nil.
+func (h *Handler) webNote(c *gin.Context) (webPage, store.NoteStore, *notes.Note, error) {
 	p, ns, err := h.notesPage(c)
 	if err != nil {
-		return p, nil, err
+		return p, nil, nil, err
 	}
 	id, ok := webNoteID(c)
 	if !ok {
-		return p, nil, h.notesMessage(c, p, "Note not found")
+		return p, ns, nil, h.notesMessage(c, p, msgNoteNotFound)
 	}
 	n, err := ns.GetNote(c.Request.Context(), id)
 	if errors.Is(err, store.ErrNoteNotFound) {
-		return p, nil, h.notesMessage(c, p, "Note not found")
+		return p, ns, nil, h.notesMessage(c, p, msgNoteNotFound)
 	}
 	if err != nil {
-		return p, nil, noteError(err)
+		return p, ns, nil, noteError(err)
 	}
-	return p, n, nil
+	return p, ns, n, nil
 }
 
 func (h *Handler) renderRename(c *gin.Context, status int, p webPage, n *notes.Note, title, msg string) error {

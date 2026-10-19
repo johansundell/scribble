@@ -43,9 +43,10 @@ func ProjectPath(project string) string {
 }
 
 const (
-	msgWrongPIN    = "Wrong PIN"
-	msgRateLimited = "Too many wrong PINs from this address. Try again later."
-	msgLocked      = "Web login is locked after too many wrong PINs. Restart the service (or wait 24 hours) to unlock it."
+	msgWrongPIN     = "Wrong PIN"
+	msgRateLimited  = "Too many wrong PINs from this address. Try again later."
+	msgLocked       = "Web login is locked after too many wrong PINs. Restart the service (or wait 24 hours) to unlock it."
+	msgNoteNotFound = "Note not found"
 )
 
 var errWebNotConfigured = errors.New("web login is not configured")
@@ -163,23 +164,12 @@ func (h *Handler) App(c *gin.Context) error {
 // AppNote shows the list and the note with id :id, rendered as Markdown,
 // with the notes that link to it.
 func (h *Handler) AppNote(c *gin.Context) error {
-	p, ns, err := h.notesPage(c)
-	if err != nil {
+	p, ns, n, err := h.webNote(c)
+	if err != nil || n == nil {
 		return err
 	}
 	ctx := c.Request.Context()
-	id, ok := webNoteID(c)
-	if !ok {
-		return h.notesMessage(c, p, "Note not found")
-	}
-	n, err := ns.GetNote(ctx, id)
-	if errors.Is(err, store.ErrNoteNotFound) {
-		return h.notesMessage(c, p, "Note not found")
-	}
-	if err != nil {
-		return noteError(err)
-	}
-	if p.Backlinks, err = ns.NoteBacklinks(ctx, id); err != nil {
+	if p.Backlinks, err = ns.NoteBacklinks(ctx, n.ID); err != nil {
 		return noteError(err)
 	}
 	var lookupErr error
