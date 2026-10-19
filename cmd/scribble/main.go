@@ -38,6 +38,7 @@ Usage:
   scribble autolink <title>          turn mentions of other note titles into [[links]]
   scribble import <path...>          import Tomboy .note XML files or directories
   scribble rm <title>                delete a note
+  scribble completion [bash]         output shell completion script
 
 Environment:
   SCRIBBLE_URL    server address (default http://localhost:8080)
@@ -55,9 +56,16 @@ func main() {
 }
 
 func run(args []string) error {
+	return runWith(os.Stdout, args)
+}
+
+func runWith(stdout io.Writer, args []string) error {
 	if len(args) == 0 || args[0] == "help" || args[0] == "-h" || args[0] == "--help" {
-		fmt.Printf(usage, Version)
+		fmt.Fprintf(stdout, usage, Version)
 		return nil
+	}
+	if args[0] == "completion" {
+		return cmdCompletion(stdout, args[1:])
 	}
 	token := os.Getenv("SCRIBBLE_TOKEN")
 	if token == "" {
