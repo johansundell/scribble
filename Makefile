@@ -112,15 +112,15 @@ release: dist #docker-push
 	github-release $(GHACCOUNT)/$(GHREPO) $(VERSION) "$$(git rev-parse --abbrev-ref HEAD)" "**Changelog**<br/>$$changelog" 'dist/*'; \
 	git pull
 
-# The web app's home-screen icons (#65), made from logo.png on white.
-# The logo fills 85% of the plain icons' width and 70% of the maskable
-# one's, which keeps it inside the circle a launcher may cut it to.
-ICON_SRC := assets/img/logo.png
+# The web app's home-screen icons (#65), made from favicon.png on white.
+# The mark fills 80% of the plain icons and 60% of the maskable one, which
+# keeps it inside the circle a launcher may cut it to.
+ICON_SRC := assets/img/favicon.png
 icons:
-	magick $(ICON_SRC) -resize 163x -background white -gravity center -extent 192x192 -alpha remove assets/img/icon-192.png
-	magick $(ICON_SRC) -resize 435x -background white -gravity center -extent 512x512 -alpha remove assets/img/icon-512.png
-	magick $(ICON_SRC) -resize 358x -background white -gravity center -extent 512x512 -alpha remove assets/img/icon-maskable-512.png
-	magick $(ICON_SRC) -resize 153x -background white -gravity center -extent 180x180 -alpha remove assets/img/apple-touch-icon.png
+	magick $(ICON_SRC) -resize 154x154 -background white -gravity center -extent 192x192 -alpha remove assets/img/icon-192.png
+	magick $(ICON_SRC) -resize 410x410 -background white -gravity center -extent 512x512 -alpha remove assets/img/icon-512.png
+	magick $(ICON_SRC) -resize 307x307 -background white -gravity center -extent 512x512 -alpha remove assets/img/icon-maskable-512.png
+	magick $(ICON_SRC) -resize 144x144 -background white -gravity center -extent 180x180 -alpha remove assets/img/apple-touch-icon.png
 
 # Bumps version, runs tests, commits and pushes to master, and runs make release.
 # Usage: make bump-release [BUMP=patch|minor|major|vX.Y.Z] [DRY_RUN=1]
