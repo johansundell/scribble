@@ -105,35 +105,179 @@ body.web {
 	color: var(--muted);
 }
 
-/* Two columns: the note list and the note. They stack on narrow screens. */
+/* Two columns: the note list and the note, each scrolling on its own. They
+   stack on narrow screens. */
 .app-main {
 	flex: 1;
 	display: grid;
 	grid-template-columns: minmax(14rem, 20rem) minmax(0, 1fr);
+	grid-template-rows: minmax(0, 1fr);
 	min-width: 0;
+	min-height: 0;
+}
+
+body.web:has(.app-main) {
+	height: 100vh;
+	height: 100dvh;
 }
 
 .note-list {
 	border-right: 1px solid var(--border);
-	padding: 1rem;
+	padding: 0.5rem;
 	min-width: 0;
+	overflow-y: auto;
+}
+
+.note-list ul,
+.backlinks ul {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.note-list a,
+.backlinks a {
+	display: flex;
+	align-items: center;
+	min-height: 44px;
+	padding: 0.25rem 0.75rem;
+	border-radius: 8px;
+	color: var(--text);
+	text-decoration: none;
+	overflow-wrap: anywhere;
+}
+
+.note-list a:hover,
+.backlinks a:hover {
+	background: var(--border);
+}
+
+.note-list a[aria-current="page"] {
+	background: var(--accent);
+	color: var(--accent-text);
+	font-weight: 600;
+}
+
+.note-list a:focus-visible,
+.backlinks a:focus-visible,
+.note-body a:focus-visible {
+	outline: 3px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.note-list > .muted {
+	padding: 0 0.5rem;
 }
 
 .note-view {
 	padding: 1rem;
 	min-width: 0;
+	overflow-y: auto;
 	overflow-wrap: anywhere;
 }
 
+/* A rendered note. Wide parts scroll inside themselves, not the page. */
+.note-body {
+	max-width: 48rem;
+}
+
+.note-body h1 {
+	margin-top: 0;
+}
+
+.note-body a {
+	color: var(--accent);
+}
+
+/* A [[link]] to a note that doesn't exist. */
+.note-body a.missing {
+	color: var(--error);
+	text-decoration-style: dashed;
+}
+
+.note-body pre,
+.note-body table {
+	display: block;
+	max-width: 100%;
+	overflow-x: auto;
+}
+
+.note-body pre {
+	padding: 0.75rem;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: var(--surface);
+	overflow-wrap: normal;
+}
+
+.note-body code {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 0.9em;
+}
+
+.note-body table {
+	border-collapse: collapse;
+	overflow-wrap: normal;
+}
+
+.note-body th,
+.note-body td {
+	padding: 0.25rem 0.75rem;
+	border: 1px solid var(--border);
+}
+
+.note-body img {
+	max-width: 100%;
+	height: auto;
+}
+
+.note-body ul:has(> li > input[type="checkbox"]) {
+	padding-left: 0.5rem;
+}
+
+.note-body li:has(> input[type="checkbox"]) {
+	list-style: none;
+}
+
+/* Raw HTML in a note, shown as text. */
+.note-body .raw-html {
+	white-space: pre-wrap;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 0.9em;
+}
+
+.backlinks {
+	max-width: 48rem;
+	margin-top: 2rem;
+	padding-top: 1rem;
+	border-top: 1px solid var(--border);
+}
+
+.backlinks h2 {
+	margin: 0 0 0.5rem;
+	font-size: 1rem;
+	color: var(--muted);
+}
+
 @media (max-width: 700px) {
+	body.web:has(.app-main) {
+		height: auto;
+	}
+
 	.app-main {
 		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: none;
 		grid-auto-rows: min-content;
 	}
 
 	.note-list {
+		max-height: 40vh;
 		border-right: none;
 		border-bottom: 1px solid var(--border);
+	}
+
+	.note-view {
+		overflow-y: visible;
 	}
 }
 
