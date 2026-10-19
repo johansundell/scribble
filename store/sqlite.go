@@ -2,10 +2,22 @@ package store
 
 import (
 	"database/sql"
+	"strings"
 	"time"
 
 	_ "github.com/ncruces/go-sqlite3/driver"
 )
+
+// uriEscaper escapes characters that end or escape the path in an SQLite
+// URI filename (RFC 3986 / SQLite URI specification).
+var uriEscaper = strings.NewReplacer("%", "%25", "?", "%3f", "#", "%23")
+
+// FileURI turns a file path into an SQLite URI filename ("file:<escaped_path>"),
+// so a '?', '#' or '%' in the path cannot be misparsed as a URI query string,
+// fragment or escape sequence.
+func FileURI(path string) string {
+	return "file:" + uriEscaper.Replace(path)
+}
 
 // sqliteTimeLayout is a fixed-width UTC layout, so created_at values compare
 // and sort correctly as strings. The driver's default (RFC3339Nano) varies in
@@ -31,7 +43,7 @@ func openSQLite(file string) (*sql.DB, error) {
 	// SQLite-specific pragmas for better concurrency and durability, set in the
 	// DSN so the driver applies them to every connection it opens.
 	// WAL mode and a busy timeout reduce SQLITE_BUSY errors under contention.
-	db, err := sql.Open("sqlite3", "file:"+file+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
+	db, err := sql.Open("sqlite3", FileURI(file)+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
 	if err != nil {
 		return nil, err
 	}

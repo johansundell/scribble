@@ -177,6 +177,8 @@ The application is configured via environment variables. You can set these in a 
 | `TIMEOUT` | int | `15` | Request timeout in seconds. |
 | `STORAGE` | string | `sqlite` | Storage backend for request logs: `sqlite`, `mysql` or `filemaker`. |
 | `SQLITE_PATH` | string | `<binary dir>/<nameOfService>.db` | Path to SQLite database file (`STORAGE=sqlite`). Set it when using `go run .`, whose binary dir is temporary. |
+| `BACKUP_DIR` | string | `backups` beside the database | Where `scribble-server backup` stores its `scribble_<timestamp>.db.gz` archives. The `-dir` flag overrides it. |
+| `RETENTION_DAYS` | int | `7` | After each backup, `scribble-server backup` deletes archives older than this many days. The newest archive is always kept, however old. The `-retention-days` flag overrides it. |
 | `AUTH_TOKEN` | string | random per start | Token required for protected endpoints. When unset, a temporary token is generated and logged (see [Authentication token](#authentication-token)). |
 | `MYSQL_USERNAME` | string | - | MySQL username (required when `STORAGE=mysql`, as are `MYSQL_HOST` and `MYSQL_DATABASE`). |
 | `MYSQL_PASSWORD` | string | - | MySQL password. |
