@@ -66,8 +66,11 @@ type webPage struct {
 	NoteHTML  template.HTML
 	Backlinks []notes.Note
 	Message   string
-	// Edit is the editor, shown in place of the note.
-	Edit *noteEditor
+	// Edit is the editor, and Rename and Delete their forms, shown in place
+	// of the note.
+	Edit   *noteEditor
+	Rename *noteForm
+	Delete *noteForm
 	// The list's filter: Query searches titles and bodies, and Project (a
 	// name, without '#') keeps the notes tagged with it. Projects are the
 	// ones to choose from.
@@ -284,7 +287,13 @@ func (h *Handler) renderLogin(c *gin.Context, status int, msg string) error {
 }
 
 // webFuncs are the functions web templates may call.
-var webFuncs = template.FuncMap{"notePath": NotePath, "editPath": EditPath}
+var webFuncs = template.FuncMap{
+	"notePath":       NotePath,
+	"editPath":       EditPath,
+	"renamePath":     RenamePath,
+	"deletePath":     DeletePath,
+	"deleteQuestion": deleteQuestion,
+}
 
 // renderWeb renders tmplFile inside the app layout. Web pages use
 // html/template, so note text and form values are escaped.

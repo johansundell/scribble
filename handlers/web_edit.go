@@ -59,6 +59,10 @@ type noteEditor struct {
 	// Dirty says Body is not what is saved, so leaving asks first. A Draft
 	// counts too: leaving would lose it.
 	Dirty bool
+	// Rename is the rename form's path, "" when it isn't offered: for a new
+	// note, or with unsaved text (save first, like the desktop app).
+	// editor.js hides it once the text is changed.
+	Rename string
 }
 
 func newNoteEditor() *noteEditor {
@@ -210,6 +214,9 @@ func (h *Handler) renderEditor(c *gin.Context, status int, p webPage, title stri
 	shown := *ed
 	shown.Action += p.Filter()
 	shown.Cancel += p.Filter()
+	if ed.ID != 0 && !ed.Dirty && ed.Draft == "" {
+		shown.Rename = RenamePath(ed.ID) + p.Filter()
+	}
 	p.Title, p.Edit = title, &shown
 	return h.renderNotes(c, status, p)
 }

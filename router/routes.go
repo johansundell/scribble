@@ -63,6 +63,10 @@ func GetRoutes(handler *handlers.Handler) Routes {
 		Route{Name: "AppNote", Method: "GET", Pattern: handlers.AppHome + "/notes/:id", HandlerFunc: handler.AppNote, Web: true, UseSession: true},
 		Route{Name: "AppEdit", Method: "GET", Pattern: handlers.AppHome + "/notes/:id/edit", HandlerFunc: handler.AppEdit, Web: true, UseSession: true},
 		Route{Name: "AppSave", Method: "POST", Pattern: handlers.AppHome + "/notes/:id/edit", HandlerFunc: handler.AppSave, Web: true, UseSession: true},
+		Route{Name: "AppRenameForm", Method: "GET", Pattern: handlers.AppHome + "/notes/:id/rename", HandlerFunc: handler.AppRenameForm, Web: true, UseSession: true},
+		Route{Name: "AppRename", Method: "POST", Pattern: handlers.AppHome + "/notes/:id/rename", HandlerFunc: handler.AppRename, Web: true, UseSession: true},
+		Route{Name: "AppDeleteForm", Method: "GET", Pattern: handlers.AppHome + "/notes/:id/delete", HandlerFunc: handler.AppDeleteForm, Web: true, UseSession: true},
+		Route{Name: "AppDelete", Method: "POST", Pattern: handlers.AppHome + "/notes/:id/delete", HandlerFunc: handler.AppDelete, Web: true, UseSession: true},
 		Route{Name: "AppNew", Method: "GET", Pattern: handlers.NewPath, HandlerFunc: handler.AppNew, Web: true, UseSession: true},
 		Route{Name: "AppCreate", Method: "POST", Pattern: handlers.NewPath, HandlerFunc: handler.AppCreate, Web: true, UseSession: true},
 		// *title, not :title: a title may hold a '/' (escaped as %2F).
