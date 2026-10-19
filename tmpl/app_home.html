@@ -5,12 +5,12 @@
 		{{- with .Rename}}{{$open = .ID}}{{end}}{{with .Delete}}{{$open = .ID}}{{end}}
 		{{- $filter := .Filter}}
 		<div class="list-actions">
-			<a class="button" href="/app/new{{$filter}}" data-filtered="new">New</a>
+			<a class="button" href="/app/new{{$filter}}" data-filtered="new" data-shortcut="new">New</a>
 		</div>
 		{{/* Without JavaScript the form is sent with Enter or Filter; list.js
 		filters while typing and swaps in the list, so the open note stays. */}}
 		<form class="list-filter" method="get" action="/app" role="search">
-			<input type="search" name="q" value="{{.Query}}" class="search-field" placeholder="Search" aria-label="Search notes" autocomplete="off" />
+			<input type="search" name="q" value="{{.Query}}" class="search-field" data-shortcut="search" placeholder="Search" aria-label="Search notes" autocomplete="off" />
 			<select name="project" class="project-select" aria-label="Project">
 				<option value="">All notes</option>
 				{{- range .Projects}}
@@ -65,8 +65,8 @@
 		{{/* Without JavaScript, Delete opens a page that asks first; note.js
 		asks with confirm() and posts. */}}
 		<div class="note-actions">
-			<a class="button" href="{{editPath .Note.ID}}{{.Filter}}" data-filtered="edit">Edit</a>
-			<a class="button" href="{{renamePath .Note.ID}}{{.Filter}}" data-filtered="rename">Rename</a>
+			<a class="button" href="{{editPath .Note.ID}}{{.Filter}}" data-filtered="edit" data-shortcut="edit">Edit</a>
+			<a class="button" href="{{renamePath .Note.ID}}{{.Filter}}" data-filtered="rename" data-shortcut="rename">Rename</a>
 			<a class="button danger" href="{{deletePath .Note.ID}}{{.Filter}}" data-filtered="delete" data-confirm="{{deleteQuestion .Note.Title}}">Delete</a>
 		</div>
 		<script src="/assets/js/note.js" defer></script>
@@ -139,11 +139,11 @@ after its start tag, so one is always written there to keep the note's own. */}}
 			<textarea id="note-text" name="body" class="editor-text" aria-label="Note text" autofocus>{{"\n"}}{{.Body}}</textarea>
 			<div id="note-preview" class="note-body editor-preview" role="tabpanel" aria-labelledby="tab-preview" hidden></div>
 			<div class="editor-buttons">
-				<button type="submit" class="button primary" name="action" value="save">Save</button>
+				<button type="submit" class="button primary" name="action" value="save" data-shortcut="save">Save</button>
 				<button type="submit" class="button" name="action" value="done">Done</button>
-				<a class="button" href="{{.Cancel}}" data-filtered="cancel">Cancel</a>
+				<a class="button" href="{{.Cancel}}" data-filtered="cancel"{{if .ID}} data-shortcut="view"{{end}}>Cancel</a>
 				{{- with .Rename}}
-				<a class="button" href="{{.}}" data-filtered="rename" data-rename>Rename</a>
+				<a class="button" href="{{.}}" data-filtered="rename" data-rename data-shortcut="rename">Rename</a>
 				{{- end}}
 			</div>
 			{{- with .Draft}}
