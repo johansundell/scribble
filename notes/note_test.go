@@ -5,6 +5,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"fyne.io/fyne/v2/widget"
 )
 
 func TestTitleOf(t *testing.T) {
@@ -289,6 +291,59 @@ func TestAutoLinkPrefersTitleAsWritten(t *testing.T) {
 			if got, _ := AutoLink(in, titles); got != want {
 				t.Errorf("AutoLink(%q, %q) = %q, want %q", in, titles, got, want)
 			}
+		}
+	}
+}
+
+func TestFlattenTaskItemsForView(t *testing.T) {
+	cases := map[string]string{
+		// Untouched cases
+		"plain text without tasks": "T\n- regular bullet\n- another bullet",
+		"code block with task":     "T\n```\n- [ ] **not a task**\n```",
+
+		// Issue #11 cases
+		"bold item":          "T\n- [ ] **bold** item",
+		"link item":          "T\n- [ ] [a link](https://example.com) item",
+		"code item":          "T\n- [ ] ``  code  `` item",
+		"plain then bold":    "T\n- [ ] plain then **bold**",
+		"checked bold":       "T\n- [x] **bold** item",
+		"nested task":        "T\n- item\n  - [ ] **nested** task",
+		"multiline task":     "T\n- [ ] first line\n  second line",
+		"mixed formatting":   "T\n- [ ] *italic* and `code` and ~~strike~~",
+		"autolink":           "T\n- [ ] <https://example.com> rest",
+		"special characters": "T\n- [ ] *a* & <b> [c]",
+	}
+
+	for name, in := range cases {
+		t.Run(name, func(t *testing.T) {
+			out := FlattenTaskItemsForView(in)
+			// Must never panic in Fyne's markdown renderer
+			rt := widget.NewRichTextFromMarkdown(out)
+			if rt == nil {
+				t.Fatal("NewRichTextFromMarkdown returned nil")
+			}
+		})
+	}
+
+	// Verify the exact text extracted on checkboxes
+	body := "# Notes\n\n- [ ] **bold** item\n- [ ] [a link](https://example.com) item\n- [ ] ``  code  `` item\n- [ ] plain then **bold**\n"
+	rewritten := FlattenTaskItemsForView(body)
+	rt := widget.NewRichTextFromMarkdown(rewritten)
+	list, ok := rt.Segments[2].(*widget.ListSegment)
+	if !ok {
+		t.Fatalf("expected ListSegment at segment 2, got %T", rt.Segments[2])
+	}
+	wants := []string{
+		"bold item",
+		"a link item",
+		"code item",
+		"plain then bold",
+	}
+	for i, want := range wants {
+		p := list.Items[i].(*widget.ParagraphSegment)
+		cb := p.Texts[0].(*widget.CheckBoxSegment)
+		if cb.Text != want {
+			t.Errorf("item %d = %q, want %q", i, cb.Text, want)
 		}
 	}
 }

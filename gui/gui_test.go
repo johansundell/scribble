@@ -627,6 +627,60 @@ func TestTaskListWithTagsRenders(t *testing.T) {
 	}
 }
 
+func TestTaskListWithFormattingRenders(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Todo\n\n- [ ] **bold** item\n- [ ] [a link](https://example.com) item\n- [ ] ``  code  `` item\n- [ ] plain then **bold**")
+
+	ui, _ := open(t, c)
+	ui.List.Select(0) // panicked in Fyne's renderer before the fix
+
+	for _, want := range []string{"bold item", "a link item", "code item", "plain then bold"} {
+		if checkBox(ui.Viewer.Segments, want) == nil {
+			t.Errorf("no task item %q, segments %#v", want, ui.Viewer.Segments)
+		}
+	}
+}
+
+func TestPreviewTaskListDraftWithFormatting(t *testing.T) {
+	c := newServer(t)
+	ui, _ := open(t, c)
+	test.Tap(ui.NewNote)
+	test.Type(ui.Editor, "# Draft\n\n- [ ] **bold** item\n- [ ] plain then **bold**")
+	test.Tap(ui.EditToggle) // Edit -> View preview
+
+	if ui.Viewer.Hidden {
+		t.Fatal("viewer should be visible after toggling to View")
+	}
+	for _, want := range []string{"bold item", "plain then bold"} {
+		if checkBox(ui.Viewer.Segments, want) == nil {
+			t.Errorf("no task item %q, segments %#v", want, ui.Viewer.Segments)
+		}
+	}
+}
+
+func TestShowViewParsePanicRecovery(t *testing.T) {
+	restore := gui.SetParseMarkdownForTest(func(string) *widget.RichText {
+		panic("simulated renderer panic")
+	})
+	defer restore()
+
+	c := newServer(t)
+	create(t, c, "# Title\n\nSome content")
+	ui, _ := open(t, c)
+	ui.List.Select(0) // triggers showView
+
+	if !strings.Contains(ui.Status.Text, "Failed to render note as Markdown") {
+		t.Fatalf("expected status message on panic, got %q", ui.Status.Text)
+	}
+	if len(ui.Viewer.Segments) != 1 {
+		t.Fatalf("expected fallback text segment, got %d segments", len(ui.Viewer.Segments))
+	}
+	ts, ok := ui.Viewer.Segments[0].(*widget.TextSegment)
+	if !ok || !strings.Contains(ts.Text, "Some content") {
+		t.Fatalf("expected raw text in viewer, got %#v", ui.Viewer.Segments[0])
+	}
+}
+
 func TestNewNoteInProjectStaysInProject(t *testing.T) {
 	c := newServer(t)
 	create(t, c, "# Plans\n#scribble")

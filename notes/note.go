@@ -452,3 +452,106 @@ func LinkTitle(u *url.URL) (string, bool) {
 	}
 	return u.Path[1:], true
 }
+
+// taskTextEscaper writes characters Markdown would parse as inline syntax
+// as character references, so task-item text renders as literal characters.
+// Fyne unescapes HTML character references in text segments.
+var taskTextEscaper = strings.NewReplacer(
+	"&", "&amp;", "<", "&lt;", ">", "&gt;", `\`, "&#92;", "`", "&#96;",
+	"*", "&#42;", "_", "&#95;", "~", "&#126;", "|", "&#124;",
+	"[", "&#91;", "]", "&#93;")
+
+// FlattenTaskItemsForView rewrites task-list items so their full text is
+// plain text without inline Markdown formatting. Fyne's Markdown renderer
+// (v2.8) renders a task item from the single node after its checkbox, casting
+// it to *ast.Text: any inline formatting there panics the viewer or drops the
+// rest of the item's text.
+// Used by GUI clients.
+func FlattenTaskItemsForView(body string) string {
+	source := []byte(body)
+	doc := markdown.Parser().Parse(text.NewReader(source))
+	type repl struct {
+		start, stop int
+		text        string
+	}
+	var repls []repl
+	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		tb, ok := n.(*ast.TextBlock)
+		if !ok {
+			return ast.WalkContinue, nil
+		}
+		c, ok := tb.FirstChild().(*east.TaskCheckBox)
+		if !ok {
+			return ast.WalkContinue, nil
+		}
+		lines := tb.Lines()
+		if lines.Len() == 0 {
+			return ast.WalkContinue, nil
+		}
+		start := lines.At(0).Start
+		stop := lines.At(lines.Len() - 1).Stop
+		itemText := taskItemText(source, c)
+		prefix := "[ ] "
+		if c.IsChecked {
+			prefix = "[x] "
+		}
+		repls = append(repls, repl{
+			start: start,
+			stop:  stop,
+			text:  prefix + taskTextEscaper.Replace(itemText),
+		})
+		return ast.WalkSkipChildren, nil
+	})
+	if len(repls) == 0 {
+		return body
+	}
+	var b strings.Builder
+	last := 0
+	for _, r := range repls {
+		b.WriteString(body[last:r.start])
+		b.WriteString(r.text)
+		last = r.stop
+	}
+	b.WriteString(body[last:])
+	return b.String()
+}
+
+// taskItemText extracts the plain text of all nodes following the task checkbox c.
+func taskItemText(source []byte, c ast.Node) string {
+	var b strings.Builder
+	for s := c.NextSibling(); s != nil; s = s.NextSibling() {
+		_ = ast.Walk(s, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+			if !entering {
+				return ast.WalkContinue, nil
+			}
+			switch n := n.(type) {
+			case *ast.Text:
+				val := n.Value(source)
+				if len(val) == 0 {
+					b.WriteByte(' ')
+				} else {
+					b.Write(val)
+					if n.SoftLineBreak() || n.HardLineBreak() {
+						b.WriteByte(' ')
+					}
+				}
+			case *ast.CodeSpan:
+				var code strings.Builder
+				for child := n.FirstChild(); child != nil; child = child.NextSibling() {
+					if t, ok := child.(*ast.Text); ok {
+						code.Write(t.Value(source))
+					}
+				}
+				b.WriteString(strings.TrimSpace(code.String()))
+				return ast.WalkSkipChildren, nil
+			case *ast.AutoLink:
+				b.Write(n.Label(source))
+			}
+			return ast.WalkContinue, nil
+		})
+	}
+	return strings.TrimSpace(b.String())
+}
