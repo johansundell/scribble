@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"io"
 	"math"
 	"net/http"
 	"strconv"
@@ -46,11 +47,11 @@ func (h *Handler) noteStore() (store.NoteStore, error) {
 // noteError maps store errors onto HTTP statuses.
 func noteError(err error) error {
 	switch {
-	case errors.Is(err, store.ErrNoteNotFound):
+	case errors.Is(err, store.ErrNoteNotFound), errors.Is(err, store.ErrVersionNotFound):
 		return httperror.ReturnWithHTTPStatus(err, http.StatusNotFound)
 	case errors.Is(err, store.ErrStaleRevision):
 		return httperror.ReturnWithHTTPStatus(err, http.StatusPreconditionFailed)
-	case errors.Is(err, store.ErrTitleTaken):
+	case errors.Is(err, store.ErrTitleTaken), errors.Is(err, store.ErrNoteDeleted):
 		return httperror.ReturnWithHTTPStatus(err, http.StatusConflict)
 	case errors.Is(err, store.ErrNoTitle):
 		return httperror.ReturnWithHTTPStatus(err, http.StatusBadRequest)
@@ -252,5 +253,120 @@ func (h *Handler) NoteChanges(c *gin.Context) error {
 		resp.LatestSeq = max(resp.LatestSeq, n.Seq)
 	}
 	c.JSON(http.StatusOK, resp)
+	return nil
+}
+
+// restoreRequest is the POST /notes/:id/versions/:rev/restore body, which
+// may be left out.
+type restoreRequest struct {
+	// BaseRevision works as in noteRequest.
+	BaseRevision int64 `json:"base_revision"`
+}
+
+func versionRev(c *gin.Context) (int64, error) {
+	rev, err := strconv.ParseInt(c.Param("rev"), 10, 64)
+	if err != nil || rev < 1 {
+		return 0, httperror.ReturnWithHTTPStatus(errors.New("invalid revision"), http.StatusBadRequest)
+	}
+	return rev, nil
+}
+
+// NoteVersions handles GET /notes/:id/versions: the kept versions, newest
+// first, without bodies.
+func (h *Handler) NoteVersions(c *gin.Context) error {
+	ns, err := h.noteStore()
+	if err != nil {
+		return err
+	}
+	id, err := noteID(c)
+	if err != nil {
+		return err
+	}
+	list, err := ns.NoteVersions(c.Request.Context(), id)
+	if err != nil {
+		return noteError(err)
+	}
+	c.JSON(http.StatusOK, list)
+	return nil
+}
+
+// NoteVersion handles GET /notes/:id/versions/:rev: one version with its body.
+func (h *Handler) NoteVersion(c *gin.Context) error {
+	ns, err := h.noteStore()
+	if err != nil {
+		return err
+	}
+	id, err := noteID(c)
+	if err != nil {
+		return err
+	}
+	rev, err := versionRev(c)
+	if err != nil {
+		return err
+	}
+	v, err := ns.NoteVersion(c.Request.Context(), id, rev)
+	if err != nil {
+		return noteError(err)
+	}
+	c.JSON(http.StatusOK, v)
+	return nil
+}
+
+// RestoreVersion handles POST /notes/:id/versions/:rev/restore: the
+// version's text becomes the note's again, as a new revision.
+func (h *Handler) RestoreVersion(c *gin.Context) error {
+	ns, err := h.noteStore()
+	if err != nil {
+		return err
+	}
+	id, err := noteID(c)
+	if err != nil {
+		return err
+	}
+	rev, err := versionRev(c)
+	if err != nil {
+		return err
+	}
+	var req restoreRequest
+	if err := bindJSON(c, &req); err != nil && !errors.Is(err, io.EOF) {
+		return err
+	}
+	n, err := ns.RestoreVersion(c.Request.Context(), id, rev, req.BaseRevision)
+	if err != nil {
+		return noteError(err)
+	}
+	c.JSON(http.StatusOK, n)
+	return nil
+}
+
+// DeletedNotes handles GET /notes/deleted, most recently deleted first.
+func (h *Handler) DeletedNotes(c *gin.Context) error {
+	ns, err := h.noteStore()
+	if err != nil {
+		return err
+	}
+	list, err := ns.DeletedNotes(c.Request.Context())
+	if err != nil {
+		return noteError(err)
+	}
+	c.JSON(http.StatusOK, list)
+	return nil
+}
+
+// UndeleteNote handles POST /notes/:id/undelete.
+func (h *Handler) UndeleteNote(c *gin.Context) error {
+	ns, err := h.noteStore()
+	if err != nil {
+		return err
+	}
+	id, err := noteID(c)
+	if err != nil {
+		return err
+	}
+	n, err := ns.UndeleteNote(c.Request.Context(), id)
+	if err != nil {
+		return noteError(err)
+	}
+	c.JSON(http.StatusOK, n)
 	return nil
 }

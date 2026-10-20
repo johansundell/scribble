@@ -199,6 +199,47 @@ func TestSyncRemovesDeletedNotes(t *testing.T) {
 	}
 }
 
+func TestSyncBringsBackUndeletedNotes(t *testing.T) {
+	ctx := context.Background()
+	c, _ := newServer(t)
+	g := create(t, c, "# Groceries\nmilk")
+	s := open(t, "")
+	syncNow(t, s, c)
+	if err := c.Delete(ctx, g.ID); err != nil {
+		t.Fatal(err)
+	}
+	syncNow(t, s, c)
+	assertTitles(t, s.List("", ""))
+
+	if _, err := c.Undelete(ctx, g.ID); err != nil {
+		t.Fatal(err)
+	}
+	syncNow(t, s, c)
+	assertTitles(t, s.List("", ""), "Groceries")
+	if n, ok := s.Get(g.ID); !ok || n.Body != "# Groceries\nmilk" || n.Deleted {
+		t.Fatalf("undeleted note = %+v, %v", n, ok)
+	}
+}
+
+func TestSyncShowsARestoredVersion(t *testing.T) {
+	ctx := context.Background()
+	c, _ := newServer(t)
+	g := create(t, c, "# Groceries\nmilk")
+	if _, err := c.Update(ctx, g.ID, "# Groceries\neggs", 0); err != nil {
+		t.Fatal(err)
+	}
+	s := open(t, "")
+	syncNow(t, s, c)
+
+	if _, err := c.Restore(ctx, g.ID, 1, 0); err != nil {
+		t.Fatal(err)
+	}
+	syncNow(t, s, c)
+	if n, _ := s.Get(g.ID); n.Body != "# Groceries\nmilk" {
+		t.Fatalf("restored note reads %q", n.Body)
+	}
+}
+
 func TestCacheOnDiskServesReadsWhileOffline(t *testing.T) {
 	c, net := newServer(t)
 	create(t, c, "# Groceries\nmilk #home")

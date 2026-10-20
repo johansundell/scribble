@@ -33,6 +33,28 @@ type Note struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// Version is one kept state of a note in its history: a full copy of its
+// text at Revision, and why it was written (ADR 7). Merged saves leave gaps
+// in the revisions. Body is empty in a list of versions.
+type Version struct {
+	Revision int64  `json:"revision"`
+	Title    string `json:"title"`
+	Body     string `json:"body,omitempty"`
+	Deleted  bool   `json:"deleted"`
+	// Reason is create, edit, rename, link-rewrite, restore, delete or
+	// undelete; more may be added, so treat it as open text.
+	Reason    string    `json:"reason"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"` // last time a merged save replaced it
+}
+
+// DeletedNote is a deleted note that can be undeleted.
+type DeletedNote struct {
+	ID        int64     `json:"id"`
+	Title     string    `json:"title"`
+	DeletedAt time.Time `json:"deleted_at"`
+}
+
 // TitleOf returns the title implied by a Markdown body.
 func TitleOf(body string) string {
 	for _, line := range strings.Split(body, "\n") {

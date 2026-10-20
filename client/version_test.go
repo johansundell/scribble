@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/johansundell/scribble/client"
+	"github.com/johansundell/scribble/router"
 )
 
 func TestClientSaysWhoItIs(t *testing.T) {
@@ -74,8 +75,8 @@ func TestHealth(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if h.Version != "dev" || h.API != 1 {
-		t.Errorf("Health = %+v, want version dev, API 1", h)
+	if h.Version != "dev" || h.API != router.APILevel {
+		t.Errorf("Health = %+v, want version dev, API %d", h, router.APILevel)
 	}
 }
 

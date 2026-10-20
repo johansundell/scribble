@@ -50,6 +50,13 @@ func GetRoutes(handler *handlers.Handler) Routes {
 		Route{Name: "RenameNote", Method: "POST", Pattern: "/notes/:id/rename", HandlerFunc: handler.RenameNote, UseAuth: true, CheckClient: true},
 		Route{Name: "NoteChanges", Method: "GET", Pattern: "/changes", HandlerFunc: handler.NoteChanges, UseAuth: true, CheckClient: true},
 		Route{Name: "ListProjects", Method: "GET", Pattern: "/projects", HandlerFunc: handler.ListProjects, UseAuth: true, CheckClient: true},
+		// Note history (#55, ADR 7). gin matches the static /notes/deleted
+		// before /notes/:id.
+		Route{Name: "NoteVersions", Method: "GET", Pattern: "/notes/:id/versions", HandlerFunc: handler.NoteVersions, UseAuth: true, CheckClient: true},
+		Route{Name: "NoteVersion", Method: "GET", Pattern: "/notes/:id/versions/:rev", HandlerFunc: handler.NoteVersion, UseAuth: true, CheckClient: true},
+		Route{Name: "RestoreVersion", Method: "POST", Pattern: "/notes/:id/versions/:rev/restore", HandlerFunc: handler.RestoreVersion, UseAuth: true, CheckClient: true},
+		Route{Name: "DeletedNotes", Method: "GET", Pattern: "/notes/deleted", HandlerFunc: handler.DeletedNotes, UseAuth: true, CheckClient: true},
+		Route{Name: "UndeleteNote", Method: "POST", Pattern: "/notes/:id/undelete", HandlerFunc: handler.UndeleteNote, UseAuth: true, CheckClient: true},
 		// The web app (Web: registered only when WEB_PIN is set). It logs in
 		// with the PIN, not AUTH_TOKEN, and is never request-logged: the log
 		// would copy PINs and note bodies.

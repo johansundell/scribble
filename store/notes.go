@@ -51,6 +51,19 @@ type NoteStore interface {
 	NoteShareToken(ctx context.Context, id int64) (string, error)
 	// GetSharedNote returns the live note with token, or ErrNoteNotFound.
 	GetSharedNote(ctx context.Context, token string) (*notes.Note, error)
+
+	// History (#55, ADR 7). Every write above records a version.
+	// NoteVersions lists note id's versions, newest first, without bodies.
+	NoteVersions(ctx context.Context, id int64) ([]notes.Version, error)
+	// NoteVersion returns one version with its body, or ErrVersionNotFound.
+	NoteVersion(ctx context.Context, id, rev int64) (*notes.Version, error)
+	// RestoreVersion makes version rev the note's text again, as a new
+	// revision; baseRev works as in UpdateNote.
+	RestoreVersion(ctx context.Context, id, rev, baseRev int64) (*notes.Note, error)
+	// DeletedNotes lists deleted notes, most recently deleted first.
+	DeletedNotes(ctx context.Context) ([]notes.DeletedNote, error)
+	// UndeleteNote brings a deleted note back with its last text.
+	UndeleteNote(ctx context.Context, id int64) (*notes.Note, error)
 }
 
 const noteCols = `id, title, body, revision, seq, deleted, created_at, updated_at`
@@ -83,8 +96,6 @@ func scanNote(r rowScanner) (*notes.Note, error) {
 	n.UpdatedAt, _ = time.Parse(sqliteTimeLayout, updated)
 	return &n, nil
 }
-
-func (s *SQLStore) nowArg() any { return s.timeArg(time.Now()) }
 
 func (s *SQLStore) checkNotes() error {
 	if !s.notesEnabled {
@@ -125,9 +136,14 @@ func (s *SQLStore) CreateNote(ctx context.Context, body string) (*notes.Note, er
 	if notes.TitleOf(body) == "" {
 		return nil, ErrNoTitle
 	}
-	now := s.nowArg()
-	res, err := s.db.ExecContext(ctx, `INSERT INTO notes (title, body, seq, created_at, updated_at)
-		VALUES (?, ?, `+nextSeq+`, ?, ?)`, notes.TitleOf(body), body, now, now)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	now := time.Now()
+	res, err := tx.ExecContext(ctx, `INSERT INTO notes (title, body, seq, created_at, updated_at)
+		VALUES (?, ?, `+nextSeq+`, ?, ?)`, notes.TitleOf(body), body, s.timeArg(now), s.timeArg(now))
 	if isUniqueViolation(err) {
 		return nil, ErrTitleTaken
 	}
@@ -138,7 +154,14 @@ func (s *SQLStore) CreateNote(ctx context.Context, body string) (*notes.Note, er
 	if err != nil {
 		return nil, err
 	}
-	return getNote(ctx, s.db, id)
+	if err := s.recordVersion(ctx, tx, now, id, reasonCreate); err != nil {
+		return nil, err
+	}
+	n, err := getNote(ctx, tx, id)
+	if err != nil {
+		return nil, err
+	}
+	return n, tx.Commit()
 }
 
 func (s *SQLStore) GetNote(ctx context.Context, id int64) (*notes.Note, error) {
@@ -216,17 +239,22 @@ func (s *SQLStore) NoteChanges(ctx context.Context, since int64) ([]notes.Note, 
 	return queryNotes(ctx, s.db, `SELECT `+noteCols+` FROM notes WHERE seq > ? ORDER BY seq`, since)
 }
 
-func writeNote(ctx context.Context, x dbx, now any, id int64, body string) error {
+// writeNote replaces live note id's body and records the new version with
+// reason.
+func (s *SQLStore) writeNote(ctx context.Context, x dbx, now time.Time, id int64, body, reason string) error {
 	title := notes.TitleOf(body)
 	if title == "" {
 		return ErrNoTitle
 	}
 	_, err := x.ExecContext(ctx, `UPDATE notes SET title = ?, body = ?, revision = revision + 1,
-		seq = `+nextSeq+`, updated_at = ? WHERE id = ? AND deleted = 0`, title, body, now, id)
+		seq = `+nextSeq+`, updated_at = ? WHERE id = ? AND deleted = 0`, title, body, s.timeArg(now), id)
 	if isUniqueViolation(err) {
 		return ErrTitleTaken
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	return s.recordVersion(ctx, x, now, id, reason)
 }
 
 func (s *SQLStore) UpdateNote(ctx context.Context, id int64, body string, baseRev int64) (*notes.Note, error) {
@@ -245,7 +273,7 @@ func (s *SQLStore) UpdateNote(ctx context.Context, id int64, body string, baseRe
 	if baseRev > 0 && cur.Revision != baseRev {
 		return nil, ErrStaleRevision
 	}
-	if err := writeNote(ctx, tx, s.nowArg(), id, body); err != nil {
+	if err := s.writeNote(ctx, tx, time.Now(), id, body, reasonEdit); err != nil {
 		return nil, err
 	}
 	n, err := getNote(ctx, tx, id)
@@ -261,15 +289,24 @@ func (s *SQLStore) DeleteNote(ctx context.Context, id int64) error {
 	if err := s.checkNotes(); err != nil {
 		return err
 	}
-	res, err := s.db.ExecContext(ctx, `UPDATE notes SET deleted = 1, share_token = NULL, revision = revision + 1,
-		seq = `+nextSeq+`, updated_at = ? WHERE id = ? AND deleted = 0`, s.nowArg(), id)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	now := time.Now()
+	res, err := tx.ExecContext(ctx, `UPDATE notes SET deleted = 1, share_token = NULL, revision = revision + 1,
+		seq = `+nextSeq+`, updated_at = ? WHERE id = ? AND deleted = 0`, s.timeArg(now), id)
 	if err != nil {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return ErrNoteNotFound
 	}
-	return nil
+	if err := s.recordVersion(ctx, tx, now, id, reasonDelete); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func backlinks(ctx context.Context, x dbx, n *notes.Note) ([]notes.Note, error) {
@@ -321,12 +358,12 @@ func (s *SQLStore) RenameNote(ctx context.Context, id int64, newTitle string) (*
 	if err != nil {
 		return nil, err
 	}
-	now := s.nowArg()
-	if err := writeNote(ctx, tx, now, id, notes.SetTitle(n.Body, newTitle)); err != nil {
+	now := time.Now()
+	if err := s.writeNote(ctx, tx, now, id, notes.SetTitle(n.Body, newTitle), reasonRename); err != nil {
 		return nil, err
 	}
 	for _, other := range linking {
-		if err := writeNote(ctx, tx, now, other.ID, notes.RewriteLinks(other.Body, n.Title, newTitle)); err != nil {
+		if err := s.writeNote(ctx, tx, now, other.ID, notes.RewriteLinks(other.Body, n.Title, newTitle), reasonLinkRewrite); err != nil {
 			return nil, err
 		}
 	}
