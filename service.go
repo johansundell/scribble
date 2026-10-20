@@ -14,6 +14,7 @@ import (
 	"github.com/johansundell/scribble/handlers"
 	"github.com/johansundell/scribble/logging"
 	"github.com/johansundell/scribble/logqueue"
+	"github.com/johansundell/scribble/replica"
 	"github.com/johansundell/scribble/router"
 	"github.com/johansundell/scribble/store"
 	"github.com/johansundell/scribble/types"
@@ -57,6 +58,13 @@ var newFileMakerStore = func(ctx context.Context, cfg types.FileMakerSettings) (
 		return nil, err
 	}
 	return s, nil
+}
+var newReplicaClient = func(cfg types.FileMakerSettings) (replica.Client, error) {
+	c, err := store.NewFileMakerClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 var netListen = net.Listen
 
@@ -129,7 +137,15 @@ func (p *program) run(startup chan<- error) error {
 		logInfo("web app is on at /")
 	}
 
-	handler, err := handlers.NewHandler(st, settings.UseFileSystem, embeddedTemplates, nameOfService, Version, handlers.WithAuth(webAuth))
+	// Stopped before the store is closed (defers run in reverse).
+	syncer, stopReplica := startReplica(st)
+	defer stopReplica()
+	handlerOpts := []handlers.Option{handlers.WithAuth(webAuth)}
+	if syncer != nil {
+		handlerOpts = append(handlerOpts, handlers.WithReplica(syncer))
+	}
+
+	handler, err := handlers.NewHandler(st, settings.UseFileSystem, embeddedTemplates, nameOfService, Version, handlerOpts...)
 	if err != nil {
 		logError("failed to create handlers: %v", err)
 		startup <- err
@@ -229,6 +245,46 @@ var storeOpeners = map[string]func() (store.Store, time.Duration, error){
 		s, err := newFileMakerStore(ctx, fm)
 		return s, fm.Timeout, err
 	},
+}
+
+// startReplica starts the FileMaker replica's sync (#66, ADR 10) when
+// NOTES_REPLICA is set, and returns it with a func that stops it. It never
+// fails startup: SQLite is the master, so a broken FileMaker setup only
+// turns the replica off, which /healthz shows.
+func startReplica(st store.Store) (*replica.Syncer, func()) {
+	r := settings.Replica
+	if !r.Enabled() {
+		return nil, func() {}
+	}
+	db, ok := st.(replica.Store)
+	if !ok { // Validate requires STORAGE=sqlite
+		logError("NOTES_REPLICA=filemaker needs STORAGE=sqlite; the replica is off")
+		return nil, func() {}
+	}
+	if settings.FileMaker.InsecureSkipVerify {
+		logWarning("FMS_INSECURE_SKIP_VERIFY is set: the FileMaker Server certificate is NOT verified, so credentials can be intercepted. Use FMS_CA_FILE instead.")
+	}
+	client, err := newReplicaClient(settings.FileMaker)
+	syncer := replica.New(client, db, replica.Config{
+		Tables:   replica.Tables{Notes: r.NotesTable, Pending: r.PendingTable, Info: r.InfoTable},
+		Interval: r.Interval,
+		Logger:   appLogger(),
+	})
+	if err != nil {
+		syncer.Disable(fmt.Errorf("connect to FileMaker: %w", err))
+	} else {
+		logInfo("FileMaker replica of the notes is on: table %s on %s, every %v", r.NotesTable, settings.FileMaker.Host, r.Interval)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		syncer.Run(ctx)
+		close(done)
+	}()
+	return syncer, func() {
+		cancel()
+		<-done
+	}
 }
 
 // openStore opens the storage backend chosen with STORAGE.

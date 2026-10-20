@@ -1,6 +1,6 @@
 # 10. SQLite is the master; FileMaker is a two-way replica
 
-- **Status:** Accepted (not built yet)
+- **Status:** Accepted
 - **Tickets:** #66, #67
 
 ## Context
@@ -21,4 +21,4 @@ The notes should also be in FileMaker, where people can browse and edit them nex
 
 - The apps never need FileMaker to work. A broken FileMaker setup turns the replica off without stopping the server.
 - An edit made in FileMaker reaches the apps at the next sync (about 30 seconds), not at once.
-- The FileMaker tables are set up by hand from the spec in #66. The service never creates them.
+- The FileMaker tables are set up by hand from [docs/filemaker/notes.md](../filemaker/notes.md). The service never creates them.

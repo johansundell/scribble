@@ -13,5 +13,8 @@
     <div class="status-item">
         Database: <span class="accent">{{.dbStatus}}</span>
     </div>
+    {{with .replica}}<div class="status-item">
+        FileMaker replica: <span class="accent">{{.Status}}</span>{{if .PendingPush}} · {{.PendingPush}} to push{{end}}{{if .LastSync}} · last sync {{.LastSync}}{{end}}{{if .Reason}}<br>{{.Reason}}{{end}}
+    </div>{{end}}
 </div>
 {{end}}

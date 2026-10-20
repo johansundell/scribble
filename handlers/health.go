@@ -12,8 +12,9 @@ import (
 // for HealthCheck to report.
 const APILevelKey = "scribble.apiLevel"
 
-// HealthCheck reports the service and storage state. It answers 503 when
-// the storage ping fails, so health checks see the service as unhealthy.
+// HealthCheck reports the service and storage state, and the FileMaker
+// replica's when there is one. It answers 503 when the storage ping fails,
+// so health checks see the service as unhealthy.
 func (h *Handler) HealthCheck(c *gin.Context) error {
 	status := http.StatusOK
 	dbStatus := "OK"
@@ -35,6 +36,10 @@ func (h *Handler) HealthCheck(c *gin.Context) error {
 		if v, ok := sv.SchemaVersion(); ok {
 			data["schema"] = v
 		}
+	}
+	// The replica can't make the service unhealthy: SQLite is the master.
+	if h.replica != nil {
+		data["replica"] = h.replica.Status(c.Request.Context())
 	}
 
 	// JSON when the client prefers it (Accept), HTML otherwise, including

@@ -198,6 +198,11 @@ The application is configured via environment variables. You can set these in a 
 | `FMS_LOG_TABLE` | string | `Logs` | FileMaker table for request logs. |
 | `FMS_CA_FILE` | string | - | PEM file with extra CA certificates to trust, for a server with a private CA. |
 | `FMS_INSECURE_SKIP_VERIFY` | bool | `false` | Skip certificate verification. Logs a warning on every start; prefer `FMS_CA_FILE`. |
+| `NOTES_REPLICA` | string | empty | `filemaker` turns on the FileMaker replica of the notes (see [FileMaker replica of the notes](#filemaker-replica-of-the-notes)). Empty means no replica. Needs `STORAGE=sqlite` and the `FMS_HOST`, `FMS_DATABASE`, `FMS_USERNAME` and `FMS_PASSWORD` settings. |
+| `FMS_NOTES_TABLE` | string | `Notes` | The replica of the notes. |
+| `FMS_PENDING_TABLE` | string | `PendingEdits` | Edits made in FileMaker, waiting for the sync. |
+| `FMS_INFO_TABLE` | string | `ScribbleInfo` | One record holding the schema version. |
+| `NOTES_REPLICA_INTERVAL` | duration | `30s` | How often the sync runs. It also runs about 2 seconds after any note write. |
 
 ## FileMaker storage
 
@@ -223,5 +228,13 @@ The account needs the `fmodata` extended privilege and create and view access to
 **Writes.** Log entries are sent in batches as one OData `$batch` request each, asking FileMaker not to send the records back (`Prefer: return=minimal`) to save the server's data-transfer allowance. A rejected batch (a 4xx response, for example a changed field) is dropped and logged at once; network errors and 5xx responses are retried.
 
 **Testing against a real server.** `go test -tags filemaker ./store` runs an integration test when `FMS_TEST_HOST`, `FMS_TEST_DATABASE`, `FMS_TEST_USERNAME` and `FMS_TEST_PASSWORD` (and optionally `FMS_TEST_CA_FILE`) are set. It uses its own variables so it never touches a service's database, and creates and deletes a temporary `LogsTest_<timestamp>` table; the account needs schema privileges for that.
+
+## FileMaker replica of the notes
+
+With `NOTES_REPLICA=filemaker`, a background sync keeps a copy of the notes in FileMaker, both ways (#66, [ADR 10](adr/0010-sqlite-master-filemaker-replica.md)). SQLite stays the master, so `STORAGE` must be `sqlite`; request logs are unaffected. The replica uses the same `FMS_*` connection settings as FileMaker storage.
+
+The tables, their fields and the account's privileges are in [docs/filemaker/notes.md](filemaker/notes.md). A FileMaker developer sets them up once; the service never creates them. A missing or wrong setup logs an error and turns the replica off, and the server still starts.
+
+`/healthz` adds a `replica` object, `{"status": "ok" | "behind" | "unreachable" | "off", "pending_push": <notes not yet pushed>, "last_sync": "<UTC>"}`, with a `reason` when it is unreachable or off. It still answers 200 while FileMaker is down, because SQLite is healthy. `scribble-server replica resync` pushes every note again, for a FileMaker file that was replaced or emptied.
 
 
