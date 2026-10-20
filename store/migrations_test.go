@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -94,7 +95,11 @@ func TestMigrate_AppliesPendingInOrder(t *testing.T) {
 
 	var ran []string
 	ms := []migration{
-		{name: "one", sql: `CREATE TABLE a (x INTEGER)`},
+		{name: "one", fn: func(tx *sql.Tx) error {
+			ran = append(ran, "one")
+			_, err := tx.Exec(`CREATE TABLE a (x INTEGER)`)
+			return err
+		}},
 		{name: "two", fn: func(tx *sql.Tx) error {
 			ran = append(ran, "two")
 			_, err := tx.Exec(`INSERT INTO a (x) VALUES (2)`)
@@ -118,8 +123,8 @@ func TestMigrate_AppliesPendingInOrder(t *testing.T) {
 	if got := userVersion(t, db); got != 2 {
 		t.Errorf("Expected user_version 2, got %d", got)
 	}
-	if len(ran) != 1 {
-		t.Errorf("Expected migration two to run once, ran %d times", len(ran))
+	if got := strings.Join(ran, ","); got != "one,two" {
+		t.Errorf("Expected each migration to run once in order, ran %q", got)
 	}
 }
 
@@ -163,6 +168,24 @@ func TestMigrate_FailureRollsBack(t *testing.T) {
 	}
 	if tableExists(t, db, "b") {
 		t.Error("Expected the failed migration's table to be rolled back")
+	}
+}
+
+func TestMigrate_FailureRollsBackVersionBump(t *testing.T) {
+	db := openRaw(t, filepath.Join(t.TempDir(), "m.db"))
+
+	// The version written inside the failed transaction must not survive.
+	ms := []migration{{name: "bump", fn: func(tx *sql.Tx) error {
+		if _, err := tx.Exec(`PRAGMA user_version = 7`); err != nil {
+			return err
+		}
+		return errors.New("boom")
+	}}}
+	if err := migrate(db, ms); err == nil {
+		t.Fatal("Expected migrate to fail")
+	}
+	if got := userVersion(t, db); got != 0 {
+		t.Errorf("Expected user_version 0, got %d", got)
 	}
 }
 

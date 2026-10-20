@@ -64,6 +64,7 @@ func migrate(db *sql.DB, ms []migration) error {
 	return nil
 }
 
+// apply runs m and sets user_version to version in one transaction.
 func apply(db *sql.DB, m migration, version int) error {
 	tx, err := db.Begin()
 	if err != nil {
