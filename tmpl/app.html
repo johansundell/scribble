@@ -11,6 +11,16 @@
 	<meta name="color-scheme" content="light dark" />
 	<meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
 	<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1e293b" />
+	{{/* The saved theme (#87), set before app.css loads so a pinned theme
+	never flashes the other one. theme.js does the rest. */}}
+	<script>
+		(function () {
+			try {
+				var theme = localStorage.getItem("theme");
+				if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+			} catch (e) {}
+		})();
+	</script>
 	<link rel="stylesheet" href="/assets/css/app.css" />
 	<link rel="icon" type="image/png" href="/assets/img/favicon.png" />
 	{{/* Add to home screen (#65). Online only, so no service worker. */}}
@@ -21,6 +31,7 @@
 	<meta name="apple-mobile-web-app-title" content="Scribble" />
 	<meta name="apple-mobile-web-app-status-bar-style" content="default" />
 	<title>{{.Title}} – Scribble</title>
+	<script src="/assets/js/theme.js" defer></script>
 	{{- if .LoggedIn}}
 	<script type="module" src="/assets/js/app.js"></script>
 	<script type="module" src="/assets/js/shortcuts.js"></script>
@@ -30,11 +41,15 @@
 <body class="web">
 	<header class="app-header">
 		<span class="app-name">Scribble</span>
-		{{- if .LoggedIn}}
-		<form method="post" action="/app/logout" class="logout-form">
-			<button type="submit" class="button">Log out</button>
-		</form>
-		{{- end}}
+		<div class="header-actions">
+			{{/* theme.js shows it and sets its icon and label. */}}
+			<button type="button" class="button theme-toggle" data-theme-toggle data-shortcut="theme" aria-label="Theme: System (click to switch)" title="Theme: System (click to switch)" hidden>💻</button>
+			{{- if .LoggedIn}}
+			<form method="post" action="/app/logout" class="logout-form">
+				<button type="submit" class="button">Log out</button>
+			</form>
+			{{- end}}
+		</div>
 	</header>
 	{{- with .Alert}}
 	<p class="pin-alert" role="alert">{{.Count}} wrong PINs since {{.First.Local.Format "2006-01-02 15:04"}}. If that wasn't you, change WEB_PIN.</p>
@@ -59,6 +74,7 @@
 					<tr><td><kbd data-alt>Alt</kbd>+<kbd>N</kbd>, or <kbd>n</kbd></td><td>New note</td></tr>
 					<tr><td><kbd>/</kbd></td><td>Search</td></tr>
 					<tr><td><kbd>F2</kbd></td><td>Rename the open note</td></tr>
+					<tr><td><kbd data-alt>Alt</kbd>+<kbd>T</kbd>, or <kbd>t</kbd></td><td>Switch theme: system, light, dark</td></tr>
 					<tr><td><kbd>?</kbd></td><td>Show these shortcuts</td></tr>
 					<tr><td><kbd>Esc</kbd></td><td>Close this, or leave the search box</td></tr>
 				</tbody>

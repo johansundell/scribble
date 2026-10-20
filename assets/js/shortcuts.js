@@ -51,6 +51,11 @@ function run(e) {
 	if (e.altKey && !mod && (key === "n" || (e.key === "Dead" && e.code === "KeyN" && !typing(e.target)))) {
 		return press("new");
 	}
+	// Option+T on macOS types †, so outside a text field it goes by the
+	// key's place.
+	if (e.altKey && !mod && (key === "t" || (e.code === "KeyT" && !typing(e.target)))) {
+		return press("theme");
+	}
 	if (mod || e.altKey) return false;
 	if (e.key === "Escape" && e.target === shortcutEl("search")) {
 		// Leaves the search box, keeping the filter.
@@ -61,6 +66,8 @@ function run(e) {
 	switch (e.key) {
 		case "n":
 			return press("new");
+		case "t":
+			return press("theme");
 		case "/":
 			el = shortcutEl("search");
 			if (!el) return false;
