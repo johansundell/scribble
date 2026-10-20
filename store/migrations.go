@@ -60,10 +60,15 @@ CREATE UNIQUE INDEX notes_share_token ON notes(share_token);
 // migrate applies the migrations the database's user_version has not yet
 // seen, in order, each in its own transaction. It stops at the first failure;
 // that migration is rolled back and user_version stays at the last success.
+// A user_version above len(ms) means a newer release migrated the database;
+// migrate refuses it rather than run this binary against an unknown schema.
 func migrate(db *sql.DB, ms []migration) error {
 	var version int
 	if err := db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		return fmt.Errorf("read schema version: %w", err)
+	}
+	if version > len(ms) {
+		return fmt.Errorf("database schema version %d is newer than this binary (%d); upgrade, or restore a backup taken before the upgrade", version, len(ms))
 	}
 	for i := version; i < len(ms); i++ {
 		if err := apply(db, ms[i], i+1); err != nil {
