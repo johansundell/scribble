@@ -5,19 +5,25 @@
 // page follows the system.
 (function () {
 	"use strict";
-	var THEMES = ["system", "light", "dark"];
-	var LABELS = { system: "System", light: "Light", dark: "Dark" };
-	var ICONS = { system: "💻", light: "☀️", dark: "🌙" };
-	// app.css's --surface in each theme: the header's colour.
-	var BAR = { light: "#ffffff", dark: "#1e293b" };
+	var THEMES = {
+		system: { label: "System", icon: "💻" },
+		light: { label: "Light", icon: "☀️" },
+		dark: { label: "Dark", icon: "🌙" },
+	};
+	var ORDER = ["system", "light", "dark"];
 
 	var button = document.querySelector("[data-theme-toggle]");
 	if (!button) return;
-	var theme = saved();
+	var bars = document.querySelectorAll('meta[name="theme-color"]');
+	// Each meta's colour for its own media query, for system mode.
+	bars.forEach(function (m) {
+		m.dataset.system = m.content;
+	});
+	var theme = savedTheme();
 	apply();
 	button.hidden = false;
 	button.addEventListener("click", function () {
-		theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length];
+		theme = ORDER[(ORDER.indexOf(theme) + 1) % ORDER.length];
 		try {
 			localStorage.setItem("theme", theme);
 		} catch (e) {
@@ -26,26 +32,27 @@
 		apply();
 	});
 
-	function saved() {
+	function savedTheme() {
 		try {
 			var t = localStorage.getItem("theme");
-			if (THEMES.indexOf(t) >= 0) return t;
+			if (ORDER.indexOf(t) >= 0) return t;
 		} catch (e) {}
 		return "system";
 	}
 
-	// apply sets data-theme, the button and theme-color. In system mode each
-	// theme-color meta keeps to its own media query, so the bars follow the
-	// system as app.css does.
+	// apply sets data-theme, the button and theme-color. A pinned theme gives
+	// the bars the header's colour (--surface); in system mode each meta keeps
+	// to its media query, so the bars follow the system as app.css does.
 	function apply() {
 		var root = document.documentElement;
 		if (theme === "system") delete root.dataset.theme;
 		else root.dataset.theme = theme;
-		document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) {
-			m.content = BAR[theme !== "system" ? theme : /dark/.test(m.media) ? "dark" : "light"];
+		var surface = getComputedStyle(root).getPropertyValue("--surface").trim();
+		bars.forEach(function (m) {
+			m.content = theme === "system" ? m.dataset.system : surface;
 		});
-		var label = "Theme: " + LABELS[theme] + " (click to switch)";
-		button.textContent = ICONS[theme];
+		var label = "Theme: " + THEMES[theme].label + " (click to switch)";
+		button.textContent = THEMES[theme].icon;
 		button.setAttribute("aria-label", label);
 		button.title = label;
 	}

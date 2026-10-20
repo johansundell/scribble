@@ -51,7 +51,8 @@ function run(e) {
 	if (e.altKey && !mod && (key === "n" || (e.key === "Dead" && e.code === "KeyN" && !typing(e.target)))) {
 		return press("new");
 	}
-	// Option+T on macOS types †, so it goes by the key's place, as above.
+	// Option+T on macOS types †, so outside a text field it goes by the
+	// key's place.
 	if (e.altKey && !mod && (key === "t" || (e.code === "KeyT" && !typing(e.target)))) {
 		return press("theme");
 	}

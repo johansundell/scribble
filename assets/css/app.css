@@ -15,7 +15,7 @@
 }
 
 /* Dark follows the system unless light is pinned, or is pinned itself
-   (#87): theme.js sets data-theme. Its BAR colours are --surface. */
+   (#87): theme.js sets data-theme. The two dark lists must match. */
 @media (prefers-color-scheme: dark) {
 	:root:not([data-theme="light"]) {
 		--bg: #0f172a;

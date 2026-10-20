@@ -10,7 +10,7 @@ The web app at `/app` should work like the desktop app in a browser, on phones t
 ## Decision
 
 - Pages are **Go templates** served under `/app`, embedded in the binary like the existing `tmpl/` templates. The web handlers call the store directly.
-- A little **plain JavaScript** is used only where it is needed: live search, the unsaved-changes check, saving without losing the text, asking before a delete, keyboard shortcuts and the editor toolbar. There is no build step, no JavaScript framework and no SPA.
+- A little **plain JavaScript** is used only where it is needed: live search, the unsaved-changes check, saving without losing the text, asking before a delete, keyboard shortcuts, the editor toolbar and the theme switcher (an inline script in `<head>` sets the saved theme before the page paints). There is no build step, no JavaScript framework and no SPA.
 - Markdown is rendered **in Go** with goldmark, with raw HTML escaped, so a note can't put scripts into the page.
 - No external fonts or scripts. Copied third-party code (GitHub's MIT-licensed `markdown-toolbar-element` and `paste-markdown`) lives in the repo.
 
