@@ -44,15 +44,16 @@ func GetRoutes(handler *handlers.Handler) Routes {
 		},
 		// Notes. UseLogger is deliberately off: the request log stores full
 		// request and response bodies, which would copy every note into it.
-		Route{Name: "ListNotes", Method: "GET", Pattern: "/notes", HandlerFunc: handler.ListNotes, UseAuth: true},
-		Route{Name: "CreateNote", Method: "POST", Pattern: "/notes", HandlerFunc: handler.CreateNote, UseAuth: true},
-		Route{Name: "GetNote", Method: "GET", Pattern: "/notes/:id", HandlerFunc: handler.GetNote, UseAuth: true},
-		Route{Name: "UpdateNote", Method: "PUT", Pattern: "/notes/:id", HandlerFunc: handler.UpdateNote, UseAuth: true},
-		Route{Name: "DeleteNote", Method: "DELETE", Pattern: "/notes/:id", HandlerFunc: handler.DeleteNote, UseAuth: true},
-		Route{Name: "NoteBacklinks", Method: "GET", Pattern: "/notes/:id/backlinks", HandlerFunc: handler.NoteBacklinks, UseAuth: true},
-		Route{Name: "RenameNote", Method: "POST", Pattern: "/notes/:id/rename", HandlerFunc: handler.RenameNote, UseAuth: true},
-		Route{Name: "NoteChanges", Method: "GET", Pattern: "/changes", HandlerFunc: handler.NoteChanges, UseAuth: true},
-		Route{Name: "ListProjects", Method: "GET", Pattern: "/projects", HandlerFunc: handler.ListProjects, UseAuth: true},
+		// CheckClient refuses clients too old for the API (ADR 8).
+		Route{Name: "ListNotes", Method: "GET", Pattern: "/notes", HandlerFunc: handler.ListNotes, UseAuth: true, CheckClient: true},
+		Route{Name: "CreateNote", Method: "POST", Pattern: "/notes", HandlerFunc: handler.CreateNote, UseAuth: true, CheckClient: true},
+		Route{Name: "GetNote", Method: "GET", Pattern: "/notes/:id", HandlerFunc: handler.GetNote, UseAuth: true, CheckClient: true},
+		Route{Name: "UpdateNote", Method: "PUT", Pattern: "/notes/:id", HandlerFunc: handler.UpdateNote, UseAuth: true, CheckClient: true},
+		Route{Name: "DeleteNote", Method: "DELETE", Pattern: "/notes/:id", HandlerFunc: handler.DeleteNote, UseAuth: true, CheckClient: true},
+		Route{Name: "NoteBacklinks", Method: "GET", Pattern: "/notes/:id/backlinks", HandlerFunc: handler.NoteBacklinks, UseAuth: true, CheckClient: true},
+		Route{Name: "RenameNote", Method: "POST", Pattern: "/notes/:id/rename", HandlerFunc: handler.RenameNote, UseAuth: true, CheckClient: true},
+		Route{Name: "NoteChanges", Method: "GET", Pattern: "/changes", HandlerFunc: handler.NoteChanges, UseAuth: true, CheckClient: true},
+		Route{Name: "ListProjects", Method: "GET", Pattern: "/projects", HandlerFunc: handler.ListProjects, UseAuth: true, CheckClient: true},
 		// The web app (Web: registered only when WEB_PIN is set). It logs in
 		// with the PIN, not AUTH_TOKEN, and is never request-logged: the log
 		// would copy PINs and note bodies.

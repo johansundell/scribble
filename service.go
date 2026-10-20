@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -154,13 +155,15 @@ func (p *program) run(startup chan<- error) error {
 		return err
 	}
 	timeoutHandler := http.TimeoutHandler(routerEngine, settings.Timeout, "Timeout")
-	var rootHandler http.Handler = timeoutHandler
-	if Version != "" {
-		rootHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Set out here too, so a timed-out request's 503 carries them.
+	apiLevel := strconv.Itoa(router.APILevel)
+	rootHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if Version != "" {
 			w.Header().Set("X-Version", Version)
-			timeoutHandler.ServeHTTP(w, r)
-		})
-	}
+		}
+		w.Header().Set(router.APIHeader, apiLevel)
+		timeoutHandler.ServeHTTP(w, r)
+	})
 
 	srv := &http.Server{
 		Handler: rootHandler,

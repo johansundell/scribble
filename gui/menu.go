@@ -136,6 +136,12 @@ func (ui *UI) typedKey(e *fyne.KeyEvent) bool {
 
 // showAbout opens the About Scribble dialog.
 func (ui *UI) showAbout() {
+	dialog.NewCustom("About Scribble", "Close", ui.aboutContent(), ui.w).Show()
+}
+
+// aboutContent is the About dialog's content, with a link to a newer
+// release when the server runs one.
+func (ui *UI) aboutContent() *fyne.Container {
 	u, _ := url.Parse(repoURL)
 	content := container.NewVBox(
 		widget.NewLabelWithStyle("Scribble "+appVersion(), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
@@ -144,7 +150,11 @@ func (ui *UI) showAbout() {
 		widget.NewHyperlink(repoURL, u),
 		widget.NewLabel(ui.c.BaseURL),
 	)
-	dialog.NewCustom("About Scribble", "Close", content, ui.w).Show()
+	if ui.newRelease != "" {
+		release, _ := url.Parse(releaseURL + ui.newRelease)
+		content.Add(widget.NewHyperlink(releaseText(ui.newRelease), release))
+	}
+	return content
 }
 
 func appVersion() string {

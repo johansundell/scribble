@@ -112,9 +112,44 @@ deliberately **not** request-logged (the template's request log stores full
 bodies, which would copy every note into it). Errors are plain-text status
 text, like the rest of the service.
 
-`GET /healthz` (also `GET /`) needs no token. It reports the version and the
-storage status, as JSON when the request sends `Accept: application/json`,
-and answers **503** when the storage does not respond.
+`GET /healthz` (also `GET /`) needs no token. It reports the version, the
+API level (`"api"`) and the storage status, as JSON when the request sends
+`Accept: application/json`, and answers **503** when the storage does not
+respond.
+
+### API level and old clients
+
+Every response carries `X-Version` (the release, such as `v0.0.12`) and
+`X-Scribble-API` (the API level, an integer). The policy
+([ADR 8](docs/adr/0008-api-level-and-minimum-client-level.md)):
+
+- **The API only grows.** Adding endpoints or fields raises the API level by
+  one. There are no versioned paths.
+- **A breaking change raises the minimum client level.** Renaming or
+  removing a field, or changing what one means, raises `minClientAPI` in
+  `router/apilevel.go` to the new API level.
+
+Clients say who they are in `X-Scribble-Client: <name>/<api level>
+<version>`, such as `cli/1 v0.0.12` or `gui/1 v0.0.12`. A request without
+it counts as level 1, which covers clients released before the header.
+A client below the minimum gets **426 Upgrade Required** from the note
+endpoints, `/changes` and `/projects`, with this plain-text body:
+
+```
+This Scribble client is too old for this server. Download the latest release: https://github.com/johansundell/scribble/releases/latest
+```
+
+Old clients print it as it is. The server logs each refusal as a warning
+with the client string and IP, at most once per client string per hour.
+`/healthz`, `/` and `/assets` are never refused.
+
+The CLI then exits with an upgrade message. The desktop app shows the
+message with a download button, sets its indicator to "Update needed",
+stops syncing and goes read-only; edits still queued on this computer
+stay there for a newer version to send. When the server runs a newer
+release than the app, the app shows "Scribble vX.Y.Z is available" in the
+status bar and in Help → About; `scribble version` says "update
+available".
 
 | Method | Path | Notes |
 | --- | --- | --- |
@@ -355,7 +390,7 @@ SCRIBBLE_WEBDRIVER=http://localhost:4444 SCRIBBLE_WEBDRIVER_HOST=host.docker.int
       with a rollback if `/healthz` doesn't answer (#44)
 - [x] Backups: `scribble-server backup` snapshots the database while it
       runs, keeps 7 days, and runs daily from cron (#62)
-- [ ] API level and minimum client version, so the server can tell
+- [x] API level and minimum client version, so the server can tell
       desktop apps and CLIs that are too old to upgrade (#57)
 - [ ] Note history: every change keeps the old text, with restore and
       undelete on the server (#55) and `scribble history / diff / restore /

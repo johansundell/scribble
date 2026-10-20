@@ -271,11 +271,11 @@ func (s *Store) ack(id, from, to int64) {
 }
 
 // retryable reports whether the server's answer is a passing trouble, or
-// about the token rather than the edit itself, so the edit is worth
-// sending again.
+// about the token or this client being too old rather than the edit itself,
+// so the edit is worth sending again (by a newer version, for a 426).
 func retryable(e *client.Error) bool {
 	switch e.Status {
-	case http.StatusUnauthorized, http.StatusForbidden, http.StatusRequestTimeout, http.StatusTooManyRequests:
+	case http.StatusUnauthorized, http.StatusForbidden, http.StatusRequestTimeout, http.StatusUpgradeRequired, http.StatusTooManyRequests:
 		return true
 	}
 	return e.Status >= 500

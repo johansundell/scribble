@@ -7,6 +7,10 @@ import (
 	"github.com/johansundell/scribble/httperror"
 )
 
+// APILevelKey is the gin context key the router stores its API level under,
+// for HealthCheck to report.
+const APILevelKey = "scribble.apiLevel"
+
 // HealthCheck reports the service and storage state. It answers 503 when
 // the storage ping fails, so health checks see the service as unhealthy.
 func (h *Handler) HealthCheck(c *gin.Context) error {
@@ -22,6 +26,9 @@ func (h *Handler) HealthCheck(c *gin.Context) error {
 		"name":     h.nameOfService,
 		"version":  h.versionOfService,
 		"dbStatus": dbStatus,
+	}
+	if level, ok := c.Get(APILevelKey); ok {
+		data["api"] = level
 	}
 
 	// JSON when the client prefers it (Accept), HTML otherwise, including

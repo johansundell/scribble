@@ -39,6 +39,7 @@ Usage:
   scribble import <path...>          import Tomboy .note XML files or directories
   scribble rm <title>                delete a note
   scribble completion [bash]         output shell completion script
+  scribble version                   print the client's and the server's versions
 
 Environment:
   SCRIBBLE_URL    server address (default http://localhost:8080)
@@ -47,12 +48,20 @@ Environment:
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
-		if client.IsUnauthorized(err) {
-			err = fmt.Errorf("the server rejected SCRIBBLE_TOKEN")
-		}
-		fmt.Fprintln(os.Stderr, "scribble:", err)
+		fmt.Fprintln(os.Stderr, errorLine(err))
 		os.Exit(1)
 	}
+}
+
+// errorLine is what main prints for err.
+func errorLine(err error) string {
+	switch {
+	case client.IsUnauthorized(err):
+		err = fmt.Errorf("the server rejected SCRIBBLE_TOKEN")
+	case client.IsUpgradeRequired(err):
+		err = fmt.Errorf("this version (%s) is too old for the server; download the latest from %s", Version, client.ReleasesURL)
+	}
+	return "scribble: " + err.Error()
 }
 
 func run(args []string) error {
@@ -67,17 +76,21 @@ func runWith(stdout io.Writer, args []string) error {
 	if args[0] == "completion" {
 		return cmdCompletion(stdout, args[1:])
 	}
-	token := os.Getenv("SCRIBBLE_TOKEN")
-	if token == "" {
-		return fmt.Errorf("SCRIBBLE_TOKEN is not set")
-	}
 	baseURL := os.Getenv("SCRIBBLE_URL")
 	if baseURL == "" {
 		baseURL = "http://localhost:8080"
 	}
+	token := os.Getenv("SCRIBBLE_TOKEN")
 	c := client.New(baseURL, token)
+	c.Name, c.Version = "cli", Version
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
+	if args[0] == "version" {
+		return cmdVersion(ctx, c, stdout) // /healthz needs no token
+	}
+	if token == "" {
+		return fmt.Errorf("SCRIBBLE_TOKEN is not set")
+	}
 
 	cmd, rest := args[0], args[1:]
 	switch cmd {
@@ -153,6 +166,22 @@ func runWith(stdout io.Writer, args []string) error {
 		})
 	}
 	return fmt.Errorf("unknown command %q (try: scribble help)", cmd)
+}
+
+// cmdVersion prints the client's and the server's versions and API levels,
+// and says when the server runs a newer release. Only this command says so,
+// so scripts using the others aren't affected.
+func cmdVersion(ctx context.Context, c *client.Client, w io.Writer) error {
+	fmt.Fprintf(w, "client %s (API level %d)\n", Version, client.APILevel)
+	h, err := c.Health(ctx)
+	if err != nil {
+		return fmt.Errorf("cannot ask the server for its version: %w", err)
+	}
+	fmt.Fprintf(w, "server %s (API level %d)\n", h.Version, h.API)
+	if client.NewerRelease(Version, h.Version) {
+		fmt.Fprintf(w, "update available: %s\n", client.ReleasesURL)
+	}
+	return nil
 }
 
 // withNote looks up the note named by args[0] and calls fn. want is the

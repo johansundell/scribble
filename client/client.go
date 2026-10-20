@@ -13,16 +13,36 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/johansundell/scribble/notes"
 )
+
+// APILevel is the server API level this client is written for. The CLI and
+// the GUI share it. Raise it with the server's when the client starts using
+// what a new level adds (ADR 8).
+const APILevel = 1
+
+// ReleasesURL is where the latest release can be downloaded.
+const ReleasesURL = "https://github.com/johansundell/scribble/releases/latest"
 
 // Client talks to one scribble server.
 type Client struct {
 	BaseURL string // e.g. http://localhost:8080
 	Token   string // the server's AUTH_TOKEN
 	HTTP    *http.Client
+
+	// Name, APILevel and Version are sent in X-Scribble-Client, so the
+	// server can refuse clients that are too old. Name is "cli" or "gui";
+	// APILevel 0 means the APILevel constant, and Version "" means "dev".
+	Name     string
+	APILevel int
+	Version  string
+
+	mu            sync.Mutex
+	serverVersion string // X-Version of the last answer
+	serverAPI     int    // X-Scribble-API of the last answer
 }
 
 // New returns a Client with a sensible timeout.
@@ -53,6 +73,10 @@ func IsTitleTaken(err error) bool   { return hasStatus(err, http.StatusConflict)
 func IsStale(err error) bool        { return hasStatus(err, http.StatusPreconditionFailed) }
 func IsUnauthorized(err error) bool { return hasStatus(err, http.StatusUnauthorized) }
 
+// IsUpgradeRequired reports whether the server refused this client as too
+// old for its API (426).
+func IsUpgradeRequired(err error) bool { return hasStatus(err, http.StatusUpgradeRequired) }
+
 // IsUnreachable reports whether err is a failure to get an answer from the
 // server at all (no network, server down, timeout), rather than a refusal.
 func IsUnreachable(err error) bool {
@@ -81,7 +105,7 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	if in != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := c.HTTP.Do(req)
+	resp, err := c.send(req)
 	if err != nil {
 		return err
 	}
@@ -198,4 +222,103 @@ func (c *Client) Changes(ctx context.Context, since int64) (changed []notes.Note
 	}
 	err = c.do(ctx, "GET", "/changes", url.Values{"since": {strconv.FormatInt(since, 10)}}, nil, &resp)
 	return resp.Notes, resp.LatestSeq, err
+}
+
+// send adds X-Scribble-Client to req, sends it and notes the server's
+// version and API level from the answer.
+func (c *Client) send(req *http.Request) (*http.Response, error) {
+	level, version := c.APILevel, c.Version
+	if level == 0 {
+		level = APILevel
+	}
+	if version == "" {
+		version = "dev"
+	}
+	req.Header.Set("X-Scribble-Client", fmt.Sprintf("%s/%d %s", c.Name, level, version))
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	// An answer without the headers (a proxy's 502, say) keeps what we knew.
+	if v := resp.Header.Get("X-Version"); v != "" {
+		api, _ := strconv.Atoi(resp.Header.Get("X-Scribble-API"))
+		c.mu.Lock()
+		c.serverVersion, c.serverAPI = v, api
+		c.mu.Unlock()
+	}
+	return resp, nil
+}
+
+// ServerVersion is the server's version and API level as of its last
+// answer: "" and 0 before the first one.
+func (c *Client) ServerVersion() (version string, api int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.serverVersion, c.serverAPI
+}
+
+// Health is what the server reports at /healthz.
+type Health struct {
+	Version string `json:"version"`
+	API     int    `json:"api"`
+}
+
+// Health asks the server for its version and API level. It needs no token,
+// and the server answers it whatever the client's level.
+func (c *Client) Health(ctx context.Context) (Health, error) {
+	var h Health
+	req, err := http.NewRequestWithContext(ctx, "GET", c.BaseURL+"/healthz", nil)
+	if err != nil {
+		return h, err
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.send(req)
+	if err != nil {
+		return h, err
+	}
+	defer resp.Body.Close()
+	// 503 means the server's storage is down; it still says who it is.
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusServiceUnavailable {
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return h, &Error{Status: resp.StatusCode, Message: strings.TrimSpace(string(msg))}
+	}
+	return h, json.NewDecoder(resp.Body).Decode(&h)
+}
+
+// NewerRelease reports whether server is a newer release than own. Both are
+// semver versions ("v1.2.3", the "v" optional); anything after the patch
+// number is ignored. "dev" and versions that don't parse are never newer,
+// nor older.
+func NewerRelease(own, server string) bool {
+	a, okA := parseVersion(own)
+	b, okB := parseVersion(server)
+	if !okA || !okB {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return b[i] > a[i]
+		}
+	}
+	return false
+}
+
+func parseVersion(v string) ([3]int, bool) {
+	var out [3]int
+	v = strings.TrimPrefix(v, "v")
+	if i := strings.IndexAny(v, "-+"); i >= 0 {
+		v = v[:i]
+	}
+	parts := strings.Split(v, ".")
+	if len(parts) != 3 {
+		return out, false
+	}
+	for i, p := range parts {
+		n, err := strconv.Atoi(p)
+		if err != nil || n < 0 {
+			return out, false
+		}
+		out[i] = n
+	}
+	return out, true
 }

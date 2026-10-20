@@ -519,3 +519,31 @@ func TestRejectedTokenKeepsTheEditQueued(t *testing.T) {
 		t.Fatalf("pending %+v, %v; want it queued for retry", e, ok)
 	}
 }
+
+// TestTooOldClientKeepsTheEditQueued checks that a server that refuses this
+// client as too old (426) stops the sync and leaves the edit queued, unmarked,
+// on disk, for a newer version of the app to send.
+func TestTooOldClientKeepsTheEditQueued(t *testing.T) {
+	c, net := newServer(t)
+	g := create(t, c, "# Groceries\nmilk")
+	path := filepath.Join(t.TempDir(), "cache.json")
+	s := open(t, path)
+	syncNow(t, s, c)
+	if _, err := s.Queue(g.ID, "# Groceries\nmilk and eggs", g.Revision); err != nil {
+		t.Fatal(err)
+	}
+
+	net.status.Store(http.StatusUpgradeRequired)
+	r, err := s.Sync(context.Background(), c)
+	if !client.IsUpgradeRequired(err) {
+		t.Fatalf("sync of a too-old client returned %v", err)
+	}
+	if len(r.Failed) != 0 {
+		t.Errorf("the edit was reported refused: %v", r.Failed)
+	}
+	s.Close()
+	s = open(t, path)
+	if e, ok := s.Pending(g.ID); !ok || e.Err != nil || e.Body != "# Groceries\nmilk and eggs" {
+		t.Fatalf("pending %+v, %v; want it still queued on disk", e, ok)
+	}
+}

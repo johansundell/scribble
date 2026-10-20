@@ -30,7 +30,7 @@ _scribble() {
         cword=$COMP_CWORD
     fi
 
-    local commands="new show edit append ls search links backlinks projects rename autolink import rm completion help"
+    local commands="new show edit append ls search links backlinks projects rename autolink import rm completion version help"
 
     if [[ $cword -eq 1 ]]; then
         COMPREPLY=( $(compgen -W "$commands" -- "$cur") )

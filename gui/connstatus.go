@@ -11,7 +11,7 @@ import (
 
 // ConnStatus is the connection status indicator at the bottom-right of the
 // window. It displays a colored dot and text ("Connecting...", "Connected",
-// "Offline") and triggers an immediate sync when clicked.
+// "Offline", "Update needed") and triggers an immediate sync when clicked.
 type ConnStatus struct {
 	widget.BaseWidget
 	ui      *UI
@@ -64,6 +64,9 @@ func (ui *UI) setOffline() {
 }
 
 func (ui *UI) retrySync() {
+	if ui.outdated.Load() {
+		return // a too-old version never syncs again
+	}
 	ui.setConnecting()
 	ui.Sync()
 }
