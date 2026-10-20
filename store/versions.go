@@ -56,15 +56,16 @@ func (s *SQLStore) recordVersion(ctx context.Context, x dbx, now time.Time, id i
 	ts := s.timeArg(now)
 	if reason == reasonEdit {
 		var rev, count int64
-		var last, created string
+		var lastReason, created string
 		err := x.QueryRowContext(ctx, `SELECT revision, reason, created_at,
 			(SELECT COUNT(*) FROM note_versions WHERE note_id = ?)
-			FROM note_versions WHERE note_id = ? ORDER BY revision DESC LIMIT 1`, id, id).Scan(&rev, &last, &created, &count)
+			FROM note_versions WHERE note_id = ? ORDER BY revision DESC LIMIT 1`, id, id).Scan(&rev, &lastReason, &created, &count)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
-		if t, perr := time.Parse(sqliteTimeLayout, created); err == nil && perr == nil &&
-			last == reasonEdit && count > 1 && now.Sub(t) < versionMergeWindow {
+		lastAt, _ := time.Parse(sqliteTimeLayout, created) // zero, so no merge, when unreadable
+		merge := err == nil && lastReason == reasonEdit && count > 1 && now.Sub(lastAt) < versionMergeWindow
+		if merge {
 			_, err := x.ExecContext(ctx, `UPDATE note_versions SET (revision, title, body, deleted, updated_at) =
 				(SELECT revision, title, body, deleted, ? FROM notes WHERE id = ?)
 				WHERE note_id = ? AND revision = ?`, ts, id, id, rev)
@@ -138,15 +139,12 @@ func (s *SQLStore) RestoreVersion(ctx context.Context, id, rev, baseRev int64) (
 	if baseRev > 0 && cur.Revision != baseRev {
 		return nil, ErrStaleRevision
 	}
-	var body string
-	err = tx.QueryRowContext(ctx, `SELECT body FROM note_versions WHERE note_id = ? AND revision = ?`, id, rev).Scan(&body)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrVersionNotFound
-	}
+	v, err := scanVersion(tx.QueryRowContext(ctx,
+		`SELECT `+versionCols+` FROM note_versions WHERE note_id = ? AND revision = ?`, id, rev))
 	if err != nil {
 		return nil, err
 	}
-	if err := s.writeNote(ctx, tx, time.Now(), id, body, reasonRestore); err != nil {
+	if err := s.writeNote(ctx, tx, time.Now(), id, v.Body, reasonRestore); err != nil {
 		return nil, err
 	}
 	n, err := getNote(ctx, tx, id)

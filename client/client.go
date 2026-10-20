@@ -224,8 +224,8 @@ func (c *Client) Changes(ctx context.Context, since int64) (changed []notes.Note
 	return resp.Notes, resp.LatestSeq, err
 }
 
-// Versions returns note id's kept versions, newest first, without bodies
-// (server API level 2).
+// Versions returns note id's kept versions, newest first, without bodies.
+// It and the other history calls below need server API level 2.
 func (c *Client) Versions(ctx context.Context, id int64) ([]notes.Version, error) {
 	var out []notes.Version
 	return out, c.do(ctx, "GET", notePath(id, "/versions"), nil, nil, &out)

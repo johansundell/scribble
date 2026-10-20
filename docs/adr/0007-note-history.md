@@ -14,6 +14,7 @@ An edit, a rename's link rewrite or a delete can lose text, and nothing on the s
 - **Kept forever.** No pruning, and deleting a note keeps its versions.
 - **Merge window:** an `edit` replaces the newest version instead of adding one when that version is also an `edit`, was created less than 5 minutes ago, and isn't the note's only version. So a burst of saves becomes one version, and the version from before the burst is kept. Other reasons are never merged.
 - **Restore is a new revision** with the old text, with the same 412 rule as a normal save. Deleted notes can be listed and **undeleted**.
+- A deleted note's `deleted_at` is its `notes.updated_at`. For every delete since history exists that is the delete version's `created_at`; for a note deleted before, it is still the delete time, where its backfilled version only has the note's creation time.
 
 ## Consequences
 
