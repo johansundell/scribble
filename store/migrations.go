@@ -46,6 +46,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS notes_title ON notes(lower(title)) WHERE delet
 CREATE INDEX IF NOT EXISTS notes_seq ON notes(seq);
 `,
 	},
+	{
+		// A note's public share link (#83); NULL while it is not shared.
+		// ALTER TABLE cannot add a UNIQUE column, so the index enforces it.
+		name: "share_token",
+		sql: `
+ALTER TABLE notes ADD COLUMN share_token TEXT;
+CREATE UNIQUE INDEX notes_share_token ON notes(share_token);
+`,
+	},
 }
 
 // migrate applies the migrations the database's user_version has not yet

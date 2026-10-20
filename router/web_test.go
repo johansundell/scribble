@@ -485,7 +485,8 @@ func TestWeb_NotRequestLogged(t *testing.T) {
 		if route.UseLogger || route.UseAuth {
 			t.Errorf("web route %q: UseLogger=%v UseAuth=%v", route.Name, route.UseLogger, route.UseAuth)
 		}
-		if !strings.HasPrefix(route.Pattern, "/app") {
+		// Share links (#83) are the one web page outside /app.
+		if !strings.HasPrefix(route.Pattern, "/app") && route.Pattern != "/s/:token" {
 			t.Errorf("web route %q is outside /app: %s", route.Name, route.Pattern)
 		}
 	}

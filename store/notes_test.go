@@ -152,3 +152,76 @@ func TestNotesProjects(t *testing.T) {
 		t.Errorf("'%%' must be literal: %+v", list)
 	}
 }
+
+func TestShareNote(t *testing.T) {
+	ctx := context.Background()
+	s := newNoteStore(t)
+	n, err := s.CreateNote(ctx, "# Shared\nbody")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if tok, err := s.NoteShareToken(ctx, n.ID); err != nil || tok != "" {
+		t.Fatalf("a new note is shared: %q %v", tok, err)
+	}
+	tok, err := s.ShareNote(ctx, n.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tok) != 32 || strings.Trim(tok, "0123456789abcdef") != "" {
+		t.Errorf("token %q is not 128 bits of hex", tok)
+	}
+	// Sharing again keeps the link.
+	if again, err := s.ShareNote(ctx, n.ID); err != nil || again != tok {
+		t.Errorf("share again: %q %v, want %q", again, err, tok)
+	}
+	if got, err := s.NoteShareToken(ctx, n.ID); err != nil || got != tok {
+		t.Errorf("NoteShareToken: %q %v, want %q", got, err, tok)
+	}
+	got, err := s.GetSharedNote(ctx, tok)
+	if err != nil || got.ID != n.ID || got.Body != n.Body {
+		t.Fatalf("GetSharedNote: %v %+v", err, got)
+	}
+	// Sharing is not an edit: synced clients have nothing to fetch.
+	if got.Revision != n.Revision || got.Seq != n.Seq {
+		t.Errorf("sharing changed revision or seq: %+v", got)
+	}
+
+	other, _ := s.CreateNote(ctx, "# Other")
+	otherTok, err := s.ShareNote(ctx, other.ID)
+	if err != nil || otherTok == tok {
+		t.Errorf("second note's token %q (%v) repeats %q", otherTok, err, tok)
+	}
+
+	if err := s.UnshareNote(ctx, n.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.GetSharedNote(ctx, tok); !errors.Is(err, ErrNoteNotFound) {
+		t.Errorf("revoked token: want ErrNoteNotFound, got %v", err)
+	}
+	if tok, _ := s.NoteShareToken(ctx, n.ID); tok != "" {
+		t.Errorf("token %q left after unsharing", tok)
+	}
+	// Sharing anew gives a new link; the old one stays dead.
+	if fresh, err := s.ShareNote(ctx, n.ID); err != nil || fresh == tok {
+		t.Errorf("reshare: %q %v, want a new token", fresh, err)
+	}
+
+	for _, bad := range []string{"", "nope"} {
+		if _, err := s.GetSharedNote(ctx, bad); !errors.Is(err, ErrNoteNotFound) {
+			t.Errorf("GetSharedNote(%q): want ErrNoteNotFound, got %v", bad, err)
+		}
+	}
+	if err := s.DeleteNote(ctx, other.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.GetSharedNote(ctx, otherTok); !errors.Is(err, ErrNoteNotFound) {
+		t.Errorf("deleted note's token: want ErrNoteNotFound, got %v", err)
+	}
+	if _, err := s.ShareNote(ctx, other.ID); !errors.Is(err, ErrNoteNotFound) {
+		t.Errorf("share deleted note: want ErrNoteNotFound, got %v", err)
+	}
+	if err := s.UnshareNote(ctx, other.ID); !errors.Is(err, ErrNoteNotFound) {
+		t.Errorf("unshare deleted note: want ErrNoteNotFound, got %v", err)
+	}
+}

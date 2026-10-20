@@ -604,6 +604,29 @@ body.web:has(.app-main) {
 	overflow-wrap: anywhere;
 }
 
+/* The share pane's QR code (#83). It stays black on white in dark mode,
+   which is what phone cameras read best. */
+.share .qr {
+	width: 100%;
+	max-width: 16rem;
+	height: auto;
+	border-radius: 8px;
+}
+
+.share form {
+	margin: 0;
+}
+
+/* A shared note's public page: just the note. */
+.shared {
+	flex: 1;
+	width: 100%;
+	max-width: 48rem;
+	margin: 0 auto;
+	padding: 1.5rem 1rem;
+	overflow-wrap: anywhere;
+}
+
 .draft-label {
 	color: var(--muted);
 	font-weight: 600;

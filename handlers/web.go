@@ -68,11 +68,12 @@ type webPage struct {
 	NoteHTML  template.HTML
 	Backlinks []notes.Note
 	Message   string
-	// Edit is the editor, and Rename and Delete their forms, shown in place
-	// of the note.
+	// Edit is the editor, Rename and Delete their forms and Share the
+	// share pane, shown in place of the note.
 	Edit   *noteEditor
 	Rename *noteForm
 	Delete *noteForm
+	Share  *shareForm
 	// The list's filter: Query searches titles and bodies, and Project (a
 	// name, without '#') keeps the notes tagged with it. Projects are the
 	// ones to choose from.
@@ -101,7 +102,7 @@ func (p webPage) Filter() string {
 // NotePane reports whether the page is about a note (or says why there is
 // none), so that phones show it in place of the list (#65).
 func (p webPage) NotePane() bool {
-	return p.Note != nil || p.Edit != nil || p.Rename != nil || p.Delete != nil || p.Message != ""
+	return p.Note != nil || p.Edit != nil || p.Rename != nil || p.Delete != nil || p.Share != nil || p.Message != ""
 }
 
 // Filtered reports whether the list is filtered.
@@ -299,6 +300,7 @@ var webFuncs = template.FuncMap{
 	"editPath":       EditPath,
 	"renamePath":     RenamePath,
 	"deletePath":     DeletePath,
+	"sharePath":      SharePath,
 	"deleteQuestion": deleteQuestion,
 }
 

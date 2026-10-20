@@ -4,7 +4,7 @@ a note, the list otherwise. */}}
 <main class="app-main{{if .NotePane}} has-note{{end}}">
 	<nav class="note-list" aria-label="Notes">
 		{{- $open := 0}}{{with .Note}}{{$open = .ID}}{{end}}{{with .Edit}}{{$open = .ID}}{{end}}
-		{{- with .Rename}}{{$open = .ID}}{{end}}{{with .Delete}}{{$open = .ID}}{{end}}
+		{{- with .Rename}}{{$open = .ID}}{{end}}{{with .Delete}}{{$open = .ID}}{{end}}{{with .Share}}{{$open = .ID}}{{end}}
 		{{- $filter := .Filter}}
 		<div class="list-actions">
 			<a class="button" href="/app/new{{$filter}}" data-filtered="new" data-shortcut="new">New</a>
@@ -46,15 +46,17 @@ a note, the list otherwise. */}}
 			<span class="note-bar-title">{{.Title}}</span>
 			{{- if and .Note (not .Message)}}
 			{{/* Without JavaScript, Delete opens a page that asks first; note.js
-			asks with confirm() and posts. Rename and Delete are under ⋯ on
-			phones, a <details> so it opens without JavaScript. */}}
+			asks with confirm() and posts. Share, Rename and Delete are under ⋯
+			on phones, a <details> so it opens without JavaScript. */}}
 			<div class="note-actions">
 				<a class="button" href="{{editPath .Note.ID}}{{.Filter}}" data-filtered="edit" data-shortcut="edit">Edit</a>
+				<a class="button wide-only" href="{{sharePath .Note.ID}}{{.Filter}}" data-filtered="share">Share</a>
 				<a class="button wide-only" href="{{renamePath .Note.ID}}{{.Filter}}" data-filtered="rename" data-shortcut="rename">Rename</a>
 				<a class="button danger wide-only" href="{{deletePath .Note.ID}}{{.Filter}}" data-filtered="delete" data-confirm="{{deleteQuestion .Note.Title}}">Delete</a>
 				<details class="more-menu">
 					<summary class="button" aria-label="More actions">⋯</summary>
 					<div class="more-items">
+						<a class="button" href="{{sharePath .Note.ID}}{{.Filter}}" data-filtered="share-more">Share</a>
 						<a class="button" href="{{renamePath .Note.ID}}{{.Filter}}" data-filtered="rename-more">Rename</a>
 						<a class="button danger" href="{{deletePath .Note.ID}}{{.Filter}}" data-filtered="delete-more" data-confirm="{{deleteQuestion .Note.Title}}">Delete</a>
 					</div>
@@ -89,6 +91,38 @@ a note, the list otherwise. */}}
 				<a class="button" href="{{.Cancel}}" data-filtered="cancel">Cancel</a>
 			</div>
 		</form>
+		{{- end}}
+		{{- else if .Share}}{{with .Share}}
+		{{/* The share pane (#83). share.js shows Copy link; without it the
+		link can be copied from the text field. */}}
+		<div class="note-form share">
+			<h1>Share</h1>
+			{{- if .URL}}
+			<p class="muted">Anyone with this link can read the note, without the PIN. Revoke it to stop that.</p>
+			<label for="share-url">Public link</label>
+			<input type="text" id="share-url" value="{{.URL}}" class="text-field" readonly />
+			<div class="editor-buttons">
+				<button type="button" class="button primary" data-copy="share-url" hidden>Copy link</button>
+				<span class="muted" data-copied role="status"></span>
+			</div>
+			{{.QR}}
+			<form method="post" action="{{.Action}}" data-filtered="unshare-form">
+				<div class="editor-buttons">
+					<button type="submit" class="button danger" name="action" value="unshare">Revoke link</button>
+					<a class="button" href="{{.Cancel}}" data-filtered="cancel">Done</a>
+				</div>
+			</form>
+			<script src="/assets/js/share.js" defer></script>
+			{{- else}}
+			<p class="muted">This note is private. A public link lets anyone who has it read the note, without the PIN, until you revoke it.</p>
+			<form method="post" action="{{.Action}}" data-filtered="share-form">
+				<div class="editor-buttons">
+					<button type="submit" class="button primary" name="action" value="share">Create public link</button>
+					<a class="button" href="{{.Cancel}}" data-filtered="cancel">Cancel</a>
+				</div>
+			</form>
+			{{- end}}
+		</div>
 		{{- end}}
 		{{- else if .Note}}
 		<article class="note-body">{{.NoteHTML}}</article>

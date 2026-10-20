@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"slices"
 	"strings"
@@ -40,6 +42,15 @@ type NoteStore interface {
 	NoteBacklinks(ctx context.Context, id int64) ([]notes.Note, error)
 	// RenameNote changes the title and rewrites [[links]] in other notes.
 	RenameNote(ctx context.Context, id int64, newTitle string) (*notes.Note, error)
+	// ShareNote gives the note a public share link token, keeping the one
+	// it has, and returns it. Sharing is not an edit: revision and seq stay.
+	ShareNote(ctx context.Context, id int64) (string, error)
+	// UnshareNote clears the token, so its link stops working.
+	UnshareNote(ctx context.Context, id int64) error
+	// NoteShareToken returns the note's token, or "" when it isn't shared.
+	NoteShareToken(ctx context.Context, id int64) (string, error)
+	// GetSharedNote returns the live note with token, or ErrNoteNotFound.
+	GetSharedNote(ctx context.Context, token string) (*notes.Note, error)
 }
 
 const noteCols = `id, title, body, revision, seq, deleted, created_at, updated_at`
@@ -323,4 +334,60 @@ func (s *SQLStore) RenameNote(ctx context.Context, id int64, newTitle string) (*
 		return nil, err
 	}
 	return renamed, tx.Commit()
+}
+
+// newShareToken returns 128 random bits as hex.
+func newShareToken() string {
+	b := make([]byte, 16)
+	rand.Read(b) // never fails (crypto/rand)
+	return hex.EncodeToString(b)
+}
+
+func (s *SQLStore) ShareNote(ctx context.Context, id int64) (string, error) {
+	if err := s.checkNotes(); err != nil {
+		return "", err
+	}
+	// A note that is already shared keeps its token.
+	if _, err := s.db.ExecContext(ctx, `UPDATE notes SET share_token = ?
+		WHERE id = ? AND deleted = 0 AND share_token IS NULL`, newShareToken(), id); err != nil {
+		return "", err
+	}
+	return s.NoteShareToken(ctx, id)
+}
+
+func (s *SQLStore) UnshareNote(ctx context.Context, id int64) error {
+	if err := s.checkNotes(); err != nil {
+		return err
+	}
+	res, err := s.db.ExecContext(ctx, `UPDATE notes SET share_token = NULL WHERE id = ? AND deleted = 0`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNoteNotFound
+	}
+	return nil
+}
+
+func (s *SQLStore) NoteShareToken(ctx context.Context, id int64) (string, error) {
+	if err := s.checkNotes(); err != nil {
+		return "", err
+	}
+	var tok sql.NullString
+	err := s.db.QueryRowContext(ctx, `SELECT share_token FROM notes WHERE id = ? AND deleted = 0`, id).Scan(&tok)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNoteNotFound
+	}
+	return tok.String, err
+}
+
+func (s *SQLStore) GetSharedNote(ctx context.Context, token string) (*notes.Note, error) {
+	if err := s.checkNotes(); err != nil {
+		return nil, err
+	}
+	if token == "" {
+		return nil, ErrNoteNotFound
+	}
+	return scanNote(s.db.QueryRowContext(ctx,
+		`SELECT `+noteCols+` FROM notes WHERE share_token = ? AND deleted = 0`, token))
 }

@@ -200,10 +200,19 @@ The server refuses to start if the PIN isn't 6–12 digits, or if
   | `Esc` | | Close the shortcuts, or leave the search box |
 - **On a phone** (below 700 px wide) the app shows one screen at a time: the
   list, or the open note with "← Notes" to go back (the search and project
-  filter stay). Edit is at the top; Rename and Delete are under **⋯**. In
+  filter stay). Edit is at the top; Share, Rename and Delete are under **⋯**. In
   the editor, Save, Done and Cancel sit in a bar at the bottom, above the
   on-screen keyboard. The keyboard shortcuts are simply not used on touch
   screens.
+- **Share links:** Share on a note creates a public, read-only link
+  (`/s/<token>`, 128 random bits) and shows it with a Copy link button and a
+  QR code, drawn on the server as inline SVG (`rsc.io/qr`), so a phone can
+  open the note without the PIN. Anyone with the link can read the note, and
+  nothing else: no list, search or editing, and its `[[links]]` and
+  `#project` tags lead to the PIN screen. Revoke link clears the token, and
+  the old link answers 404 at once; sharing again makes a new one. Notes are
+  private until shared. The page is sent with `Referrer-Policy: no-referrer`,
+  so the link doesn't leak to sites the note links to. (#83)
 - **Add to Home Screen:** in Safari on iPhone, Share → *Add to Home Screen*;
   in Chrome on Android, ⋮ → *Add to Home screen* (or *Install app*). The
   Scribble icon then opens `/app` without the browser bars. The app is
