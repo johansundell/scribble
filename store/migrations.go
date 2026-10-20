@@ -68,7 +68,7 @@ func migrate(db *sql.DB, ms []migration) error {
 		return fmt.Errorf("read schema version: %w", err)
 	}
 	if version > len(ms) {
-		return fmt.Errorf("database schema version %d is newer than this binary (%d); upgrade, or restore a backup taken before the upgrade", version, len(ms))
+		return fmt.Errorf("database schema version %d is newer than this binary (%d); run a newer scribble-server, or restore an archive taken before the upgrade", version, len(ms))
 	}
 	for i := version; i < len(ms); i++ {
 		if err := apply(db, ms[i], i+1); err != nil {

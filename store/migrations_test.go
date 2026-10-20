@@ -242,8 +242,12 @@ func TestNewSQLite_RefusesNewerSchemaVersion(t *testing.T) {
 	}
 	db.Close()
 
-	if s, err := NewSQLite(file); err == nil {
+	s, err := NewSQLite(file)
+	if err == nil {
 		s.Close()
 		t.Fatal("Expected NewSQLite to refuse a newer schema version")
+	}
+	if want := "is newer than this binary"; !strings.Contains(err.Error(), want) {
+		t.Errorf("Expected error to contain %q, got %q", want, err)
 	}
 }
