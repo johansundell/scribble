@@ -131,6 +131,11 @@ func TestHealthCheck_SchemaVersion(t *testing.T) {
 		t.Fatalf("Failed to create db: %v", err)
 	}
 	defer s.Close()
+	down, err := store.NewSQLite(":memory:")
+	if err != nil {
+		t.Fatalf("Failed to create db: %v", err)
+	}
+	down.Close() // Ping now fails
 	mockFS := fstest.MapFS{
 		"tmpl/base.html":   {Data: []byte(`{{define "base"}}{{template "content" .}}{{end}}`)},
 		"tmpl/health.html": {Data: []byte(`{{define "content"}}api={{.api}} schema={{.schema}}{{end}}`)},
@@ -139,17 +144,13 @@ func TestHealthCheck_SchemaVersion(t *testing.T) {
 	for _, tc := range []struct {
 		name               string
 		store              store.Store
-		closed             bool
 		wantJSON, wantHTML string
 	}{
-		{"sqlite", s, false, `"schema":3`, "api=2 schema=3"},
-		{"no schema version", noSchemaStore{s}, false, "", "api=2 schema=<no value>"},
+		{"sqlite", s, `"schema":3`, "api=2 schema=3"},
+		{"no schema version", noSchemaStore{s}, "", "api=2 schema=<no value>"},
 		// A failing database still reports its schema version.
-		{"storage down", s, true, `"schema":3`, "api=2 schema=3"},
+		{"storage down", down, `"schema":3`, "api=2 schema=3"},
 	} {
-		if tc.closed {
-			s.Close()
-		}
 		h := mustNewHandler(t, tc.store, false, mockFS, "test-service", "v1.0")
 		for _, accept := range []string{"application/json", "text/html"} {
 			w := httptest.NewRecorder()

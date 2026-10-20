@@ -71,6 +71,8 @@ type SchemaVersioner interface {
 	SchemaVersion() (int, bool)
 }
 
+// SchemaVersion returns the SQLite schema version read at open; MySQL has
+// none.
 func (s *SQLStore) SchemaVersion() (int, bool) {
 	return s.schema, s.schema > 0
 }

@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"fmt"
 	"strings"
 	"time"
 
@@ -31,12 +32,17 @@ func NewSQLite(file string) (*SQLStore, error) {
 	if err != nil {
 		return nil, err
 	}
+	var schema int
+	if err := db.QueryRow("PRAGMA user_version").Scan(&schema); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("read schema version: %w", err)
+	}
 	return &SQLStore{
 		db:           db,
 		timeArg:      func(t time.Time) any { return t.UTC().Format(sqliteTimeLayout) },
 		noLimit:      -1, // SQLite: a negative LIMIT means no limit
 		notesEnabled: true,
-		schema:       len(migrations), // migrate leaves user_version here
+		schema:       schema,
 	}, nil
 }
 
