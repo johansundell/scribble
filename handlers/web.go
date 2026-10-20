@@ -28,6 +28,10 @@ const (
 	AppHome    = "/"
 	LoginPath  = "/login"
 	LogoutPath = "/logout"
+	// NotePrefix starts a note's pages and TitlePrefix the open-by-title
+	// page.
+	NotePrefix  = "/note/"
+	TitlePrefix = "/title/"
 )
 
 // LoginTo is the PIN screen, going on to next after login. The slashes in
@@ -38,13 +42,13 @@ func LoginTo(next string) string {
 
 // NotePath is the web app page of the note with id.
 func NotePath(id int64) string {
-	return "/note/" + strconv.FormatInt(id, 10)
+	return NotePrefix + strconv.FormatInt(id, 10)
 }
 
 // TitlePath is the web app page that opens the note titled title. Dots are
 // escaped too, so a browser never reads "." or ".." as a path step.
 func TitlePath(title string) string {
-	return "/title/" + strings.ReplaceAll(url.PathEscape(title), ".", "%2E")
+	return TitlePrefix + strings.ReplaceAll(url.PathEscape(title), ".", "%2E")
 }
 
 // ProjectPath is the list of the notes tagged #project.
