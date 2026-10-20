@@ -49,10 +49,10 @@ func clientLevel(header string) int {
 	return 1
 }
 
-// ClientCheck refuses clients whose API level is below min with 426 Upgrade
-// Required. Each refusal is logged as a warning, at most once per client
-// string per hour; now is the clock (time.Now when nil).
-func ClientCheck(min int, l Logger, now func() time.Time) func(HandlerFuncWithError) HandlerFuncWithError {
+// ClientCheck refuses clients whose API level is below minLevel with 426
+// Upgrade Required. Each refusal is logged as a warning, at most once per
+// client string per hour; now is the clock (time.Now when nil).
+func ClientCheck(minLevel int, l Logger, now func() time.Time) func(HandlerFuncWithError) HandlerFuncWithError {
 	l = logging.OrStd(l)
 	if now == nil {
 		now = time.Now
@@ -61,20 +61,21 @@ func ClientCheck(min int, l Logger, now func() time.Time) func(HandlerFuncWithEr
 	logged := map[string]time.Time{}
 	return func(inner HandlerFuncWithError) HandlerFuncWithError {
 		return func(c *gin.Context) error {
-			client := c.GetHeader(ClientHeader)
-			if clientLevel(client) >= min {
+			who := c.GetHeader(ClientHeader)
+			level := clientLevel(who)
+			if level >= minLevel {
 				return inner(c)
 			}
 			mu.Lock()
 			t := now()
-			if last, ok := logged[client]; !ok || t.Sub(last) >= refusalLogEvery {
+			if last, ok := logged[who]; !ok || t.Sub(last) >= refusalLogEvery {
 				for k, v := range logged {
 					if t.Sub(v) >= refusalLogEvery {
 						delete(logged, k)
 					}
 				}
-				logged[client] = t
-				l.Warningf("refused a client too old for this server (API level %d, minimum %d): %q from %s", clientLevel(client), min, client, c.ClientIP())
+				logged[who] = t
+				l.Warningf("refused a client too old for this server (API level %d, minimum %d): %q from %s", level, minLevel, who, c.ClientIP())
 			}
 			mu.Unlock()
 			c.String(http.StatusUpgradeRequired, tooOld)
