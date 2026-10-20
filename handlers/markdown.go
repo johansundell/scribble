@@ -28,9 +28,22 @@ var webMarkdown = goldmark.New(
 // tags at that project's list. Links to anything but http(s) and mailto are
 // dropped, keeping their text.
 func renderNote(body string, exists func(title string) bool) (template.HTML, error) {
+	return renderMarkdown(body, exists, func(path string) string { return path })
+}
+
+// renderSharedNote renders body for a share link's public page (#83).
+// [[links]] and #project tags go through the PIN screen, and a [[link]] is
+// never marked missing: that would tell the reader which notes exist.
+func renderSharedNote(body string) (template.HTML, error) {
+	return renderMarkdown(body, func(string) bool { return true }, LoginTo)
+}
+
+// renderMarkdown renders body, sending [[links]] and #project tags to
+// to(their web app path).
+func renderMarkdown(body string, exists func(title string) bool, to func(path string) string) (template.HTML, error) {
 	source := []byte(notes.LinkifyProjectsForView(notes.LinkifyForView(body)))
 	doc := webMarkdown.Parser().Parse(text.NewReader(source))
-	fixLinks(doc, source, exists)
+	fixLinks(doc, source, exists, to)
 	var buf bytes.Buffer
 	if err := webMarkdown.Renderer().Render(&buf, source, doc); err != nil {
 		return "", err
@@ -41,9 +54,9 @@ func renderNote(body string, exists func(title string) bool) (template.HTML, err
 // linkSchemes are the URL schemes a link in a note may use.
 var linkSchemes = []string{"http", "https", "mailto"}
 
-// fixLinks points [[links]] and #project tags at the web app and drops
-// unsafe links.
-func fixLinks(doc ast.Node, source []byte, exists func(string) bool) {
+// fixLinks points [[links]] and #project tags at to(their web app path)
+// and drops unsafe links.
+func fixLinks(doc ast.Node, source []byte, exists func(string) bool, to func(string) string) {
 	var drop []ast.Node
 	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
@@ -53,12 +66,12 @@ func fixLinks(doc ast.Node, source []byte, exists func(string) bool) {
 		case *ast.Link:
 			u, err := url.Parse(string(n.Destination))
 			if title, ok := notes.LinkTitle(u); ok && err == nil {
-				n.Destination = []byte(TitlePath(title))
+				n.Destination = []byte(to(TitlePath(title)))
 				if !exists(title) {
 					n.SetAttributeString("class", []byte("missing"))
 				}
 			} else if err == nil && u.Scheme == "project" && projectTag(u.Host) != "" {
-				n.Destination = []byte(ProjectPath(u.Host))
+				n.Destination = []byte(to(ProjectPath(u.Host)))
 			} else if !allowedURL(string(n.Destination), linkSchemes...) {
 				drop = append(drop, n)
 			}

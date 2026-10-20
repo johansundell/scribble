@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/johansundell/scribble/auth"
@@ -28,12 +27,12 @@ func RequireSession(a *auth.Authenticator) func(HandlerFuncWithError) HandlerFun
 }
 
 // loginURL is the PIN screen, with next set to r's page when r is a page
-// view. The slashes in next are left as they are, for readability.
+// view.
 func loginURL(r *http.Request) string {
 	if !isSafeMethod(r.Method) {
 		return handlers.LoginPath
 	}
-	return handlers.LoginPath + "?next=" + strings.ReplaceAll(url.QueryEscape(r.URL.RequestURI()), "%2F", "/")
+	return handlers.LoginTo(r.URL.RequestURI())
 }
 
 // isSafeMethod reports whether method only reads (GET or HEAD), so it needs

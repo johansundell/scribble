@@ -1,0 +1,23 @@
+{{/* A shared note's public page (#83): the note and nothing of the app
+around it. Its [[links]] go through the PIN screen. */}}<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+	<meta name="color-scheme" content="light dark" />
+	<meta name="robots" content="noindex" />
+	<link rel="stylesheet" href="/assets/css/app.css" />
+	<link rel="icon" type="image/png" href="/assets/img/favicon.png" />
+	<title>{{.Title}} – Scribble</title>
+</head>
+
+<body class="web">
+	<main class="shared">
+		<article class="note-body">{{.NoteHTML}}</article>
+		<p class="muted">Updated {{.Updated}}</p>
+	</main>
+	<footer class="app-footer">Shared from Scribble</footer>
+</body>
+
+</html>

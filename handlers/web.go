@@ -27,6 +27,12 @@ const (
 	LoginPath = "/app/login"
 )
 
+// LoginTo is the PIN screen, going on to next after login. The slashes in
+// next are left as they are, for readability.
+func LoginTo(next string) string {
+	return LoginPath + "?next=" + strings.ReplaceAll(url.QueryEscape(next), "%2F", "/")
+}
+
 // NotePath is the web app page of the note with id.
 func NotePath(id int64) string {
 	return AppHome + "/notes/" + strconv.FormatInt(id, 10)
@@ -68,11 +74,12 @@ type webPage struct {
 	NoteHTML  template.HTML
 	Backlinks []notes.Note
 	Message   string
-	// Edit is the editor, and Rename and Delete their forms, shown in place
-	// of the note.
+	// Edit is the editor, Rename and Delete their forms and Share the
+	// share pane, shown in place of the note.
 	Edit   *noteEditor
 	Rename *noteForm
 	Delete *noteForm
+	Share  *shareForm
 	// The list's filter: Query searches titles and bodies, and Project (a
 	// name, without '#') keeps the notes tagged with it. Projects are the
 	// ones to choose from.
@@ -101,7 +108,7 @@ func (p webPage) Filter() string {
 // NotePane reports whether the page is about a note (or says why there is
 // none), so that phones show it in place of the list (#65).
 func (p webPage) NotePane() bool {
-	return p.Note != nil || p.Edit != nil || p.Rename != nil || p.Delete != nil || p.Message != ""
+	return p.Note != nil || p.Edit != nil || p.Rename != nil || p.Delete != nil || p.Share != nil || p.Message != ""
 }
 
 // Filtered reports whether the list is filtered.
@@ -299,6 +306,7 @@ var webFuncs = template.FuncMap{
 	"editPath":       EditPath,
 	"renamePath":     RenamePath,
 	"deletePath":     DeletePath,
+	"sharePath":      SharePath,
 	"deleteQuestion": deleteQuestion,
 }
 

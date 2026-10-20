@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"path/filepath"
@@ -87,6 +88,10 @@ func TestNewSQLite_UpgradesUnversionedDatabase(t *testing.T) {
 	}
 	if notesCount != 1 || logsCount != 1 {
 		t.Errorf("Expected existing data intact, got %d notes and %d logs", notesCount, logsCount)
+	}
+	// Notes from before share links (#83) start unshared.
+	if tok, err := s.NoteShareToken(context.Background(), 1); err != nil || tok != "" {
+		t.Errorf("Expected the old note unshared, got %q %v", tok, err)
 	}
 }
 
