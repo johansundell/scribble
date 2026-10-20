@@ -124,13 +124,13 @@ func (p webPage) Filtered() bool {
 }
 
 // LoginPage shows the PIN entry screen, or sends someone with a valid
-// session on to the app.
+// session on to next or the app.
 func (h *Handler) LoginPage(c *gin.Context) error {
 	if h.auth == nil {
 		return httperror.ReturnWithHTTPStatus(errWebNotConfigured, http.StatusInternalServerError)
 	}
 	if h.auth.Session(c.Request) {
-		c.Redirect(http.StatusSeeOther, AppHome)
+		c.Redirect(http.StatusSeeOther, SafeNext(c.Query("next")))
 		return nil
 	}
 	msg := ""
@@ -141,7 +141,7 @@ func (h *Handler) LoginPage(c *gin.Context) error {
 }
 
 // Login checks the posted PIN. The right one starts a session and goes to
-// next (a path on this site) or AppHome; a wrong one shows the screen again.
+// next (a web app page) or AppHome; a wrong one shows the screen again.
 func (h *Handler) Login(c *gin.Context) error {
 	if h.auth == nil {
 		return httperror.ReturnWithHTTPStatus(errWebNotConfigured, http.StatusInternalServerError)
@@ -332,8 +332,9 @@ func (h *Handler) renderWeb(c *gin.Context, status int, tmplFile string, data we
 	return nil
 }
 
-// SafeNext returns next when it is a plain path on this site, and AppHome
-// otherwise, so the login can't send anyone to another site.
+// SafeNext returns next when it is a plain path to a web app page, and
+// AppHome otherwise, so the login can't send anyone to another site, or to
+// the API, health check, shares or assets on this one (#95).
 func SafeNext(next string) string {
 	if strings.Contains(next, `\`) {
 		return AppHome
@@ -349,5 +350,23 @@ func SafeNext(next string) string {
 	if u.Path != "/" && path.Clean(u.Path) != strings.TrimSuffix(u.Path, "/") {
 		return AppHome
 	}
+	if !isAppPage(u.Path) {
+		return AppHome
+	}
 	return next
+}
+
+// isAppPage reports whether p is a web app page: the list, the new-note
+// editor, or a page under a note or title.
+func isAppPage(p string) bool {
+	switch p {
+	case AppHome, NewPath:
+		return true
+	}
+	for _, prefix := range []string{NotePrefix, TitlePrefix} {
+		if len(p) > len(prefix) && strings.HasPrefix(p, prefix) {
+			return true
+		}
+	}
+	return false
 }
