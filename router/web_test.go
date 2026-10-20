@@ -228,8 +228,11 @@ func TestWeb_LoginPage(t *testing.T) {
 		t.Error("next is not escaped")
 	}
 
-	// With a session, the login page sends you on.
-	wantRedirect(t, e.do(get("/login", e.login(t))), "/")
+	// With a session, the login page sends you on, to next when it is safe.
+	c := e.login(t)
+	wantRedirect(t, e.do(get("/login", c)), "/")
+	wantRedirect(t, e.do(get("/login?next=/note/1", c)), "/note/1")
+	wantRedirect(t, e.do(get("/login?next=/healthz", c)), "/")
 }
 
 func TestWeb_Login(t *testing.T) {
@@ -252,6 +255,21 @@ func TestWeb_Login(t *testing.T) {
 		"/note/../../healthz": "/",
 		"/note/./1":           "/",
 		"note/1":              "/",
+		// Only web app pages: not the API, health check, shares or assets.
+		"/healthz":            "/",
+		"/notes/1":            "/",
+		"/s/abc":              "/",
+		"/assets/css/app.css": "/",
+		"/login":              "/",
+		"/note":               "/",
+		"/note/":              "/",
+		"/title/":             "/",
+		"/new/":               "/",
+		"/newx":               "/",
+		"?x":                  "/",
+		"/new":                "/new",
+		"/note/1/edit":        "/note/1/edit",
+		"/title/x":            "/title/x",
 	} {
 		w := e.do(postLogin("10.0.0.2", webPIN, next))
 		if got := w.Header().Get("Location"); got != want {
