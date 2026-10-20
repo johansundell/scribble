@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -56,7 +57,15 @@ type UI struct {
 	Status *widget.Label // the last error, empty when all is well
 	ConnStatus *ConnStatus   // connection indicator in status bar
 	ConnDot    *canvas.Circle // status dot: grey/green/red
-	ConnLabel  *widget.Label  // "Connecting...", "Connected", "Offline"
+	ConnLabel  *widget.Label  // "Connecting...", "Connected", "Offline", "Update needed"
+
+	// Upgrade is the update message, shown once the server refuses this
+	// version: UpgradeLabel and UpgradeButton, which opens the releases page.
+	Upgrade       *fyne.Container
+	UpgradeLabel  *widget.Label
+	UpgradeButton *widget.Button
+	// NewRelease links to a newer release the server runs, hidden if none.
+	NewRelease *widget.Hyperlink
 
 	backlinkButtons *fyne.Container // inside Backlinks
 
@@ -69,6 +78,10 @@ type UI struct {
 	store    *offline.Store // the local copy all reads come from
 	hasTray  bool
 	offline  bool // the last sync could not reach the server
+	// outdated is set once the server refuses this version as too old
+	// (426): syncing stops for good. The sync goroutine reads it too.
+	outdated   atomic.Bool
+	newRelease string // the newer release NewRelease shows, "" if none
 	notes    []notes.Note
 	projects []string // the #projects in use, as of the last reload
 	// current is the open note, nil when none; ID 0 for a new, unsaved
@@ -115,6 +128,7 @@ func New(w fyne.Window, c *client.Client, store *offline.Store) *UI {
 	ui.Status = widget.NewLabel("")
 	ui.Status.Wrapping = fyne.TextWrapWord
 	ui.ConnStatus = newConnStatus(ui)
+	ui.newVersionWidgets()
 	ui.backlinkButtons = container.NewHBox()
 	ui.Backlinks = container.NewVBox(
 		widget.NewLabelWithStyle("Linked from", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
@@ -128,7 +142,7 @@ func New(w fyne.Window, c *client.Client, store *offline.Store) *UI {
 			container.NewStack(container.NewVScroll(ui.Viewer), ui.Editor)),
 	)
 	split.Offset = 0.3
-	statusBar := container.NewBorder(nil, nil, nil, ui.ConnStatus, ui.Status)
+	statusBar := container.NewBorder(nil, nil, container.NewHBox(ui.Upgrade, ui.NewRelease), ui.ConnStatus, ui.Status)
 	w.SetContent(container.NewBorder(nil, statusBar, nil, nil, split))
 	w.SetCloseIntercept(ui.Close)
 	ui.setupMenu()
@@ -173,7 +187,7 @@ func (ui *UI) showWindow() {
 // ready for typing, asking first if there are unsaved changes.
 func (ui *UI) OpenNewNote() {
 	ui.showWindow()
-	if ui.dialogOpen() {
+	if ui.dialogOpen() || ui.NewNote.Disabled() {
 		return
 	}
 	ui.unlessUnsaved(ui.startNote)
@@ -468,12 +482,17 @@ func (ui *UI) toggleMode() {
 }
 
 func (ui *UI) updateButtons() {
-	setEnabled(ui.EditToggle, ui.current != nil)
+	// A version too old for the server is read-only. Edit still leads
+	// back to view mode, and Save keeps text typed before the refusal
+	// queued on disk, for a newer version to send.
+	writable := !ui.outdated.Load()
+	setEnabled(ui.NewNote, writable)
+	setEnabled(ui.EditToggle, ui.current != nil && (writable || ui.Editor.Visible()))
 	setEnabled(ui.Save, ui.hasUnsavedChanges())
 	// Rename rewrites the note on the server, which would make unsaved
 	// or queued edits stale.
-	setEnabled(ui.Rename, ui.onServer() && !ui.hasUnsavedChanges())
-	setEnabled(ui.Delete, ui.isSaved())
+	setEnabled(ui.Rename, writable && ui.onServer() && !ui.hasUnsavedChanges())
+	setEnabled(ui.Delete, writable && ui.isSaved())
 	ui.updateMenu()
 }
 
@@ -610,8 +629,8 @@ func (ui *UI) reloadLatest() {
 // editor.
 func (ui *UI) write(id int64, body string, base int64) (notes.Note, error) {
 	n, err := ui.store.Queue(id, body, base)
-	if err != nil {
-		return n, err
+	if err != nil || ui.outdated.Load() {
+		return n, err // too old: the edit waits on disk for a newer version
 	}
 	ctx, cancel := requestContext()
 	defer cancel()
@@ -734,6 +753,9 @@ func (ui *UI) closeNote() {
 // Sync brings the local copy up to date with the server and shows the
 // result. It runs on the UI thread; StartSync runs it in the background.
 func (ui *UI) Sync() {
+	if ui.outdated.Load() {
+		return
+	}
 	ctx, cancel := requestContext()
 	defer cancel()
 	r, err := ui.store.Sync(ctx, ui.c)
@@ -744,7 +766,7 @@ func (ui *UI) Sync() {
 // the app quits.
 func (ui *UI) StartSync(interval time.Duration) {
 	go func() {
-		for {
+		for !ui.outdated.Load() {
 			ctx, cancel := requestContext()
 			r, err := ui.store.Sync(ctx, ui.c)
 			cancel()
@@ -757,6 +779,14 @@ func (ui *UI) StartSync(interval time.Duration) {
 // synced shows the outcome of a sync: the refreshed list, the open note's
 // latest version, and any trouble in the status line.
 func (ui *UI) synced(r offline.Report, err error) {
+	ui.noticeNewRelease()
+	if client.IsUpgradeRequired(err) || ui.outdated.Load() {
+		ui.offline = false
+		ui.setOutdated()
+		ui.reload()
+		ui.followOpenNote()
+		return
+	}
 	wasOffline := ui.offline
 	ui.offline = client.IsUnreachable(err)
 	if ui.offline {
@@ -884,6 +914,9 @@ func (ui *UI) reportOnline(err error) bool {
 
 // report shows err in the status line and reports whether there was one.
 func (ui *UI) report(err error) bool {
+	if client.IsUpgradeRequired(err) {
+		ui.setOutdated()
+	}
 	if err != nil {
 		ui.Status.SetText(explain(err))
 	}
@@ -899,6 +932,8 @@ func explain(err error) string {
 		return "Another note already has that title."
 	case client.IsUnauthorized(err):
 		return "The server rejected SCRIBBLE_TOKEN."
+	case client.IsUpgradeRequired(err):
+		return tooOld
 	}
 	return err.Error()
 }

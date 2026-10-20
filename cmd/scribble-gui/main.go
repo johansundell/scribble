@@ -71,7 +71,9 @@ func main() {
 		}
 	} else {
 		defer cache.Close()
-		ui := gui.New(w, client.New(baseURL, token), cache)
+		c := client.New(baseURL, token)
+		c.Name, c.Version = "gui", ver
+		ui := gui.New(w, c, cache)
 		ui.StartSync(syncInterval)
 		if desk, ok := a.(desktop.App); ok {
 			ui.SetupTray(desk)

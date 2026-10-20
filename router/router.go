@@ -45,6 +45,9 @@ type Route struct {
 	// AllowCrossOrigin skips the same-origin check. Only login and logout
 	// set it (#47). Web routes only.
 	AllowCrossOrigin bool
+	// CheckClient refuses clients below the minimum API level with 426
+	// (ADR 8). Token routes only; the token is checked first.
+	CheckClient bool
 }
 
 // Routes is a collection of Route definitions
@@ -71,6 +74,10 @@ type Config struct {
 	Version  string
 	Logger   Logger // Optional: defaults to standard logger when nil
 	Routes   Routes // Optional: defaults to GetRoutes(Handler) when nil
+	// APILevel and MinClientAPI default to the APILevel and minClientAPI
+	// constants when 0; tests set them.
+	APILevel     int
+	MinClientAPI int
 }
 
 // NewRouter creates a new web handler with middleware and registered routes
@@ -98,6 +105,15 @@ func NewRouter(cfg Config) (*gin.Engine, error) {
 		})
 	}
 
+	apiLevel, minClient := cfg.APILevel, cfg.MinClientAPI
+	if apiLevel == 0 {
+		apiLevel = APILevel
+	}
+	if minClient == 0 {
+		minClient = minClientAPI
+	}
+	router.Use(apiLevelHeader(apiLevel))
+
 	router.NoRoute(func(c *gin.Context) {
 		c.String(http.StatusNotFound, http.StatusText(http.StatusNotFound))
 	})
@@ -113,6 +129,7 @@ func NewRouter(cfg Config) (*gin.Engine, error) {
 
 	l := logging.OrStd(cfg.Logger)
 	debug := cfg.Settings.Debug
+	checkClient := ClientCheck(minClient, l, nil)
 	if debug {
 		router.Use(AccessLog(l))
 	}
@@ -133,6 +150,9 @@ func NewRouter(cfg Config) (*gin.Engine, error) {
 		if (route.UseSession || route.AllowCrossOrigin) && !route.Web {
 			return nil, fmt.Errorf("route %q uses web app options but is not a web route", route.Name)
 		}
+		if route.CheckClient && !route.UseAuth {
+			return nil, fmt.Errorf("route %q checks the client level but needs no token", route.Name)
+		}
 
 		fn := route.HandlerFunc
 
@@ -151,6 +171,12 @@ func NewRouter(cfg Config) (*gin.Engine, error) {
 		// Wrapping order is inside-out: the last wrapper applied is the first to execute.
 		if route.UseLogger {
 			fn = LoggerMiddleware(cfg.LogSink, l)(fn)
+		}
+
+		// Inside auth, so only clients with the token are refused (and logged)
+		// for being too old.
+		if route.CheckClient {
+			fn = checkClient(fn)
 		}
 
 		// Apply Auth Middleware second (outermost), so it executes first and rejects

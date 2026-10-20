@@ -27,7 +27,7 @@ export SCRIBBLE_URL=https://notes.example.com
 export SCRIBBLE_TOKEN=change-me
 ```
 
-If `SCRIBBLE_TOKEN` is not set, every command except `help` fails with
+If `SCRIBBLE_TOKEN` is not set, every command except `help`, `completion` and `version` fails with
 `SCRIBBLE_TOKEN is not set`. If the server does not accept the token, the
 error is `the server rejected SCRIBBLE_TOKEN`.
 
@@ -66,6 +66,7 @@ stderr as `scribble: <message>`.
 | `import <path...>` | import Tomboy `.note` XML files or directories |
 | `rm <title>` | delete a note |
 | `completion [bash]` | output shell completion script |
+| `version` | print the client's and the server's versions and API levels |
 
 Lists (`ls`, `search`, `backlinks`, `projects <name>`) print one title per
 line, so they work with `grep`, `head`, `xargs` and so on. `ls` and `search`
@@ -227,6 +228,28 @@ scribble completion > ~/.local/share/bash-completion/completions/scribble
 
 # Or system-wide (requires root):
 sudo scribble completion > /etc/bash_completion.d/scribble
+```
+
+### version
+
+Prints the CLI's version and API level, then the server's, and says
+`update available` when the server runs a newer release. `dev` builds
+never say so. It asks `/healthz`, so it does not need `SCRIBBLE_TOKEN`.
+It is the only command that checks for a newer release, so scripts using
+the others see no extra output.
+
+```sh
+$ scribble version
+client v0.0.11 (API level 1)
+server v0.0.12 (API level 1)
+update available: https://github.com/johansundell/scribble/releases/latest
+```
+
+If the server answers 426 because this CLI is too old for it, every
+command fails with:
+
+```
+scribble: this version (v0.0.11) is too old for the server; download the latest from https://github.com/johansundell/scribble/releases/latest
 ```
 
 ## Saving shell commands to a note

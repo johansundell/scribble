@@ -4,7 +4,7 @@ A robust Go-based service template designed for quick bootstrapping of web servi
 
 ## API Endpoints
 
-Every response carries an `X-Version` header with the build version. Errors are returned as plain text with the HTTP status text as the body (for example `Not Found`). A request that runs longer than `TIMEOUT` seconds gets **503** with the body `Timeout`.
+Every response carries an `X-Version` header with the build version, and an `X-Scribble-API` header with the API level (see the README's API section). Errors are returned as plain text with the HTTP status text as the body (for example `Not Found`). A request that runs longer than `TIMEOUT` seconds gets **503** with the body `Timeout`.
 
 ### Public Endpoints
 

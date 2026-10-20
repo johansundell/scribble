@@ -1,6 +1,6 @@
 # 8. API level and a minimum client level, rather than versioned paths
 
-- **Status:** Accepted (not built yet)
+- **Status:** Accepted
 - **Tickets:** #57
 
 ## Context

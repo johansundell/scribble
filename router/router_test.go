@@ -165,13 +165,14 @@ func TestGetRoutes(t *testing.T) {
 	}
 
 	expectedRoutes := map[string]struct {
-		method     string
-		pattern    string
-		useLogger  bool
-		useAuth    bool
-		web        bool
-		useSession bool
-		allowCross bool
+		method      string
+		pattern     string
+		useLogger   bool
+		useAuth     bool
+		web         bool
+		useSession  bool
+		allowCross  bool
+		checkClient bool
 	}{
 		// The web app: on only with WEB_PIN, never request-logged. Login and
 		// logout take posts from anywhere; every other web POST is origin-checked.
@@ -200,16 +201,17 @@ func TestGetRoutes(t *testing.T) {
 		"Ping":        {method: "GET", pattern: "/ping/:argument", useLogger: true, useAuth: false},
 		"Pong":        {method: "POST", pattern: "/pong", useLogger: true, useAuth: true},
 		"GetLogs":     {method: "GET", pattern: "/logs/:from/:to", useLogger: false, useAuth: true},
-		// Notes: authenticated, and never request-logged (the log would copy every note body).
-		"ListNotes":     {method: "GET", pattern: "/notes", useLogger: false, useAuth: true},
-		"CreateNote":    {method: "POST", pattern: "/notes", useLogger: false, useAuth: true},
-		"GetNote":       {method: "GET", pattern: "/notes/:id", useLogger: false, useAuth: true},
-		"UpdateNote":    {method: "PUT", pattern: "/notes/:id", useLogger: false, useAuth: true},
-		"DeleteNote":    {method: "DELETE", pattern: "/notes/:id", useLogger: false, useAuth: true},
-		"NoteBacklinks": {method: "GET", pattern: "/notes/:id/backlinks", useLogger: false, useAuth: true},
-		"RenameNote":    {method: "POST", pattern: "/notes/:id/rename", useLogger: false, useAuth: true},
-		"NoteChanges":   {method: "GET", pattern: "/changes", useLogger: false, useAuth: true},
-		"ListProjects":  {method: "GET", pattern: "/projects", useLogger: false, useAuth: true},
+		// Notes: authenticated, never request-logged (the log would copy every note body),
+		// and closed to clients below the minimum API level.
+		"ListNotes":     {method: "GET", pattern: "/notes", useLogger: false, useAuth: true, checkClient: true},
+		"CreateNote":    {method: "POST", pattern: "/notes", useLogger: false, useAuth: true, checkClient: true},
+		"GetNote":       {method: "GET", pattern: "/notes/:id", useLogger: false, useAuth: true, checkClient: true},
+		"UpdateNote":    {method: "PUT", pattern: "/notes/:id", useLogger: false, useAuth: true, checkClient: true},
+		"DeleteNote":    {method: "DELETE", pattern: "/notes/:id", useLogger: false, useAuth: true, checkClient: true},
+		"NoteBacklinks": {method: "GET", pattern: "/notes/:id/backlinks", useLogger: false, useAuth: true, checkClient: true},
+		"RenameNote":    {method: "POST", pattern: "/notes/:id/rename", useLogger: false, useAuth: true, checkClient: true},
+		"NoteChanges":   {method: "GET", pattern: "/changes", useLogger: false, useAuth: true, checkClient: true},
+		"ListProjects":  {method: "GET", pattern: "/projects", useLogger: false, useAuth: true, checkClient: true},
 	}
 
 	if len(routes) != len(expectedRoutes) {
@@ -237,6 +239,9 @@ func TestGetRoutes(t *testing.T) {
 		if route.Web != expected.web || route.UseSession != expected.useSession || route.AllowCrossOrigin != expected.allowCross {
 			t.Errorf("Route %q: expected Web=%v UseSession=%v AllowCrossOrigin=%v, got %v %v %v", route.Name,
 				expected.web, expected.useSession, expected.allowCross, route.Web, route.UseSession, route.AllowCrossOrigin)
+		}
+		if route.CheckClient != expected.checkClient {
+			t.Errorf("Route %q: expected CheckClient=%v, got %v", route.Name, expected.checkClient, route.CheckClient)
 		}
 		if route.HandlerFunc == nil {
 			t.Errorf("Route %q: HandlerFunc should not be nil", route.Name)
