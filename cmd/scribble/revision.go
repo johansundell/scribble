@@ -9,6 +9,7 @@ import (
 // revision is a note's revision number, shown as r12.
 type revision int64
 
+// String returns r as it is shown, such as r12.
 func (r revision) String() string {
 	return "r" + strconv.FormatInt(int64(r), 10)
 }

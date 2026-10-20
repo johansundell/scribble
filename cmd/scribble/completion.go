@@ -39,15 +39,20 @@ _scribble() {
 
     local cmd="${words[1]}"
     case "$cmd" in
-        show|edit|append|links|backlinks|autolink|rm|history|diff|restore|rename)
+        show|restore)
             if _scribble_at_first_arg; then
                 _scribble_complete_titles "$cur" "$(scribble ls 2>/dev/null)"
             fi
             ;;
+        edit|append|links|backlinks|autolink|rm|history|diff|rename)
+            if [[ $cword -eq 2 ]]; then
+                _scribble_complete_titles "$cur" "$(scribble ls 2>/dev/null)"
+            fi
+            ;;
         undelete)
-            if _scribble_at_first_arg; then
-                # Drop the "YYYY-MM-DD HH:MM  " each line of deleted starts with.
-                _scribble_complete_titles "$cur" "$(scribble deleted 2>/dev/null | cut -c19- | sort -u)"
+            if [[ $cword -eq 2 ]]; then
+                # Drop the date and time each line of deleted starts with.
+                _scribble_complete_titles "$cur" "$(scribble deleted 2>/dev/null | sed 's/^[^ ]* [^ ]*  //' | sort -u)"
             fi
             ;;
         projects)
@@ -74,18 +79,21 @@ _scribble() {
     esac
 }
 
-# _scribble_at_first_arg succeeds when the word being completed is the
-# command's first argument. Flags before it are skipped, with the value of -r;
-# after --, a word that starts with - is an argument too.
+# _scribble_at_first_arg succeeds when the word being completed is the first
+# argument of show or restore, the commands that take flags. Flags before it
+# are skipped, with the value of -r; after --, a word that starts with - is an
+# argument too.
 _scribble_at_first_arg() {
     local i args=0 dashdash=0
     for (( i=2; i<cword; i++ )); do
-        if [[ $dashdash -eq 0 && "${words[i]}" == -* ]]; then
+        if [[ $dashdash -eq 0 ]]; then
             case "${words[i]}" in
-                --) dashdash=1 ;;
-                -r|--r) (( i++ )) ;;
+                --) dashdash=1; continue ;;
+                # -r=3 arrives as -r, =, 3.
+                =) (( i++ )); continue ;;
+                -r|--r) [[ "${words[i+1]}" == "=" ]] || (( i++ )); continue ;;
+                -*) continue ;;
             esac
-            continue
         fi
         (( args++ ))
     done

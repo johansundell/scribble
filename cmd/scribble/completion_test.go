@@ -195,7 +195,21 @@ if [[ "${COMPREPLY[*]}" != '-todo' ]]; then
     exit 13
 fi
 
-# 12. undelete completes deleted titles, once each
+# 12. Commands without flags take a title that starts with -
+run_comp "scribble" "edit" "-t"
+if [[ "${COMPREPLY[*]}" != '-todo' ]]; then
+    echo "edit title starting with - failed: expected '-todo', got '${COMPREPLY[*]}'"
+    exit 15
+fi
+
+# 13. -r=3 arrives as -r, =, 3
+run_comp "scribble" "show" "-r" "=" "3" "groc"
+if [[ "${COMPREPLY[*]}" != 'Groceries' ]]; then
+    echo "title after -r=3 failed: expected 'Groceries', got '${COMPREPLY[*]}'"
+    exit 16
+fi
+
+# 14. undelete completes deleted titles, once each
 run_comp "scribble" "undelete" "old"
 if [[ "${COMPREPLY[*]}" != 'Old\ Plans' ]]; then
     echo "undelete completion failed: expected 'Old\\ Plans', got '${COMPREPLY[*]}'"
