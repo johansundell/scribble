@@ -110,7 +110,13 @@ func (c *Client) CreateRecord(ctx context.Context, tableName string, data map[st
 
 // UpdateRecord updates an existing record
 func (c *Client) UpdateRecord(ctx context.Context, tableName string, id string, data map[string]interface{}) error {
-	resp, err := c.sendRequest(ctx, http.MethodPatch, fmt.Sprintf("%s/%s('%s')", c.baseURL, tableName, id), data)
+	return c.UpdateRecordByKey(ctx, tableName, "'"+id+"'", data)
+}
+
+// UpdateRecordByKey updates the record whose primary key is the OData
+// literal key: 5 for a number, '5' for text.
+func (c *Client) UpdateRecordByKey(ctx context.Context, tableName string, key string, data map[string]interface{}) error {
+	resp, err := c.sendRequest(ctx, http.MethodPatch, fmt.Sprintf("%s/%s(%s)", c.baseURL, tableName, key), data)
 	if err != nil {
 		return err
 	}
@@ -119,7 +125,13 @@ func (c *Client) UpdateRecord(ctx context.Context, tableName string, id string, 
 
 // DeleteRecord deletes a record
 func (c *Client) DeleteRecord(ctx context.Context, tableName string, id string) error {
-	resp, err := c.sendRequest(ctx, http.MethodDelete, fmt.Sprintf("%s/%s('%s')", c.baseURL, tableName, id), nil)
+	return c.DeleteRecordByKey(ctx, tableName, "'"+id+"'")
+}
+
+// DeleteRecordByKey deletes the record whose primary key is the OData
+// literal key, as in UpdateRecordByKey.
+func (c *Client) DeleteRecordByKey(ctx context.Context, tableName string, key string) error {
+	resp, err := c.sendRequest(ctx, http.MethodDelete, fmt.Sprintf("%s/%s(%s)", c.baseURL, tableName, key), nil)
 	if err != nil {
 		return err
 	}

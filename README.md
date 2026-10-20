@@ -349,12 +349,25 @@ Then check `/healthz` and that notes are what you expect.
 
 **Going back to an older release.** Database migrations only go forward. An older `scribble-server` refuses to start on a database that a newer release has migrated, with `database schema version N is newer than this binary (M)`. To go back, stop the service, put the older binary in place and restore an archive taken before the upgrade, as above.
 
+## FileMaker replica
+
+The server can keep a copy of the notes in a FileMaker file, so people can browse and edit them next to other FileMaker data (#66, [ADR 10](docs/adr/0010-sqlite-master-filemaker-replica.md)).
+
+- **SQLite is the master.** The API, the CLI, the desktop app and the web app only use SQLite. They never wait on FileMaker, and keep working while it is down.
+- A background sync **pushes** every note change to FileMaker's `Notes` table in `seq` order, about 2 seconds after a write and every 30 seconds. After an outage it catches up from where it stopped.
+- It **pulls** edits made in FileMaker from the `PendingEdits` table and applies them as normal saves, with history.
+- **If a note changed in both places, the app wins.** The FileMaker text is kept in the note's history, so it can be restored, and the `PendingEdits` row says why the edit wasn't applied.
+
+Turn it on with `NOTES_REPLICA=filemaker`, `STORAGE=sqlite` and the `FMS_HOST`, `FMS_DATABASE`, `FMS_USERNAME` and `FMS_PASSWORD` settings. `FMS_NOTES_TABLE`, `FMS_PENDING_TABLE`, `FMS_INFO_TABLE` and `NOTES_REPLICA_INTERVAL` change the defaults ([settings](docs/service-template.md#configuration)). A FileMaker developer creates the tables once from [docs/filemaker/notes.md](docs/filemaker/notes.md). If the setup is missing or wrong, the server logs an error and runs without the replica. `/healthz` shows the replica's state, and `scribble-server replica resync` pushes every note again after the FileMaker file was replaced.
+
 ## Layout
 
 ```
 main.go, service.go, config.go   service lifecycle (from the template)
 router/, handlers/, store/       routes, handlers, storage (notes: handlers/notes.go, store/notes.go)
 auth/                            the web app's PIN login, session cookie and guessing limits
+replica/                         the FileMaker replica's sync (push, pull, conflicts)
+docs/filemaker/                  the FileMaker tables for the replica
 tmpl/, assets/                   page templates (web app: app.html), CSS and the PIN keypad script
 notes/                           Note type, [[link]] and #project helpers (no server deps)
 client/                          Go API client

@@ -368,3 +368,23 @@ func TestCreateRecords_BatchResponses(t *testing.T) {
 		assert.NoError(t, newTestClient("http://127.0.0.1:1").CreateRecords(context.Background(), "Logs", nil))
 	})
 }
+
+func TestRecordByKeyUsesTheLiteralKey(t *testing.T) {
+	var got []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = append(got, r.Method+" "+r.URL.Path)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	client := NewClient(ClientConfig{Host: server.URL, Database: "testdb", Timeout: 10 * time.Second})
+	ctx := context.Background()
+
+	assert.NoError(t, client.UpdateRecordByKey(ctx, "Notes", "5", map[string]interface{}{"Title": "x"}))
+	assert.NoError(t, client.DeleteRecordByKey(ctx, "Notes", "5"))
+	assert.NoError(t, client.UpdateRecord(ctx, "Notes", "5", map[string]interface{}{"Title": "x"}))
+	assert.Equal(t, []string{
+		"PATCH /fmi/odata/v4/testdb/Notes(5)",
+		"DELETE /fmi/odata/v4/testdb/Notes(5)",
+		"PATCH /fmi/odata/v4/testdb/Notes('5')",
+	}, got)
+}
