@@ -53,19 +53,7 @@ func openSQLite(file string) (*sql.DB, error) {
 	db.SetMaxIdleConns(1)
 	db.SetConnMaxLifetime(0 * time.Second)
 
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS request_logs (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		status INTEGER,
-		method TEXT,
-		error TEXT,
-		endpoint TEXT,
-		created_at DATETIME,
-		response TEXT,
-		request TEXT
-	)`)
-	if err == nil {
-		_, err = db.Exec(createNotesTable)
-	}
+	err = migrate(db, migrations)
 	if err != nil {
 		db.Close()
 		return nil, err
