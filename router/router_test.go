@@ -214,6 +214,12 @@ func TestGetRoutes(t *testing.T) {
 		"RenameNote":    {method: "POST", pattern: "/notes/:id/rename", useLogger: false, useAuth: true, checkClient: true},
 		"NoteChanges":   {method: "GET", pattern: "/changes", useLogger: false, useAuth: true, checkClient: true},
 		"ListProjects":  {method: "GET", pattern: "/projects", useLogger: false, useAuth: true, checkClient: true},
+		// Note history (#55): the same rules.
+		"NoteVersions":   {method: "GET", pattern: "/notes/:id/versions", useAuth: true, checkClient: true},
+		"NoteVersion":    {method: "GET", pattern: "/notes/:id/versions/:rev", useAuth: true, checkClient: true},
+		"RestoreVersion": {method: "POST", pattern: "/notes/:id/versions/:rev/restore", useAuth: true, checkClient: true},
+		"DeletedNotes":   {method: "GET", pattern: "/notes/deleted", useAuth: true, checkClient: true},
+		"UndeleteNote":   {method: "POST", pattern: "/notes/:id/undelete", useAuth: true, checkClient: true},
 	}
 
 	if len(routes) != len(expectedRoutes) {

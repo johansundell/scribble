@@ -55,6 +55,27 @@ ALTER TABLE notes ADD COLUMN share_token TEXT;
 CREATE UNIQUE INDEX notes_share_token ON notes(share_token);
 `,
 	},
+	{
+		// Note history (#55, ADR 7): a full copy of every kept version.
+		// Existing notes, deleted ones included, start with their current
+		// text; INSERT OR IGNORE keeps a rerun from duplicating it.
+		name: "note_versions",
+		sql: `
+CREATE TABLE IF NOT EXISTS note_versions (
+	note_id INTEGER NOT NULL REFERENCES notes(id),
+	revision INTEGER NOT NULL,
+	title TEXT NOT NULL,
+	body TEXT NOT NULL,
+	deleted INTEGER NOT NULL DEFAULT 0,
+	reason TEXT NOT NULL,
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL,
+	PRIMARY KEY (note_id, revision)
+);
+INSERT OR IGNORE INTO note_versions (note_id, revision, title, body, deleted, reason, created_at, updated_at)
+	SELECT id, revision, title, body, deleted, 'create', created_at, created_at FROM notes;
+`,
+	},
 }
 
 // migrate applies the migrations the database's user_version has not yet

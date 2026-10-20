@@ -14,8 +14,8 @@ import (
 
 // APILevel is the server's API level, sent in APIHeader on every response
 // and in /healthz. It goes up by one whenever endpoints or fields are added
-// (ADR 8).
-const APILevel = 1
+// (ADR 8). Level 2 added note history (#55).
+const APILevel = 2
 
 // minClientAPI is the lowest client API level the note endpoints accept.
 // It is raised only by a breaking change: a field renamed or removed, or a

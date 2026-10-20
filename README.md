@@ -31,6 +31,15 @@ create and update notes over an HTTP API.
 - Every note has a `revision` (for edit-conflict detection) and a `seq` (a
   global change counter, for sync). Deleting leaves a tombstone so synced
   clients learn about it.
+- **History** ([ADR 7](docs/adr/0007-note-history.md)): every write keeps a
+  full copy of the note's new text as a version, with the reason (create,
+  edit, rename, link-rewrite, restore, delete, undelete), in the same
+  database, so backups cover it. Versions are kept forever, deleted notes
+  included. Edits within 5 minutes of the edit before them replace that
+  version instead of adding one, so a burst of saves is one version and the
+  text before the burst is kept; the kept revisions therefore have gaps.
+  `/notes/:id/versions` lists them, a version can be restored as a new
+  revision, and deleted notes can be listed and undeleted.
 
 ## Quick start
 
@@ -120,7 +129,7 @@ respond.
 ### API level and old clients
 
 Every response carries `X-Version` (the release, such as `v0.0.12`) and
-`X-Scribble-API` (the API level, an integer). The policy
+`X-Scribble-API` (the API level, an integer; 2 since note history). The policy
 ([ADR 8](docs/adr/0008-api-level-and-minimum-client-level.md)):
 
 - **The API only grows.** Adding endpoints or fields raises the API level by
@@ -162,6 +171,11 @@ available".
 | GET | `/notes/:id/backlinks` | notes containing `[[Title]]` for this note |
 | POST | `/notes/:id/rename` | `{"title": "New"}`; rewrites `[[links]]` in other notes in one transaction |
 | GET | `/changes?since=N` | everything changed after seq N (deleted ones flagged) plus `latest_seq` to use next time |
+| GET | `/notes/:id/versions` | the note's kept versions, newest first, without bodies: `revision, title, reason, deleted, created_at, updated_at`. Works for deleted notes too |
+| GET | `/notes/:id/versions/:rev` | one version with its `body`. **404** if that revision wasn't kept |
+| POST | `/notes/:id/versions/:rev/restore` | optional `{"base_revision": 3}` (**412** as for `PUT`); sets the note's text to that version as a new revision and returns the note. **409** if the old title now belongs to another note, or if the note is deleted (undelete it first) |
+| GET | `/notes/deleted` | deleted notes, most recently deleted first: `id, title, deleted_at` |
+| POST | `/notes/:id/undelete` | brings a deleted note back with its last text and returns it. **409** if a live note has its title, **404** if the id isn't a deleted note |
 
 Notes need `STORAGE=sqlite` (the default). With `mysql` or `filemaker`, request
 logs still work but the notes endpoints answer **501**, and the service logs a

@@ -1,6 +1,6 @@
 # 7. Note history stores full copies, keeps them forever, and merges saves within 5 minutes
 
-- **Status:** Accepted (not built yet)
+- **Status:** Accepted, built in #55
 - **Tickets:** #55 (the CLI commands are #56, and the FileMaker replica adds two reasons in #66)
 
 ## Context

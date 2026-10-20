@@ -224,6 +224,54 @@ func (c *Client) Changes(ctx context.Context, since int64) (changed []notes.Note
 	return resp.Notes, resp.LatestSeq, err
 }
 
+// Versions returns note id's kept versions, newest first, without bodies
+// (server API level 2).
+func (c *Client) Versions(ctx context.Context, id int64) ([]notes.Version, error) {
+	var out []notes.Version
+	return out, c.do(ctx, "GET", notePath(id, "/versions"), nil, nil, &out)
+}
+
+// GetVersion returns note id's version at revision rev, with its body.
+// IsNotFound(err) is true when that revision was not kept. (Version is
+// taken: it is the client's own release.)
+func (c *Client) GetVersion(ctx context.Context, id, rev int64) (*notes.Version, error) {
+	var v notes.Version
+	if err := c.do(ctx, "GET", notePath(id, "/versions/"+strconv.FormatInt(rev, 10)), nil, nil, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+// Restore makes note id's version at rev its text again, as a new revision.
+// baseRevision works as in Update; IsTitleTaken(err) is true when another
+// note has the old title, or the note is deleted (Undelete it first).
+func (c *Client) Restore(ctx context.Context, id, rev, baseRevision int64) (*notes.Note, error) {
+	var n notes.Note
+	err := c.do(ctx, "POST", notePath(id, "/versions/"+strconv.FormatInt(rev, 10)+"/restore"), nil,
+		map[string]any{"base_revision": baseRevision}, &n)
+	if err != nil {
+		return nil, err
+	}
+	return &n, nil
+}
+
+// Deleted returns the deleted notes, most recently deleted first.
+func (c *Client) Deleted(ctx context.Context) ([]notes.DeletedNote, error) {
+	var out []notes.DeletedNote
+	return out, c.do(ctx, "GET", "/notes/deleted", nil, nil, &out)
+}
+
+// Undelete brings deleted note id back with its last text. IsTitleTaken(err)
+// is true when a live note has its title, IsNotFound(err) when id is not a
+// deleted note.
+func (c *Client) Undelete(ctx context.Context, id int64) (*notes.Note, error) {
+	var n notes.Note
+	if err := c.do(ctx, "POST", notePath(id, "/undelete"), nil, nil, &n); err != nil {
+		return nil, err
+	}
+	return &n, nil
+}
+
 // send adds X-Scribble-Client to req, sends it and notes the server's
 // version and API level from the answer.
 func (c *Client) send(req *http.Request) (*http.Response, error) {

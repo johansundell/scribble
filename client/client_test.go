@@ -132,3 +132,59 @@ func TestClientBadToken(t *testing.T) {
 		t.Errorf("want unauthorized, got %v", err)
 	}
 }
+
+func TestClientHistory(t *testing.T) {
+	ctx := context.Background()
+	c := newClient(t)
+
+	n, _ := c.Create(ctx, "# Ideas\nfirst")
+	cur, _ := c.Update(ctx, n.ID, "# Ideas\nsecond", 0)
+
+	vs, err := c.Versions(ctx, n.ID)
+	if err != nil || len(vs) != 2 || vs[0].Reason != "edit" || vs[1].Revision != 1 || vs[0].Body != "" {
+		t.Fatalf("Versions: %v %+v", err, vs)
+	}
+	if _, err := c.Versions(ctx, 99); !client.IsNotFound(err) {
+		t.Errorf("Versions of a missing note: want not-found, got %v", err)
+	}
+	v, err := c.GetVersion(ctx, n.ID, 1)
+	if err != nil || v.Body != "# Ideas\nfirst" {
+		t.Fatalf("Version: %v %+v", err, v)
+	}
+	if _, err := c.GetVersion(ctx, n.ID, 9); !client.IsNotFound(err) {
+		t.Errorf("Version 9: want not-found, got %v", err)
+	}
+
+	if _, err := c.Restore(ctx, n.ID, 1, n.Revision); !client.IsStale(err) {
+		t.Errorf("Restore from a stale base: want stale, got %v", err)
+	}
+	r, err := c.Restore(ctx, n.ID, 1, cur.Revision)
+	if err != nil || r.Body != "# Ideas\nfirst" || r.Revision != 3 {
+		t.Fatalf("Restore: %v %+v", err, r)
+	}
+	c.Rename(ctx, n.ID, "Thoughts")
+	c.Create(ctx, "# Ideas\nsomeone else")
+	if _, err := c.Restore(ctx, n.ID, 1, 0); !client.IsTitleTaken(err) {
+		t.Errorf("Restore onto a taken title: want title-taken, got %v", err)
+	}
+
+	if err := c.Delete(ctx, n.ID); err != nil {
+		t.Fatal(err)
+	}
+	del, err := c.Deleted(ctx)
+	if err != nil || len(del) != 1 || del[0].ID != n.ID || del[0].Title != "Thoughts" {
+		t.Fatalf("Deleted: %v %+v", err, del)
+	}
+	back, err := c.Undelete(ctx, n.ID)
+	if err != nil || back.Deleted || back.Title != "Thoughts" {
+		t.Fatalf("Undelete: %v %+v", err, back)
+	}
+	if _, err := c.Undelete(ctx, n.ID); !client.IsNotFound(err) {
+		t.Errorf("Undelete a live note: want not-found, got %v", err)
+	}
+	c.Delete(ctx, n.ID)
+	c.Create(ctx, "# thoughts\nnew")
+	if _, err := c.Undelete(ctx, n.ID); !client.IsTitleTaken(err) {
+		t.Errorf("Undelete onto a taken title: want title-taken, got %v", err)
+	}
+}
