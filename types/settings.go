@@ -38,7 +38,7 @@ type FileMakerSettings struct {
 	InsecureSkipVerify bool          `json:"insecureSkipVerify"`
 }
 
-// NotesReplica values: the FileMaker replica of the notes (#66).
+// NOTES_REPLICA values: the FileMaker replica of the notes (#66).
 const ReplicaFileMaker = "filemaker"
 
 // ReplicaSettings configures the FileMaker replica of the notes

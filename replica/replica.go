@@ -81,7 +81,7 @@ type Status struct {
 	Status      string `json:"status"`
 	PendingPush int    `json:"pending_push"`
 	// LastSync is when the last round finished, in UTC; empty before one.
-	LastSync string `json:"last_sync,omitempty"`
+	LastSync string `json:"last_sync"`
 	Reason   string `json:"reason,omitempty"`
 }
 

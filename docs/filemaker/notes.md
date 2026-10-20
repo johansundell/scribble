@@ -67,7 +67,7 @@ The service turns the replica off when the table has no record, more than one, o
 The account in `FMS_USERNAME` needs:
 
 - the `fmodata` extended privilege;
-- **create, edit, view and delete** on `Notes` and `PendingEdits`, and view on `ScribbleInfo`.
+- **create, edit, view and delete** on `Notes` and `PendingEdits`, and edit on `ScribbleInfo` (the service only reads it).
 
 #67 adds a privilege set for FileMaker users that makes the three tables view-only, except for adding rows to `PendingEdits`, so edits can't skip the history.
 

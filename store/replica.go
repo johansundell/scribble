@@ -148,7 +148,7 @@ func (s *SQLStore) ForgetPendingOutcome(ctx context.Context, id int64) error {
 func (s *SQLStore) applyPending(ctx context.Context, x dbx, e PendingEdit) (PendingOutcome, error) {
 	if e.Kind == PendingCreate {
 		id, err := s.createNote(ctx, x, e.Body)
-		if out, ok := refused(err, e.Body); ok {
+		if out, ok := refused(err, e.Body, 0); ok {
 			return out, nil
 		}
 		return PendingOutcome{Status: PendingApplied, NoteID: id}, err
@@ -177,8 +177,7 @@ func (s *SQLStore) applyPending(ctx context.Context, x dbx, e PendingEdit) (Pend
 
 	if !stale {
 		err := s.writeNote(ctx, x, now, cur.ID, e.Body, reasonEdit)
-		if out, ok := refused(err, e.Body); ok {
-			out.NoteID = cur.ID
+		if out, ok := refused(err, e.Body, cur.ID); ok {
 			return out, nil
 		}
 		return PendingOutcome{Status: PendingApplied, NoteID: cur.ID}, err
@@ -186,8 +185,7 @@ func (s *SQLStore) applyPending(ctx context.Context, x dbx, e PendingEdit) (Pend
 	// The app wins: the FileMaker text becomes a version, and the app's
 	// text is written again on top of it.
 	err = s.writeNote(ctx, x, now, cur.ID, e.Body, reasonFileMakerConflict)
-	if out, ok := refused(err, e.Body); ok {
-		out.NoteID = cur.ID
+	if out, ok := refused(err, e.Body, cur.ID); ok {
 		return out, nil
 	}
 	if err != nil {
@@ -200,13 +198,14 @@ func (s *SQLStore) applyPending(ctx context.Context, x dbx, e PendingEdit) (Pend
 		Message: fmt.Sprintf("Changed in the app at the same time. Your edit is saved in the note's history (r%d).", cur.Revision+1)}, nil
 }
 
-// refused turns a write refused for its title into a rejected outcome.
-func refused(err error, body string) (PendingOutcome, bool) {
+// refused turns a write to note id refused for its title into a rejected
+// outcome.
+func refused(err error, body string, id int64) (PendingOutcome, bool) {
 	switch {
 	case errors.Is(err, ErrTitleTaken):
-		return PendingOutcome{Status: PendingRejected, Message: fmt.Sprintf("A note titled %q already exists.", notes.TitleOf(body))}, true
+		return PendingOutcome{Status: PendingRejected, NoteID: id, Message: fmt.Sprintf("A note titled %q already exists.", notes.TitleOf(body))}, true
 	case errors.Is(err, ErrNoTitle):
-		return PendingOutcome{Status: PendingRejected, Message: "The note needs a title (its first line)."}, true
+		return PendingOutcome{Status: PendingRejected, NoteID: id, Message: "The note needs a title (its first line)."}, true
 	}
 	return PendingOutcome{}, false
 }
