@@ -1,7 +1,7 @@
 # 8. API level and a minimum client level, rather than versioned paths
 
 - **Status:** Accepted
-- **Tickets:** #57
+- **Tickets:** #57, #103
 
 ## Context
 
@@ -11,6 +11,7 @@ The server deploys itself on every release ([ADR 9](0009-releases-deploy-themsel
 
 - The server has an integer **API level** (1 at first; 2 since note history, #55). It sends it in `X-Scribble-API` on every response and in `/healthz`.
 - **The API only grows.** Adding endpoints or fields raises the API level. There are no versioned paths like `/v2/notes`.
+- New `/healthz` fields (such as `"schema"`, #103) don't raise the level. `/healthz` is a diagnostic that every level answers.
 - A second constant, the **minimum client level** (`minClientAPI`), is raised only by a breaking change: a field renamed or removed, or a meaning changed.
 - Clients send `X-Scribble-Client: <name>/<api level> <version>`. A request without it counts as level 1, which covers every client released before this. A client below the minimum gets **426 Upgrade Required** with a plain-text message that links to the latest release, so even old clients print it.
 - When the server's version is newer than the client's, the client says so, without refusing anything.

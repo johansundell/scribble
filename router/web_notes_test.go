@@ -226,7 +226,7 @@ func TestWeb_BesideAPI(t *testing.T) {
 
 	wantBody(t, e.do(get(fmt.Sprintf("/note/%d", n.ID), c)), http.StatusOK, "<h1>Alpha</h1>")
 	w := e.do(get("/healthz"))
-	if w.Code != http.StatusOK || strings.Contains(w.Body.String(), "Log out") {
+	if w.Code != http.StatusOK || strings.Contains(w.Body.String(), "Log out") || !strings.Contains(w.Body.String(), "API level 2 · schema 3") {
 		t.Errorf("/healthz = %d:\n%s", w.Code, w.Body.String())
 	}
 }

@@ -197,7 +197,11 @@ func cmdVersion(ctx context.Context, c *client.Client, w io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("cannot ask the server for its version: %w", err)
 	}
-	fmt.Fprintf(w, "server %s (API level %d)\n", h.Version, h.API)
+	schema := ""
+	if h.Schema > 0 {
+		schema = fmt.Sprintf(", schema %d", h.Schema)
+	}
+	fmt.Fprintf(w, "server %s (API level %d%s)\n", h.Version, h.API, schema)
 	if client.NewerRelease(Version, h.Version) {
 		fmt.Fprintf(w, "update available: %s\n", client.ReleasesURL)
 	}

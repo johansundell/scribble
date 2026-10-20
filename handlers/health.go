@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/johansundell/scribble/httperror"
+	"github.com/johansundell/scribble/store"
 )
 
 // APILevelKey is the gin context key the router stores its API level under,
@@ -29,6 +30,11 @@ func (h *Handler) HealthCheck(c *gin.Context) error {
 	}
 	if level, ok := c.Get(APILevelKey); ok {
 		data["api"] = level
+	}
+	if sv, ok := h.store.(store.SchemaVersioner); ok {
+		if v, ok := sv.SchemaVersion(); ok {
+			data["schema"] = v
+		}
 	}
 
 	// JSON when the client prefers it (Accept), HTML otherwise, including

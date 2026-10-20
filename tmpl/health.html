@@ -7,6 +7,9 @@
         We are up and running <span class="accent">{{.name}}</span> with version <span
             class="accent">{{.version}}</span> ;)
     </div>
+    {{if .api}}<div class="status-item">
+        API level {{.api}}{{if .schema}} · schema {{.schema}}{{end}}
+    </div>{{end}}
     <div class="status-item">
         Database: <span class="accent">{{.dbStatus}}</span>
     </div>
