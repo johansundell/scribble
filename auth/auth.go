@@ -26,7 +26,7 @@ import (
 const CookieName = "scribble_session"
 
 // cookiePath keeps the session cookie to the web app; the API never sees it.
-const cookiePath = "/app"
+const cookiePath = "/"
 
 // Guessing limits (ADR 5). After DefaultMaxFailures wrong PINs from one
 // address within DefaultFailureWindow, that address is refused until the

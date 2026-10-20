@@ -51,3 +51,10 @@ func (h *Handler) HealthCheck(c *gin.Context) error {
 	}
 	return nil
 }
+
+// RootToHealth sends the root to the health check. The router uses it only
+// while the web app, which is at the root, is off (#92).
+func (h *Handler) RootToHealth(c *gin.Context) error {
+	c.Redirect(http.StatusSeeOther, "/healthz")
+	return nil
+}

@@ -7,7 +7,7 @@ The result:
 - `scribble-server` in `/opt/scribble`, running as the systemd service `scribble-server`, with its settings in `/opt/scribble/.env` and its notes in `/opt/scribble/scribble-server.db`.
 - The server listening on `127.0.0.1:8082` only, so plain HTTP never leaves the machine.
 - nginx in front, serving HTTPS at your domain (`notes.example.com` below).
-- The web app at `https://notes.example.com/app`, if you want it.
+- The web app at `https://notes.example.com/`, if you want it.
 
 You need a VPS running Debian or Ubuntu, a domain name with a DNS `A` record that points to it, and `sudo`.
 
@@ -58,7 +58,7 @@ AUTH_TOKEN=<the first value>
 # nginx runs on this host: believe its X-Forwarded-For, and nobody else's.
 TRUSTED_PROXIES=127.0.0.1
 
-# The web app at /app. Leave WEB_PIN out to keep it off.
+# The web app at /. Leave WEB_PIN out to keep it off.
 WEB_PIN=<6-12 digits>
 SESSION_SECRET=<the second value>
 ```
@@ -89,7 +89,7 @@ systemctl status scribble-server --no-pager
 curl -s -H 'Accept: application/json' http://127.0.0.1:8082/healthz
 ```
 
-The service is `active (running)`, and `curl` prints JSON with `"dbStatus":"OK"`. If the web app is on, `journalctl -u scribble-server -n 20` shows `web app is on at /app`. If the service doesn't start, that log tells you why, for example a wrong `WEB_PIN`.
+The service is `active (running)`, and `curl` prints JSON with `"dbStatus":"OK"`. If the web app is on, `journalctl -u scribble-server -n 20` shows `web app is on at /`. If the service doesn't start, that log tells you why, for example a wrong `WEB_PIN`.
 
 ## 4. Put nginx in front
 
@@ -128,7 +128,7 @@ The first prints the same JSON as in step 3. The second prints `[]` (no notes ye
 ## 5. Try the clients
 
 - **CLI and desktop app:** set `SCRIBBLE_URL=https://notes.example.com` and `SCRIBBLE_TOKEN=<AUTH_TOKEN>` (see the [README](../README.md#quick-start)).
-- **Web app:** open `https://notes.example.com/app` in a browser or on your phone, and enter the PIN.
+- **Web app:** open `https://notes.example.com/` in a browser or on your phone, and enter the PIN.
 
 **Check:** `scribble new "Hello" "first note"` works, and the web app shows the page with "Log out" after the PIN.
 

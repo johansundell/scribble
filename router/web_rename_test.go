@@ -10,16 +10,16 @@ import (
 	"github.com/johansundell/scribble/notes"
 )
 
-func renamePath(n *notes.Note) string { return fmt.Sprintf("/app/notes/%d/rename", n.ID) }
-func deletePath(n *notes.Note) string { return fmt.Sprintf("/app/notes/%d/delete", n.ID) }
+func renamePath(n *notes.Note) string { return fmt.Sprintf("/note/%d/rename", n.ID) }
+func deletePath(n *notes.Note) string { return fmt.Sprintf("/note/%d/delete", n.ID) }
 
 func TestWebRename_RequireSessionAndOrigin(t *testing.T) {
 	e := newWebEnv(t)
 	n := e.note(t, "# Alpha")
-	wantRedirect(t, e.do(get(renamePath(n))), fmt.Sprintf("/app/login?next=/app/notes/%d/rename", n.ID))
-	wantRedirect(t, e.do(get(deletePath(n))), fmt.Sprintf("/app/login?next=/app/notes/%d/delete", n.ID))
-	wantRedirect(t, e.do(postForm(renamePath(n), url.Values{"title": {"Beta"}})), "/app/login")
-	wantRedirect(t, e.do(postForm(deletePath(n), nil)), "/app/login")
+	wantRedirect(t, e.do(get(renamePath(n))), fmt.Sprintf("/login?next=/note/%d/rename", n.ID))
+	wantRedirect(t, e.do(get(deletePath(n))), fmt.Sprintf("/login?next=/note/%d/delete", n.ID))
+	wantRedirect(t, e.do(postForm(renamePath(n), url.Values{"title": {"Beta"}})), "/login")
+	wantRedirect(t, e.do(postForm(deletePath(n), nil)), "/login")
 
 	c := e.login(t)
 	for _, path := range []string{renamePath(n), deletePath(n)} {
@@ -44,20 +44,20 @@ func TestWebRename_Buttons(t *testing.T) {
 	c := e.login(t)
 	n := e.note(t, "# Alpha")
 
-	w := e.do(get(fmt.Sprintf("/app/notes/%d?project=work", n.ID), c))
+	w := e.do(get(fmt.Sprintf("/note/%d?project=work", n.ID), c))
 	wantBody(t, w, http.StatusOK,
-		fmt.Sprintf(`href="/app/notes/%d/rename?project=work"`, n.ID), ">Rename<",
-		fmt.Sprintf(`href="/app/notes/%d/delete?project=work"`, n.ID), ">Delete<",
+		fmt.Sprintf(`href="/note/%d/rename?project=work"`, n.ID), ">Rename<",
+		fmt.Sprintf(`href="/note/%d/delete?project=work"`, n.ID), ">Delete<",
 		`data-confirm="Delete &#34;Alpha&#34;? This cannot be undone."`, "/assets/js/note.js",
 	)
 
 	// The editor offers Rename while nothing is unsaved, and not after a
 	// refused save, which leaves the text unsaved.
-	wantBody(t, e.do(get(editPath(n), c)), http.StatusOK, fmt.Sprintf(`href="/app/notes/%d/rename"`, n.ID), "data-rename")
+	wantBody(t, e.do(get(editPath(n), c)), http.StatusOK, fmt.Sprintf(`href="/note/%d/rename"`, n.ID), "data-rename")
 	w = e.do(postForm(editPath(n), url.Values{"body": {""}, "revision": {"1"}, "action": {"save"}}, c))
 	wantNot(t, w.Body.String(), "data-rename")
 	// Nor in a new note's editor.
-	wantNot(t, e.do(get("/app/new", c)).Body.String(), "data-rename", "/rename")
+	wantNot(t, e.do(get("/new", c)).Body.String(), "data-rename", "/rename")
 }
 
 func TestWebRename_Rename(t *testing.T) {
@@ -69,16 +69,16 @@ func TestWebRename_Rename(t *testing.T) {
 
 	w := e.do(get(renamePath(old)+"?project=work", c))
 	wantBody(t, w, http.StatusOK,
-		fmt.Sprintf(`action="/app/notes/%d/rename?project=work"`, old.ID), `method="post"`,
+		fmt.Sprintf(`action="/note/%d/rename?project=work"`, old.ID), `method="post"`,
 		`name="title"`, `value="Old"`, ">Rename</button>",
-		fmt.Sprintf(`href="/app/notes/%d?project=work"`, old.ID), ">Cancel<",
+		fmt.Sprintf(`href="/note/%d?project=work"`, old.ID), ">Cancel<",
 	)
 	if e.get(t, old.ID).Title != "Old" {
 		t.Fatal("GET rename changed the note")
 	}
 
 	w = e.do(postForm(renamePath(old)+"?project=work", url.Values{"title": {"  New Name "}}, c))
-	wantRedirect(t, w, fmt.Sprintf("/app/notes/%d?project=work", old.ID))
+	wantRedirect(t, w, fmt.Sprintf("/note/%d?project=work", old.ID))
 	if got := e.get(t, old.ID); got.Title != "New Name" || got.Body != "# New Name\nbody" {
 		t.Errorf("renamed note: %+v", got)
 	}
@@ -102,7 +102,7 @@ func TestWebRename_Rename(t *testing.T) {
 		t.Error("the other note changed")
 	}
 
-	for _, path := range []string{"/app/notes/999/rename", "/app/notes/abc/rename"} {
+	for _, path := range []string{"/note/999/rename", "/note/abc/rename"} {
 		wantBody(t, e.do(get(path, c)), http.StatusNotFound, "Note not found")
 		wantBody(t, e.do(postForm(path, url.Values{"title": {"X"}}, c)), http.StatusNotFound, "Note not found")
 	}
@@ -117,22 +117,22 @@ func TestWebRename_Delete(t *testing.T) {
 	w := e.do(get(deletePath(n)+"?project=work", c))
 	wantBody(t, w, http.StatusOK,
 		"Delete &#34;Doomed &lt;b&gt;&#34;? This cannot be undone.",
-		fmt.Sprintf(`action="/app/notes/%d/delete?project=work"`, n.ID), `method="post"`, ">Delete</button>",
-		fmt.Sprintf(`href="/app/notes/%d?project=work"`, n.ID), ">Cancel<",
+		fmt.Sprintf(`action="/note/%d/delete?project=work"`, n.ID), `method="post"`, ">Delete</button>",
+		fmt.Sprintf(`href="/note/%d?project=work"`, n.ID), ">Cancel<",
 	)
 	if _, err := e.store.GetNote(context.Background(), n.ID); err != nil {
 		t.Fatal("GET delete deleted the note")
 	}
 
-	wantRedirect(t, e.do(postForm(deletePath(n)+"?project=work", nil, c)), "/app?project=work")
+	wantRedirect(t, e.do(postForm(deletePath(n)+"?project=work", nil, c)), "/?project=work")
 	if _, err := e.store.GetNote(context.Background(), n.ID); err == nil {
 		t.Fatal("not deleted")
 	}
-	w = e.do(get("/app?project=work", c))
+	w = e.do(get("/?project=work", c))
 	wantListed(t, w.Body.String(), []string{"Kept"}, []string{"Doomed"})
 
 	// Deleting it again, or an unknown note: 404 inside the layout.
 	wantBody(t, e.do(postForm(deletePath(n), nil, c)), http.StatusNotFound, "Note not found", "Log out")
 	wantBody(t, e.do(get(deletePath(n), c)), http.StatusNotFound, "Note not found")
-	wantBody(t, e.do(get("/app/notes/abc/delete", c)), http.StatusNotFound, "Note not found")
+	wantBody(t, e.do(get("/note/abc/delete", c)), http.StatusNotFound, "Note not found")
 }

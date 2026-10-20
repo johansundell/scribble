@@ -112,7 +112,7 @@ deliberately **not** request-logged (the template's request log stores full
 bodies, which would copy every note into it). Errors are plain-text status
 text, like the rest of the service.
 
-`GET /healthz` (also `GET /`) needs no token. It reports the version, the
+`GET /healthz` needs no token. It reports the version, the
 API level (`"api"`) and the storage status, as JSON when the request sends
 `Accept: application/json`, and answers **503** when the storage does not
 respond.
@@ -141,7 +141,7 @@ This Scribble client is too old for this server. Download the latest release: ht
 
 Old clients print it as it is. The server logs each refusal as a warning
 with the client string and IP, at most once per client string per hour.
-`/healthz`, `/` and `/assets` are never refused.
+`/healthz`, the web app and `/assets` are never refused.
 
 The CLI then exits with an upgrade message. The desktop app shows the
 message with a download button, sets its indicator to "Update needed",
@@ -169,8 +169,10 @@ warning at startup.
 
 ## Web app
 
-The server can also serve a web app at `/app`, for a browser or a phone. It
-logs in with a PIN instead of the token. So far it has the PIN screen, logout
+The server can also serve a web app at its root, `/`, for a browser or a
+phone. It logs in with a PIN instead of the token. Its note pages are at
+`/note/<id>`, apart from the JSON API at `/notes/<id>`. With the web app off,
+`/` redirects to `/healthz`. So far it has the PIN screen, logout
 and the page layout; the notes come next (#46).
 
 It is off until `WEB_PIN` is set. To turn it on, add to the server's `.env`:
@@ -252,7 +254,7 @@ The server refuses to start if the PIN isn't 6–12 digits, or if
   revokes its link. (#83)
 - **Add to Home Screen:** in Safari on iPhone, Share → *Add to Home Screen*;
   in Chrome on Android, ⋮ → *Add to Home screen* (or *Install app*). The
-  Scribble icon then opens `/app` without the browser bars. The app is
+  Scribble icon then opens the web app without the browser bars. The app is
   online only ([ADR 6](docs/adr/0006-web-app-is-online-only.md)): it needs a
   connection to the server, and opened without one it shows the browser's
   offline page. The icons are made from `assets/img/favicon.png` with
@@ -395,7 +397,7 @@ SCRIBBLE_WEBDRIVER=http://localhost:4444 SCRIBBLE_WEBDRIVER_HOST=host.docker.int
 - [ ] Note history: every change keeps the old text, with restore and
       undelete on the server (#55) and `scribble history / diff / restore /
       undelete` in the CLI (#56)
-- [ ] Web app at `/app`: log in with a PIN, then browse, search, read,
+- [ ] Web app at `/`: log in with a PIN, then browse, search, read,
       edit, rename and delete notes like in the desktop app (#46), on
       phones too, with "Add to Home Screen" (#65)
 - [ ] GitHub-style Markdown editing (toolbar, `Ctrl+B` / `Ctrl+I` /

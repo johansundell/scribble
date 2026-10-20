@@ -7,11 +7,11 @@ a note, the list otherwise. */}}
 		{{- with .Rename}}{{$open = .ID}}{{end}}{{with .Delete}}{{$open = .ID}}{{end}}{{with .Share}}{{$open = .ID}}{{end}}
 		{{- $filter := .Filter}}
 		<div class="list-actions">
-			<a class="button" href="/app/new{{$filter}}" data-filtered="new" data-shortcut="new">New</a>
+			<a class="button" href="/new{{$filter}}" data-filtered="new" data-shortcut="new">New</a>
 		</div>
 		{{/* Without JavaScript the form is sent with Enter or Filter; list.js
 		filters while typing and swaps in the list, so the open note stays. */}}
-		<form class="list-filter" method="get" action="/app" role="search">
+		<form class="list-filter" method="get" action="/" role="search">
 			<input type="search" name="q" value="{{.Query}}" class="search-field" data-shortcut="search" placeholder="Search" aria-label="Search notes" autocomplete="off" />
 			<select name="project" class="project-select" aria-label="Project">
 				<option value="">All notes</option>
@@ -42,7 +42,7 @@ a note, the list otherwise. */}}
 		list, the title and the note's actions; from 700 px up only the
 		actions show, as before. */}}
 		<div class="note-bar">
-			<a class="button back-link" href="/app{{.Filter}}" data-filtered="back">← Notes</a>
+			<a class="button back-link" href="/{{.Filter}}" data-filtered="back">← Notes</a>
 			<span class="note-bar-title">{{.Title}}</span>
 			{{- if and .Note (not .Message)}}
 			{{/* Without JavaScript, Delete opens a page that asks first; note.js
@@ -155,7 +155,7 @@ after its start tag, so one is always written there to keep the note's own. */}}
 			{{- end}}
 			<div class="session-ended" role="alert" hidden>
 				Your session has ended. Copy your text, then log in again.
-				<a href="/app/login" target="_blank" rel="noopener">Log in</a>
+				<a href="/login" target="_blank" rel="noopener">Log in</a>
 			</div>
 			<p class="editor-error" role="alert"{{if not .Error}} hidden{{end}}>{{.Error}}</p>
 			{{- if .Conflict}}

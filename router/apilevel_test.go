@@ -72,7 +72,7 @@ func TestTooOldClientGets426(t *testing.T) {
 		{"at the minimum", "GET", "/notes", "cli/2 v0.1.0", http.StatusNotImplemented},
 		{"above the minimum", "GET", "/notes", "gui/3 v0.2.0", http.StatusNotImplemented},
 		{"healthz is never refused", "GET", "/healthz", "", http.StatusOK},
-		{"root is never refused", "GET", "/", "", http.StatusOK},
+		{"root is never refused", "GET", "/", "", http.StatusSeeOther},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

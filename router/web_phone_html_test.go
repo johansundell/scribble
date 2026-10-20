@@ -12,16 +12,16 @@ import (
 func TestWebPhoneHTML_Head(t *testing.T) {
 	e := newWebEnv(t)
 	c := e.login(t)
-	for _, path := range []string{"/app/login", "/app"} {
+	for _, path := range []string{"/login", "/"} {
 		var cookies []*http.Cookie
-		if path != "/app/login" {
+		if path != "/login" {
 			cookies = append(cookies, c)
 		}
 		w := e.do(get(path, cookies...))
 		wantBody(t, w, http.StatusOK,
 			// Zooming stays on: no maximum-scale or user-scalable.
 			`<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />`,
-			`<link rel="manifest" href="/app/manifest.webmanifest" />`,
+			`<link rel="manifest" href="/manifest.webmanifest" />`,
 			`<link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png" />`,
 			`<meta name="apple-mobile-web-app-capable" content="yes" />`,
 			`<meta name="apple-mobile-web-app-title" content="Scribble" />`,
@@ -35,7 +35,7 @@ func TestWebPhoneHTML_Head(t *testing.T) {
 func TestWebPhoneHTML_Manifest(t *testing.T) {
 	e := newWebEnv(t)
 	// No session: the home-screen icon is fetched before login.
-	w := e.do(get("/app/manifest.webmanifest"))
+	w := e.do(get("/manifest.webmanifest"))
 	if w.Code != http.StatusOK {
 		t.Fatalf("GET manifest = %d: %s", w.Code, w.Body.String())
 	}
@@ -55,7 +55,7 @@ func TestWebPhoneHTML_Manifest(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &m); err != nil {
 		t.Fatalf("manifest is not JSON: %v\n%s", err, w.Body.String())
 	}
-	if m.Name != "Scribble" || m.ShortName != "Scribble" || m.StartURL != "/app" || m.Scope != "/app" || m.Display != "standalone" {
+	if m.Name != "Scribble" || m.ShortName != "Scribble" || m.StartURL != "/" || m.Scope != "/" || m.Display != "standalone" {
 		t.Errorf("manifest = %+v", m)
 	}
 	if m.ThemeColor == "" || m.BackgroundColor == "" {
@@ -101,22 +101,22 @@ func TestWebPhoneHTML_Panes(t *testing.T) {
 	n := e.note(t, "# Alpha\n#work")
 
 	// The list alone has no note open.
-	body := e.do(get("/app?q=al", c)).Body.String()
+	body := e.do(get("/?q=al", c)).Body.String()
 	if !strings.Contains(body, `<main class="app-main">`) {
-		t.Errorf("/app shows the note pane on phones:\n%s", body)
+		t.Errorf("/ shows the note pane on phones:\n%s", body)
 	}
 	wantNot(t, body, "back-link")
 
 	// Every page about a note shows the note pane, with a back link that
 	// keeps the filter.
-	back := `<a class="button back-link" href="/app?project=work&amp;q=al" data-filtered="back">← Notes</a>`
+	back := `<a class="button back-link" href="/?project=work&amp;q=al" data-filtered="back">← Notes</a>`
 	for path, status := range map[string]int{
-		fmt.Sprintf("/app/notes/%d", n.ID): http.StatusOK,
-		editPath(n):                        http.StatusOK,
-		renamePath(n):                      http.StatusOK,
-		deletePath(n):                      http.StatusOK,
-		"/app/new":                         http.StatusOK,
-		"/app/notes/999":                   http.StatusNotFound,
+		fmt.Sprintf("/note/%d", n.ID): http.StatusOK,
+		editPath(n):                   http.StatusOK,
+		renamePath(n):                 http.StatusOK,
+		deletePath(n):                 http.StatusOK,
+		"/new":                        http.StatusOK,
+		"/note/999":                   http.StatusNotFound,
 	} {
 		w := e.do(get(path+"?project=work&q=al", c))
 		wantBody(t, w, status, `<main class="app-main has-note">`, back, `<span class="note-bar-title">`)
@@ -127,15 +127,15 @@ func TestWebPhoneHTML_NoteMenu(t *testing.T) {
 	e := newWebEnv(t)
 	c := e.login(t)
 	n := e.note(t, "# Alpha")
-	w := e.do(get(fmt.Sprintf("/app/notes/%d", n.ID), c))
+	w := e.do(get(fmt.Sprintf("/note/%d", n.ID), c))
 	wantBody(t, w, http.StatusOK,
 		`<span class="note-bar-title">Alpha</span>`,
 		// Rename and Delete under ⋯ on phones: a <details>, so no JavaScript
 		// is needed. Delete there asks first, as the wide one does.
 		`<details class="more-menu">`,
 		`<summary class="button" aria-label="More actions">⋯</summary>`,
-		fmt.Sprintf(`href="/app/notes/%d/rename" data-filtered="rename-more">Rename</a>`, n.ID),
-		fmt.Sprintf(`href="/app/notes/%d/delete" data-filtered="delete-more" data-confirm="Delete &#34;Alpha&#34;? This cannot be undone.">Delete</a>`, n.ID),
+		fmt.Sprintf(`href="/note/%d/rename" data-filtered="rename-more">Rename</a>`, n.ID),
+		fmt.Sprintf(`href="/note/%d/delete" data-filtered="delete-more" data-confirm="Delete &#34;Alpha&#34;? This cannot be undone.">Delete</a>`, n.ID),
 	)
 }
 

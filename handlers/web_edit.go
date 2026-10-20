@@ -17,7 +17,7 @@ import (
 // changes check and saving with fetch.
 
 // NewPath is the new-note editor.
-const NewPath = AppHome + "/new"
+const NewPath = "/new"
 
 // EditPath is the editor of the note with id.
 func EditPath(id int64) string {

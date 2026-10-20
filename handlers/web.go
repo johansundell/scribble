@@ -18,13 +18,20 @@ import (
 	"github.com/johansundell/scribble/store"
 )
 
-// The web app at /app (ADR 4, ADR 5). The router only registers these
-// routes when WEB_PIN is set, and checks the session before App.
+// The web app at the root (ADR 4, ADR 5, #92). The router only registers
+// these routes when WEB_PIN is set, and checks the session before App. Its
+// note pages are under /note, as /notes is the JSON API.
 
-// AppHome is where a login lands, and LoginPath the PIN screen.
+// AppHome is where a login lands, LoginPath the PIN screen and LogoutPath
+// where Log out posts.
 const (
-	AppHome   = "/app"
-	LoginPath = "/app/login"
+	AppHome    = "/"
+	LoginPath  = "/login"
+	LogoutPath = "/logout"
+	// NotePrefix starts a note's pages and TitlePrefix the open-by-title
+	// page.
+	NotePrefix  = "/note/"
+	TitlePrefix = "/title/"
 )
 
 // LoginTo is the PIN screen, going on to next after login. The slashes in
@@ -35,13 +42,13 @@ func LoginTo(next string) string {
 
 // NotePath is the web app page of the note with id.
 func NotePath(id int64) string {
-	return AppHome + "/notes/" + strconv.FormatInt(id, 10)
+	return NotePrefix + strconv.FormatInt(id, 10)
 }
 
 // TitlePath is the web app page that opens the note titled title. Dots are
 // escaped too, so a browser never reads "." or ".." as a path step.
 func TitlePath(title string) string {
-	return AppHome + "/title/" + strings.ReplaceAll(url.PathEscape(title), ".", "%2E")
+	return TitlePrefix + strings.ReplaceAll(url.PathEscape(title), ".", "%2E")
 }
 
 // ProjectPath is the list of the notes tagged #project.
@@ -134,7 +141,7 @@ func (h *Handler) LoginPage(c *gin.Context) error {
 }
 
 // Login checks the posted PIN. The right one starts a session and goes to
-// next (a path under /app) or AppHome; a wrong one shows the screen again.
+// next (a path on this site) or AppHome; a wrong one shows the screen again.
 func (h *Handler) Login(c *gin.Context) error {
 	if h.auth == nil {
 		return httperror.ReturnWithHTTPStatus(errWebNotConfigured, http.StatusInternalServerError)
@@ -325,7 +332,7 @@ func (h *Handler) renderWeb(c *gin.Context, status int, tmplFile string, data we
 	return nil
 }
 
-// SafeNext returns next when it is a plain path under /app, and AppHome
+// SafeNext returns next when it is a plain path on this site, and AppHome
 // otherwise, so the login can't send anyone to another site.
 func SafeNext(next string) string {
 	if strings.Contains(next, `\`) {
@@ -335,11 +342,11 @@ func SafeNext(next string) string {
 	if err != nil || u.Scheme != "" || u.Host != "" || u.Opaque != "" {
 		return AppHome
 	}
-	if u.Path != AppHome && !strings.HasPrefix(u.Path, AppHome+"/") {
+	if !strings.HasPrefix(u.Path, "/") {
 		return AppHome
 	}
-	// "/app/../x" would leave /app once the browser resolves it.
-	if path.Clean(u.Path) != strings.TrimSuffix(u.Path, "/") {
+	// Only a clean path: "/note/../x" is not where it seems to go.
+	if u.Path != "/" && path.Clean(u.Path) != strings.TrimSuffix(u.Path, "/") {
 		return AppHome
 	}
 	return next

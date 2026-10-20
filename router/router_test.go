@@ -173,34 +173,36 @@ func TestGetRoutes(t *testing.T) {
 		useSession  bool
 		allowCross  bool
 		checkClient bool
+		webOff      bool
 	}{
 		// The web app: on only with WEB_PIN, never request-logged. Login and
 		// logout take posts from anywhere; every other web POST is origin-checked.
-		"LoginPage":     {method: "GET", pattern: "/app/login", web: true},
-		"Login":         {method: "POST", pattern: "/app/login", web: true, allowCross: true},
-		"Logout":        {method: "POST", pattern: "/app/logout", web: true, allowCross: true},
-		"AppManifest":   {method: "GET", pattern: "/app/manifest.webmanifest", web: true},
-		"App":           {method: "GET", pattern: "/app", web: true, useSession: true},
-		"AppNote":       {method: "GET", pattern: "/app/notes/:id", web: true, useSession: true},
-		"AppTitle":      {method: "GET", pattern: "/app/title/*title", web: true, useSession: true},
-		"AppEdit":       {method: "GET", pattern: "/app/notes/:id/edit", web: true, useSession: true},
-		"AppSave":       {method: "POST", pattern: "/app/notes/:id/edit", web: true, useSession: true},
-		"AppNew":        {method: "GET", pattern: "/app/new", web: true, useSession: true},
-		"AppRenameForm": {method: "GET", pattern: "/app/notes/:id/rename", web: true, useSession: true},
-		"AppRename":     {method: "POST", pattern: "/app/notes/:id/rename", web: true, useSession: true},
-		"AppDeleteForm": {method: "GET", pattern: "/app/notes/:id/delete", web: true, useSession: true},
-		"AppDelete":     {method: "POST", pattern: "/app/notes/:id/delete", web: true, useSession: true},
-		"AppCreate":     {method: "POST", pattern: "/app/new", web: true, useSession: true},
-		"AppPreview":    {method: "POST", pattern: "/app/preview", web: true, useSession: true},
-		"AppShareForm":  {method: "GET", pattern: "/app/notes/:id/share", web: true, useSession: true},
-		"AppShare":      {method: "POST", pattern: "/app/notes/:id/share", web: true, useSession: true},
+		"LoginPage":     {method: "GET", pattern: "/login", web: true},
+		"Login":         {method: "POST", pattern: "/login", web: true, allowCross: true},
+		"Logout":        {method: "POST", pattern: "/logout", web: true, allowCross: true},
+		"AppManifest":   {method: "GET", pattern: "/manifest.webmanifest", web: true},
+		"App":           {method: "GET", pattern: "/", web: true, useSession: true},
+		"AppNote":       {method: "GET", pattern: "/note/:id", web: true, useSession: true},
+		"AppTitle":      {method: "GET", pattern: "/title/*title", web: true, useSession: true},
+		"AppEdit":       {method: "GET", pattern: "/note/:id/edit", web: true, useSession: true},
+		"AppSave":       {method: "POST", pattern: "/note/:id/edit", web: true, useSession: true},
+		"AppNew":        {method: "GET", pattern: "/new", web: true, useSession: true},
+		"AppRenameForm": {method: "GET", pattern: "/note/:id/rename", web: true, useSession: true},
+		"AppRename":     {method: "POST", pattern: "/note/:id/rename", web: true, useSession: true},
+		"AppDeleteForm": {method: "GET", pattern: "/note/:id/delete", web: true, useSession: true},
+		"AppDelete":     {method: "POST", pattern: "/note/:id/delete", web: true, useSession: true},
+		"AppCreate":     {method: "POST", pattern: "/new", web: true, useSession: true},
+		"AppPreview":    {method: "POST", pattern: "/preview", web: true, useSession: true},
+		"AppShareForm":  {method: "GET", pattern: "/note/:id/share", web: true, useSession: true},
+		"AppShare":      {method: "POST", pattern: "/note/:id/share", web: true, useSession: true},
 		// A share link's public page: web, but no session.
-		"Shared":      {method: "GET", pattern: "/s/:token", web: true},
-		"HealthCheck": {method: "GET", pattern: "/", useLogger: false, useAuth: false},
-		"Healthz":     {method: "GET", pattern: "/healthz", useLogger: false, useAuth: false},
-		"Ping":        {method: "GET", pattern: "/ping/:argument", useLogger: true, useAuth: false},
-		"Pong":        {method: "POST", pattern: "/pong", useLogger: true, useAuth: true},
-		"GetLogs":     {method: "GET", pattern: "/logs/:from/:to", useLogger: false, useAuth: true},
+		"Shared": {method: "GET", pattern: "/s/:token", web: true},
+		// With the web app off, the root goes to the health check.
+		"RootToHealth": {method: "GET", pattern: "/", webOff: true},
+		"Healthz":      {method: "GET", pattern: "/healthz", useLogger: false, useAuth: false},
+		"Ping":         {method: "GET", pattern: "/ping/:argument", useLogger: true, useAuth: false},
+		"Pong":         {method: "POST", pattern: "/pong", useLogger: true, useAuth: true},
+		"GetLogs":      {method: "GET", pattern: "/logs/:from/:to", useLogger: false, useAuth: true},
 		// Notes: authenticated, never request-logged (the log would copy every note body),
 		// and closed to clients below the minimum API level.
 		"ListNotes":     {method: "GET", pattern: "/notes", useLogger: false, useAuth: true, checkClient: true},
@@ -239,6 +241,9 @@ func TestGetRoutes(t *testing.T) {
 		if route.Web != expected.web || route.UseSession != expected.useSession || route.AllowCrossOrigin != expected.allowCross {
 			t.Errorf("Route %q: expected Web=%v UseSession=%v AllowCrossOrigin=%v, got %v %v %v", route.Name,
 				expected.web, expected.useSession, expected.allowCross, route.Web, route.UseSession, route.AllowCrossOrigin)
+		}
+		if route.WebOff != expected.webOff {
+			t.Errorf("Route %q: expected WebOff=%v, got %v", route.Name, expected.webOff, route.WebOff)
 		}
 		if route.CheckClient != expected.checkClient {
 			t.Errorf("Route %q: expected CheckClient=%v, got %v", route.Name, expected.checkClient, route.CheckClient)

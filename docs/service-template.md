@@ -180,7 +180,7 @@ The application is configured via environment variables. You can set these in a 
 | `BACKUP_DIR` | string | `backups` beside the database | Where `scribble-server backup` stores its `scribble_<timestamp>.db.gz` archives. The `-dir` flag overrides it. |
 | `RETENTION_DAYS` | int | `7` | After each backup, `scribble-server backup` deletes archives older than this many days. The newest archive is always kept, however old. The `-retention-days` flag overrides it. |
 | `AUTH_TOKEN` | string | random per start | Token required for protected endpoints. When unset, a temporary token is generated and logged (see [Authentication token](#authentication-token)). |
-| `WEB_PIN` | string | - | The PIN for the web app at `/app`: 6–12 digits. **Unset means the web app is off** and every `/app` path answers 404. The JSON API never accepts it. |
+| `WEB_PIN` | string | - | The PIN for the web app at `/`: 6–12 digits. **Unset means the web app is off**: its paths answer 404 and `/` redirects to `/healthz`. The JSON API never accepts it. |
 | `SESSION_SECRET` | string | - | The key that signs the web app's session cookie: at least 32 characters, and not equal to `AUTH_TOKEN`. Required when `WEB_PIN` is set. Generate it with `openssl rand -base64 33`. Changing it ends every session. |
 | `WEB_SESSION_TIMEOUT` | duration | `168h` | How long a web login lasts (7 days). The expiry is fixed at login and never extended. |
 | `TRUSTED_PROXIES` | string | none | Comma-separated IPs or CIDRs whose `X-Forwarded-For` is believed, for example `127.0.0.1` for nginx on the same host. With none, the client address is the TCP peer. It keys the web app's per-address PIN limit. |

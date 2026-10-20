@@ -91,7 +91,7 @@ function loadPreview(form, body, preview) {
 		if (run !== previewRun) return;
 		preview.textContent = UNAVAILABLE;
 	};
-	fetch("/app/preview", {
+	fetch("/preview", {
 		method: "POST",
 		body: new URLSearchParams({ body: body }),
 		credentials: "same-origin",

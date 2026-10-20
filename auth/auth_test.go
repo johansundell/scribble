@@ -82,7 +82,7 @@ func login(t *testing.T, a *auth.Authenticator) *http.Cookie {
 }
 
 func hasSession(a *auth.Authenticator, c *http.Cookie) bool {
-	r := httptest.NewRequest("GET", "/app", nil)
+	r := httptest.NewRequest("GET", "/", nil)
 	r.AddCookie(c)
 	return a.Session(r)
 }
@@ -124,7 +124,7 @@ func TestSessionCookie(t *testing.T) {
 	a, clk := newAuth(t, nil)
 	c := login(t, a)
 
-	if c.Name != auth.CookieName || c.Path != "/app" || !c.HttpOnly || !c.Secure || c.SameSite != http.SameSiteLaxMode {
+	if c.Name != auth.CookieName || c.Path != "/" || !c.HttpOnly || !c.Secure || c.SameSite != http.SameSiteLaxMode {
 		t.Errorf("cookie attributes: %+v", c)
 	}
 	if c.MaxAge != 3600 {
@@ -187,7 +187,7 @@ func TestEndSession(t *testing.T) {
 	w := httptest.NewRecorder()
 	a.EndSession(w)
 	c := w.Result().Cookies()
-	if len(c) != 1 || c[0].Name != auth.CookieName || c[0].Path != "/app" || c[0].MaxAge >= 0 || c[0].Value != "" {
+	if len(c) != 1 || c[0].Name != auth.CookieName || c[0].Path != "/" || c[0].MaxAge >= 0 || c[0].Value != "" {
 		t.Errorf("EndSession cookie: %+v", c)
 	}
 }
