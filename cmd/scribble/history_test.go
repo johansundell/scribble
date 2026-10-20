@@ -203,6 +203,19 @@ func TestCmdRestore(t *testing.T) {
 		}
 	})
 
+	t.Run("the question warns of a new title", func(t *testing.T) {
+		c := newClient(t)
+		historyNote(t, c)
+		var out bytes.Buffer
+		if err := cmdRestore(ctx, c, &out, strings.NewReader("y\n"), true, []string{"Plans", "1"}); err != nil {
+			t.Fatal(err)
+		}
+		want := "Restore \"Plans\" to r1 (renames it to \"Draft\")? [y/N] restored \"Plans\" to r1 (now titled \"Draft\")\n"
+		if out.String() != want {
+			t.Errorf("printed %q, want %q", out.String(), want)
+		}
+	})
+
 	t.Run("no on the terminal keeps the note", func(t *testing.T) {
 		c := newClient(t)
 		historyNote(t, c)
@@ -233,7 +246,7 @@ func TestCmdRestore(t *testing.T) {
 			if err := cmdRestore(ctx, c, &out, strings.NewReader("n\n"), tc.ask, tc.args); err != nil {
 				t.Fatal(err)
 			}
-			if want := "restored \"Plans\" to r1\n"; out.String() != want {
+			if want := "restored \"Plans\" to r1 (now titled \"Draft\")\n"; out.String() != want {
 				t.Errorf("printed %q, want %q", out.String(), want)
 			}
 			// r1 was titled Draft, so the note has that title again.

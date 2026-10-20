@@ -194,17 +194,26 @@ func cmdRestore(ctx context.Context, c *client.Client, w io.Writer, in io.Reader
 			return err
 		}
 		if ask && !*yes {
-			fmt.Fprintf(w, "Restore %q to r%d? [y/N] ", n.Title, rev)
+			rename := ""
+			if v.Title != n.Title {
+				rename = fmt.Sprintf(" (renames it to %q)", v.Title)
+			}
+			fmt.Fprintf(w, "Restore %q to r%d%s? [y/N] ", n.Title, rev, rename)
 			answer, _ := bufio.NewReader(in).ReadString('\n')
 			if a := strings.ToLower(strings.TrimSpace(answer)); a != "y" && a != "yes" {
 				fmt.Fprintln(w, "not restored")
 				return nil
 			}
 		}
-		if _, err := c.Restore(ctx, n.ID, rev, n.Revision); err != nil {
+		restored, err := c.Restore(ctx, n.ID, rev, n.Revision)
+		if err != nil {
 			return explain(err, v.Title)
 		}
-		fmt.Fprintf(w, "restored %q to r%d\n", n.Title, rev)
+		fmt.Fprintf(w, "restored %q to r%d", n.Title, rev)
+		if restored.Title != n.Title {
+			fmt.Fprintf(w, " (now titled %q)", restored.Title)
+		}
+		fmt.Fprintln(w)
 		return nil
 	})
 }

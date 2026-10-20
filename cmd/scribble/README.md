@@ -281,9 +281,12 @@ nothing when the versions are the same, and exits with 0 either way.
 
 Makes an old version of a note its current text, as a new revision, and
 prints `restored "<title>" to r<rev>`. The old version's title comes back
-with it. Nothing is lost: the text it replaces stays in the history.
+with it, and then the message ends with `(now titled "<new title>")`.
+Nothing is lost: the text it replaces stays in the history.
 
-When stdin is a terminal, it asks `Restore "Ideas" to r4? [y/N]` first.
+When stdin is a terminal, it asks `Restore "Ideas" to r4? [y/N]` first, or
+`Restore "Ideas" to r4 (renames it to "Draft")? [y/N]` when the old version
+had another title.
 `-y` skips the question. When stdin is piped, it does not ask, so scripts
 work.
 
