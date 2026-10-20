@@ -410,7 +410,7 @@ SCRIBBLE_WEBDRIVER=http://localhost:4444 SCRIBBLE_WEBDRIVER_HOST=host.docker.int
       runs, keeps 7 days, and runs daily from cron (#62)
 - [x] API level and minimum client version, so the server can tell
       desktop apps and CLIs that are too old to upgrade (#57)
-- [ ] Note history: every change keeps the old text, with restore and
+- [x] Note history: every change keeps the old text, with restore and
       undelete on the server (#55) and `scribble history / diff / restore /
       undelete` in the CLI (#56)
 - [ ] Web app at `/`: log in with a PIN, then browse, search, read,

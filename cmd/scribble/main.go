@@ -26,7 +26,7 @@ const usage = `scribble - notes from the command line (version %s)
 
 Usage:
   scribble new <title> [text...]     create a note (text may also be piped in)
-  scribble show <title>              print a note's Markdown
+  scribble show <title> [-r <rev>]   print a note's Markdown, or that of an old version
   scribble edit <title>              edit in $EDITOR
   scribble append <title> [text...]  add text at the end (creates the note if missing; pipe-friendly)
   scribble ls                        list all notes
@@ -38,8 +38,23 @@ Usage:
   scribble autolink <title>          turn mentions of other note titles into [[links]]
   scribble import <path...>          import Tomboy .note XML files or directories
   scribble rm <title>                delete a note
+  scribble history <title>           list a note's versions, newest first
+  scribble diff <title> [<rev> [<rev2>]]
+                                     show what changed between two versions
+  scribble restore [-y] <title> <rev>
+                                     make an old version the current text
+  scribble deleted                   list deleted notes
+  scribble undelete <title>          bring back a deleted note
   scribble completion [bash]         output shell completion script
   scribble version                   print the client's and the server's versions
+
+Examples:
+  scribble history "Work log"        see its versions
+  scribble show "Work log" -r 3      print version r3
+  scribble diff "Work log"           what the last change did
+  scribble diff "Work log" 3 5       what changed from r3 to r5
+  scribble restore "Work log" r3     make r3 the current text again
+  scribble deleted                   then: scribble undelete "Work log"
 
 Environment:
   SCRIBBLE_URL    server address (default http://localhost:8080)
@@ -97,13 +112,7 @@ func runWith(stdout io.Writer, args []string) error {
 	case "new":
 		return cmdNew(ctx, c, rest)
 	case "show":
-		return withNote(ctx, c, rest, 1, func(n *notes.Note, _ []string) error {
-			fmt.Print(n.Body)
-			if !strings.HasSuffix(n.Body, "\n") {
-				fmt.Println()
-			}
-			return nil
-		})
+		return cmdShow(ctx, c, stdout, rest)
 	case "edit":
 		return cmdEdit(ctx, c, rest)
 	case "append":
@@ -164,6 +173,16 @@ func runWith(stdout io.Writer, args []string) error {
 			fmt.Printf("deleted %q\n", n.Title)
 			return nil
 		})
+	case "history":
+		return cmdHistory(ctx, c, stdout, rest)
+	case "diff":
+		return cmdDiff(ctx, c, stdout, diffColour(), rest)
+	case "restore":
+		return cmdRestore(ctx, c, stdout, os.Stdin, !stdinPiped(), rest)
+	case "deleted":
+		return cmdDeleted(ctx, c, stdout, rest)
+	case "undelete":
+		return cmdUndelete(ctx, c, stdout, rest)
 	}
 	return fmt.Errorf("unknown command %q (try: scribble help)", cmd)
 }

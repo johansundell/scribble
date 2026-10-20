@@ -30,7 +30,7 @@ _scribble() {
         cword=$COMP_CWORD
     fi
 
-    local commands="new show edit append ls search links backlinks projects rename autolink import rm completion version help"
+    local commands="new show edit append ls search links backlinks projects rename autolink import rm history diff restore deleted undelete completion version help"
 
     if [[ $cword -eq 1 ]]; then
         COMPREPLY=( $(compgen -W "$commands" -- "$cur") )
@@ -39,7 +39,7 @@ _scribble() {
 
     local cmd="${words[1]}"
     case "$cmd" in
-        show|edit|append|links|backlinks|autolink|rm)
+        show|edit|append|links|backlinks|autolink|rm|history|diff|restore)
             if [[ $cword -eq 2 ]]; then
                 _scribble_complete_titles "$cur"
             fi
