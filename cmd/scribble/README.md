@@ -73,7 +73,7 @@ stderr as `scribble: <message>`.
 | `deleted` | list deleted notes, most recently deleted first |
 | `undelete <title>` | bring back a deleted note |
 | `completion [bash]` | output shell completion script |
-| `version` | print the client's and the server's versions and API levels |
+| `version` | print the client's and the server's versions and API levels, and the server's schema version |
 
 Lists (`ls`, `search`, `backlinks`, `projects <name>`) print one title per
 line, so they work with `grep`, `head`, `xargs` and so on. `ls` and `search`
@@ -349,7 +349,8 @@ sudo scribble completion > /etc/bash_completion.d/scribble
 
 ### version
 
-Prints the CLI's version and API level, then the server's, and says
+Prints the CLI's version and API level, then the server's, with the
+server's database schema version when it has one (SQLite only), and says
 `update available` when the server runs a newer release. `dev` builds
 never say so. It asks `/healthz`, so it does not need `SCRIBBLE_TOKEN`.
 It is the only command that checks for a newer release, so scripts using
@@ -358,7 +359,7 @@ the others see no extra output.
 ```sh
 $ scribble version
 client v0.0.11 (API level 1)
-server v0.0.12 (API level 1)
+server v0.0.12 (API level 2, schema 3)
 update available: https://github.com/johansundell/scribble/releases/latest
 ```
 

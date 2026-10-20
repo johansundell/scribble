@@ -82,7 +82,7 @@ func TestHealthCheckJSON(t *testing.T) {
 		t.Errorf("Expected status 200, got %d", w.Code)
 	}
 
-	expectedJSON := `{"dbStatus":"OK","name":"test-service","title":"Health Check","version":"v1.0"}`
+	expectedJSON := `{"dbStatus":"OK","name":"test-service","schema":3,"title":"Health Check","version":"v1.0"}`
 	if w.Body.String() != expectedJSON {
 		t.Errorf("Expected body '%s', got '%s'", expectedJSON, w.Body.String())
 	}
@@ -117,6 +117,63 @@ func TestHealthCheck_StorageDownReturns503(t *testing.T) {
 		}
 		if !strings.Contains(w.Body.String(), "closed") {
 			t.Errorf("%s: expected the storage error in the body, got %q", accept, w.Body.String())
+		}
+	}
+}
+
+// noSchemaStore is a store without a schema version, like MySQL and FileMaker.
+type noSchemaStore struct{ store.Store }
+
+func TestHealthCheck_SchemaVersion(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s, err := store.NewSQLite(":memory:")
+	if err != nil {
+		t.Fatalf("Failed to create db: %v", err)
+	}
+	defer s.Close()
+	mockFS := fstest.MapFS{
+		"tmpl/base.html":   {Data: []byte(`{{define "base"}}{{template "content" .}}{{end}}`)},
+		"tmpl/health.html": {Data: []byte(`{{define "content"}}api={{.api}} schema={{.schema}}{{end}}`)},
+	}
+
+	for _, tc := range []struct {
+		name               string
+		store              store.Store
+		closed             bool
+		wantJSON, wantHTML string
+	}{
+		{"sqlite", s, false, `"schema":3`, "api=2 schema=3"},
+		{"no schema version", noSchemaStore{s}, false, "", "api=2 schema=<no value>"},
+		// A failing database still reports its schema version.
+		{"storage down", s, true, `"schema":3`, "api=2 schema=3"},
+	} {
+		if tc.closed {
+			s.Close()
+		}
+		h := mustNewHandler(t, tc.store, false, mockFS, "test-service", "v1.0")
+		for _, accept := range []string{"application/json", "text/html"} {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest("GET", "/", nil)
+			c.Request.Header.Set("Accept", accept)
+			c.Set(APILevelKey, 2)
+			if err := h.HealthCheck(c); err != nil {
+				t.Fatalf("%s %s: expected no error, got %v", tc.name, accept, err)
+			}
+			body := w.Body.String()
+			if accept == "text/html" {
+				if body != tc.wantHTML {
+					t.Errorf("%s: HTML %q, want %q", tc.name, body, tc.wantHTML)
+				}
+				continue
+			}
+			if tc.wantJSON == "" {
+				if strings.Contains(body, `"schema"`) {
+					t.Errorf("%s: JSON %s has a schema key", tc.name, body)
+				}
+			} else if !strings.Contains(body, tc.wantJSON) {
+				t.Errorf("%s: JSON %s lacks %s", tc.name, body, tc.wantJSON)
+			}
 		}
 	}
 }

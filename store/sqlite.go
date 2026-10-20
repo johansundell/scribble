@@ -36,6 +36,7 @@ func NewSQLite(file string) (*SQLStore, error) {
 		timeArg:      func(t time.Time) any { return t.UTC().Format(sqliteTimeLayout) },
 		noLimit:      -1, // SQLite: a negative LIMIT means no limit
 		notesEnabled: true,
+		schema:       len(migrations), // migrate leaves user_version here
 	}, nil
 }
 

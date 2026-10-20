@@ -59,6 +59,20 @@ type SQLStore struct {
 	noLimit int64
 	// notesEnabled is true when the notes table exists (SQLite only).
 	notesEnabled bool
+	// schema is the SQLite schema version once migrated; 0 for MySQL.
+	schema int
+}
+
+// SchemaVersioner is a store with a schema version: how many migrations its
+// database has run. Only SQLite has one.
+type SchemaVersioner interface {
+	// SchemaVersion returns the version read at open, and false when the
+	// store has none.
+	SchemaVersion() (int, bool)
+}
+
+func (s *SQLStore) SchemaVersion() (int, bool) {
+	return s.schema, s.schema > 0
 }
 
 func (s *SQLStore) Ping(ctx context.Context) error {

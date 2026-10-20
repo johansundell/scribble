@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"io"
+	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
@@ -64,11 +66,11 @@ func TestCmdVersion(t *testing.T) {
 		want                 string
 	}{
 		{"update available", "v0.0.9", "v0.0.12",
-			"client v0.0.9 (API level 1)\nserver v0.0.12 (API level 2)\nupdate available: https://github.com/johansundell/scribble/releases/latest\n"},
+			"client v0.0.9 (API level 1)\nserver v0.0.12 (API level 2, schema 3)\nupdate available: https://github.com/johansundell/scribble/releases/latest\n"},
 		{"up to date", "v0.0.12", "v0.0.12",
-			"client v0.0.12 (API level 1)\nserver v0.0.12 (API level 2)\n"},
+			"client v0.0.12 (API level 1)\nserver v0.0.12 (API level 2, schema 3)\n"},
 		{"dev build never compares", "dev", "v0.0.12",
-			"client dev (API level 1)\nserver v0.0.12 (API level 2)\n"},
+			"client dev (API level 1)\nserver v0.0.12 (API level 2, schema 3)\n"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -83,6 +85,26 @@ func TestCmdVersion(t *testing.T) {
 				t.Errorf("printed\n%s\nwant\n%s", out.String(), tc.want)
 			}
 		})
+	}
+}
+
+// TestCmdVersionWithoutSchema reads as before when the server sends no
+// schema version (MySQL, FileMaker, or a server from before #103).
+func TestCmdVersionWithoutSchema(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"version":"v0.0.12","api":2}`)
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("SCRIBBLE_URL", srv.URL)
+	t.Setenv("SCRIBBLE_TOKEN", "")
+	setVersion(t, "v0.0.12")
+	var out bytes.Buffer
+	if err := runWith(&out, []string{"version"}); err != nil {
+		t.Fatal(err)
+	}
+	if want := "client v0.0.12 (API level 1)\nserver v0.0.12 (API level 2)\n"; out.String() != want {
+		t.Errorf("printed %q, want %q", out.String(), want)
 	}
 }
 

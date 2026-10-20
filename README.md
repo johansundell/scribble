@@ -122,9 +122,11 @@ bodies, which would copy every note into it). Errors are plain-text status
 text, like the rest of the service.
 
 `GET /healthz` needs no token. It reports the version, the
-API level (`"api"`) and the storage status, as JSON when the request sends
-`Accept: application/json`, and answers **503** when the storage does not
-respond.
+API level (`"api"`), the database schema version (`"schema"`, the number of
+migrations the database has run) and the storage status, as JSON when the
+request sends `Accept: application/json`, and answers **503** when the
+storage does not respond. Only SQLite has a schema version; with MySQL or
+FileMaker the `"schema"` key is left out.
 
 ### API level and old clients
 

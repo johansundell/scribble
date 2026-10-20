@@ -55,6 +55,18 @@ func TestNewSQLite_FreshDatabaseIsAtLatestVersion(t *testing.T) {
 	}
 }
 
+func TestSQLStore_SchemaVersion(t *testing.T) {
+	s := newTestSQLite(t)
+	if v, ok := s.SchemaVersion(); !ok || v != len(migrations) {
+		t.Errorf("SQLite: got (%d, %v), want (%d, true)", v, ok, len(migrations))
+	}
+
+	// MySQL has no migrations, so no schema version.
+	if v, ok := (&SQLStore{}).SchemaVersion(); ok {
+		t.Errorf("MySQL: got (%d, true), want no schema version", v)
+	}
+}
+
 func TestNewSQLite_UpgradesUnversionedDatabase(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "old.db")
 

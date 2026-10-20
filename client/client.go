@@ -309,6 +309,8 @@ func (c *Client) ServerVersion() (version string, api int) {
 type Health struct {
 	Version string `json:"version"`
 	API     int    `json:"api"`
+	// Schema is the database schema version; 0 when the server has none.
+	Schema int `json:"schema"`
 }
 
 // Health asks the server for its version and API level. It needs no token,
