@@ -15,7 +15,8 @@ go build -o scribble ./cmd/scribble
 
 ## Configuration
 
-The CLI has no flags. It reads two environment variables:
+Apart from `show -r` and `restore -y`, the CLI has no flags. It reads two
+environment variables:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
@@ -32,7 +33,8 @@ If `SCRIBBLE_TOKEN` is not set, every command except `help`, `completion` and `v
 error is `the server rejected SCRIBBLE_TOKEN`.
 
 `scribble edit` also reads `VISUAL`, then `EDITOR`, to choose the editor
-(fallback: `vi`, or `notepad` on Windows).
+(fallback: `vi`, or `notepad` on Windows). `scribble diff` reads `NO_COLOR`
+(see [diff](#diff)).
 
 ## Usage
 
@@ -53,7 +55,7 @@ stderr as `scribble: <message>`.
 | --- | --- |
 | `help`, `-h`, `--help` | print usage and the version |
 | `new <title> [text...]` | create a note |
-| `show <title>` | print a note's Markdown |
+| `show <title> [-r <rev>]` | print a note's Markdown, or that of an old version |
 | `edit <title>` | edit a note in your editor |
 | `append <title> [text...]` | add text at the end of a note; creates it if missing |
 | `ls` | list all notes |
@@ -65,6 +67,11 @@ stderr as `scribble: <message>`.
 | `autolink <title>` | turn mentions of other note titles into `[[links]]` |
 | `import <path...>` | import Tomboy `.note` XML files or directories |
 | `rm <title>` | delete a note |
+| `history <title>` | list a note's versions, newest first |
+| `diff <title> [<rev> [<rev2>]]` | show what changed between two versions of a note |
+| `restore [-y] <title> <rev>` | make an old version of a note its current text |
+| `deleted` | list deleted notes, most recently deleted first |
+| `undelete <title>` | bring back a deleted note |
 | `completion [bash]` | output shell completion script |
 | `version` | print the client's and the server's versions and API levels |
 
@@ -96,12 +103,19 @@ If a note with that title already exists, the command fails with
 
 ### show
 
-Prints the note's Markdown to stdout.
+Prints the note's Markdown to stdout. With `-r <rev>`, prints the Markdown
+of that version of the note instead (see [history](#history)). A revision
+may be written `12` or `r12`, and `-r` may come before or after the title.
 
 ```sh
 scribble show Ideas
 scribble show "Work log" | less
+scribble show Ideas -r 3
+scribble show -r r3 Ideas > ideas-r3.md
 ```
+
+If the note has no such revision, the error is
+`no revision r3 of "Ideas" (see: scribble history Ideas)`.
 
 ### edit
 
@@ -213,6 +227,99 @@ Deletes a note.
 ```sh
 scribble rm "Shopping list"
 ```
+
+### history
+
+Lists the versions the server keeps of a note, newest first, one per line:
+the revision, the local time it was saved, why it was saved, and the title
+it had then. The current version is marked `(current)`.
+
+```sh
+$ scribble history Ideas
+r7  2026-10-20 14:02  edit  Ideas  (current)
+r5  2026-10-20 13:40  rename  Ideas
+r4  2026-10-19 09:12  edit  Draft
+r1  2026-10-18 21:30  create  Draft
+```
+
+The reason is `create`, `edit`, `rename`, `link-rewrite` (another note was
+renamed and a `[[link]]` in this one was fixed), `restore`, `delete` or
+`undelete`. Saves made within a few minutes of each other are kept as one
+version, so revision numbers can have gaps.
+
+### diff
+
+Prints a unified diff between two versions of a note, with three lines of
+context:
+
+- `scribble diff <title>` compares the version before the current one with
+  the current text.
+- `scribble diff <title> <rev>` compares that version with the current text.
+- `scribble diff <title> <rev> <rev2>` compares the first version with the
+  second.
+
+```sh
+$ scribble diff Ideas 4
+--- Draft r4
++++ Ideas r7
+@@ -1,3 +1,4 @@
+-# Draft
++# Ideas
+ one
+ two
++three
+```
+
+The headers name each version's title and revision. The diff is coloured
+only when stdout is a terminal, and never when `NO_COLOR` is set. It prints
+nothing when the versions are the same, and exits with 0 either way.
+
+### restore
+
+Makes an old version of a note its current text, as a new revision, and
+prints `restored "<title>" to r<rev>`. The old version's title comes back
+with it. Nothing is lost: the text it replaces stays in the history.
+
+When stdin is a terminal, it asks `Restore "Ideas" to r4? [y/N]` first.
+`-y` skips the question. When stdin is piped, it does not ask, so scripts
+work.
+
+```sh
+scribble restore Ideas 4
+scribble restore -y Ideas r4
+```
+
+It fails with:
+
+- `a note titled "..." already exists` when another note now has the old
+  version's title;
+- `the note was changed elsewhere since you started` when someone saved the
+  note after `restore` read it, for example while the question was shown.
+  Run it again to restore anyway.
+
+### deleted
+
+Lists deleted notes, most recently deleted first, with the local time each
+was deleted.
+
+```sh
+$ scribble deleted
+2026-10-20 13:55  Shopping list
+2026-10-12 08:03  Old ideas
+```
+
+### undelete
+
+Brings back the most recently deleted note with that title (ignoring case),
+with the text it had when it was deleted.
+
+```sh
+scribble undelete "Shopping list"
+```
+
+It fails with `no deleted note titled "..."` when there is none, and with
+`a note titled "..." already exists` when a live note has taken the title.
+Rename or delete that note first.
 
 ### completion
 
