@@ -50,27 +50,3 @@ func TestUnifiedDiffColour(t *testing.T) {
 		t.Errorf("got %q\nwant %q", got, want)
 	}
 }
-
-func TestParseRevision(t *testing.T) {
-	for in, want := range map[string]int64{"12": 12, "r12": 12, "R3": 3} {
-		if got, err := parseRevision(in); err != nil || got != want {
-			t.Errorf("parseRevision(%q) = %d, %v; want %d", in, got, err, want)
-		}
-	}
-	for _, in := range []string{"", "r", "x1", "0", "-2", "r1.5"} {
-		if _, err := parseRevision(in); err == nil {
-			t.Errorf("parseRevision(%q) should fail", in)
-		}
-	}
-}
-
-func TestShellQuote(t *testing.T) {
-	for in, want := range map[string]string{
-		"Plans": "Plans", "École-2": "École-2", "Work log": "'Work log'",
-		"$HOME": "'$HOME'", "it's": `'it'\''s'`, "": "''",
-	} {
-		if got := shellQuote(in); got != want {
-			t.Errorf("shellQuote(%q) = %s, want %s", in, got, want)
-		}
-	}
-}

@@ -9,15 +9,6 @@ import (
 // diffContext is how many unchanged lines a hunk shows around a change.
 const diffContext = 3
 
-// parseRevision reads a revision written as 12 or r12.
-func parseRevision(s string) (int64, error) {
-	n, err := strconv.ParseInt(strings.TrimPrefix(strings.ToLower(s), "r"), 10, 64)
-	if err != nil || n < 1 {
-		return 0, fmt.Errorf("%q is not a revision (write 12 or r12)", s)
-	}
-	return n, nil
-}
-
 // diffOp is one line of an edit script: ' ' kept, '-' removed, '+' added.
 type diffOp struct {
 	kind byte
