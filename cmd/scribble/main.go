@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"io/fs"
@@ -214,6 +215,27 @@ func withNote(ctx context.Context, c *client.Client, args []string, want int, fn
 		return explain(err, args[0])
 	}
 	return fn(n, args)
+}
+
+// parseFlags parses args with fs, allowing flags before, between and after
+// the positional arguments, which it returns. Everything after -- is
+// positional, for titles that start with -.
+func parseFlags(fs *flag.FlagSet, args []string) ([]string, error) {
+	fs.SetOutput(io.Discard)
+	var pos []string
+	for {
+		if err := fs.Parse(args); err != nil {
+			return nil, err
+		}
+		if used := len(args) - fs.NArg(); used > 0 && args[used-1] == "--" {
+			return append(pos, fs.Args()...), nil
+		}
+		if fs.NArg() == 0 {
+			return pos, nil
+		}
+		pos = append(pos, fs.Arg(0))
+		args = fs.Args()[1:]
+	}
 }
 
 func explain(err error, title string) error {

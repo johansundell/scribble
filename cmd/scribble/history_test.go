@@ -372,3 +372,14 @@ func TestHistoryCommandsAreWired(t *testing.T) {
 		}
 	}
 }
+
+func TestShellQuote(t *testing.T) {
+	for in, want := range map[string]string{
+		"Plans": "Plans", "École-2": "École-2", "Work log": "'Work log'",
+		"$HOME": "'$HOME'", "it's": `'it'\''s'`, "": "''",
+	} {
+		if got := shellQuote(in); got != want {
+			t.Errorf("shellQuote(%q) = %s, want %s", in, got, want)
+		}
+	}
+}
