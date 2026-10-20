@@ -24,7 +24,7 @@
 	<link rel="stylesheet" href="/assets/css/app.css" />
 	<link rel="icon" type="image/png" href="/assets/img/favicon.png" />
 	{{/* Add to home screen (#65). Online only, so no service worker. */}}
-	<link rel="manifest" href="/app/manifest.webmanifest" />
+	<link rel="manifest" href="/manifest.webmanifest" />
 	<link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png" />
 	<meta name="apple-mobile-web-app-capable" content="yes" />
 	<meta name="mobile-web-app-capable" content="yes" />
@@ -45,7 +45,7 @@
 			{{/* theme.js shows it and sets its icon and label. */}}
 			<button type="button" class="button theme-toggle" data-theme-toggle data-shortcut="theme" aria-label="Theme: System (click to switch)" title="Theme: System (click to switch)" hidden>💻</button>
 			{{- if .LoggedIn}}
-			<form method="post" action="/app/logout" class="logout-form">
+			<form method="post" action="/logout" class="logout-form">
 				<button type="submit" class="button">Log out</button>
 			</form>
 			{{- end}}

@@ -1,5 +1,5 @@
 // The note list's search and project filter (#49). Without JavaScript the
-// form is sent with Enter or Filter and opens the list at /app; with it, the
+// form is sent with Enter or Filter and opens the list at /; with it, the
 // list is filtered while typing and swapped in, so the open note stays.
 (function () {
 	"use strict";

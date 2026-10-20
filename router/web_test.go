@@ -115,7 +115,7 @@ func postLogin(remoteAddr, pin, next string) *http.Request {
 	if next != "" {
 		form.Set("next", next)
 	}
-	req := httptest.NewRequest("POST", "/app/login", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest("POST", "/login", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.RemoteAddr = remoteAddr + ":12345"
 	return req
@@ -172,10 +172,14 @@ func TestWeb_OffWithoutPIN(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)
 	}
+	// The root is the server's own: it sends browsers to the health check.
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, get("/"))
+	wantRedirect(t, w, "/healthz")
 	for _, req := range []*http.Request{
-		get("/app"), get("/app/login"), get("/app/anything"),
+		get("/login"), get("/note/1"), get("/new"), get("/manifest.webmanifest"),
 		postLogin("10.0.0.1", webPIN, ""),
-		httptest.NewRequest("POST", "/app/logout", nil),
+		httptest.NewRequest("POST", "/logout", nil),
 	} {
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
@@ -183,7 +187,7 @@ func TestWeb_OffWithoutPIN(t *testing.T) {
 			t.Errorf("%s %s = %d, want 404", req.Method, req.URL, w.Code)
 		}
 	}
-	w := httptest.NewRecorder()
+	w = httptest.NewRecorder()
 	r.ServeHTTP(w, get("/healthz"))
 	if w.Code != http.StatusOK {
 		t.Errorf("/healthz = %d", w.Code)
@@ -192,19 +196,19 @@ func TestWeb_OffWithoutPIN(t *testing.T) {
 
 func TestWeb_RequiresSession(t *testing.T) {
 	e := newWebEnv(t)
-	wantRedirect(t, e.do(get("/app")), "/app/login?next=/app")
-	if got := e.do(get("/app")).Header().Get("Cache-Control"); got != "no-store" {
+	wantRedirect(t, e.do(get("/")), "/login?next=/")
+	if got := e.do(get("/")).Header().Get("Cache-Control"); got != "no-store" {
 		t.Errorf("Cache-Control = %q", got)
 	}
 }
 
 func TestWeb_LoginPage(t *testing.T) {
 	e := newWebEnv(t)
-	w := e.do(get("/app/login?next=/app/notes/1"))
+	w := e.do(get("/login?next=/note/1"))
 	wantBody(t, w, http.StatusOK,
-		`action="/app/login"`, `method="post"`, `name="pin"`,
+		`action="/login"`, `method="post"`, `name="pin"`,
 		`inputmode="numeric"`, `autocomplete="current-password"`,
-		`name="next" value="/app/notes/1"`,
+		`name="next" value="/note/1"`,
 		`data-digit="0"`, `data-digit="9"`, // the on-screen keypad
 		"Scribble v9.8.7",
 	)
@@ -219,35 +223,35 @@ func TestWeb_LoginPage(t *testing.T) {
 	}
 
 	// next is escaped, not trusted.
-	w = e.do(get(`/app/login?next="><script>`))
+	w = e.do(get(`/login?next="><script>`))
 	if strings.Contains(w.Body.String(), `"><script>`) {
 		t.Error("next is not escaped")
 	}
 
 	// With a session, the login page sends you on.
-	wantRedirect(t, e.do(get("/app/login", e.login(t))), "/app")
+	wantRedirect(t, e.do(get("/login", e.login(t))), "/")
 }
 
 func TestWeb_Login(t *testing.T) {
 	e := newWebEnv(t)
 
 	w := e.do(postLogin("10.0.0.1", webPIN, ""))
-	wantRedirect(t, w, "/app")
+	wantRedirect(t, w, "/")
 	c := sessionCookie(t, w)
-	if c.Path != "/app" || !c.HttpOnly || !c.Secure || c.SameSite != http.SameSiteLaxMode {
+	if c.Path != "/" || !c.HttpOnly || !c.Secure || c.SameSite != http.SameSiteLaxMode {
 		t.Errorf("cookie = %+v", c)
 	}
 
 	for next, want := range map[string]string{
-		"/app/notes/1?q=x":   "/app/notes/1?q=x",
-		"/app":               "/app",
-		"https://evil.test/": "/app",
-		"//evil.test/app":    "/app",
-		"/\\evil.test":       "/app",
-		"/appx":              "/app",
-		"/app/../healthz":    "/app",
-		"/healthz":           "/app",
-		"app":                "/app",
+		"/note/1?q=x":         "/note/1?q=x",
+		"/?project=work":      "/?project=work",
+		"/":                   "/",
+		"https://evil.test/":  "/",
+		"//evil.test/":        "/",
+		"/\\evil.test":        "/",
+		"/note/../../healthz": "/",
+		"/note/./1":           "/",
+		"note/1":              "/",
 	} {
 		w := e.do(postLogin("10.0.0.2", webPIN, next))
 		if got := w.Header().Get("Location"); got != want {
@@ -258,8 +262,8 @@ func TestWeb_Login(t *testing.T) {
 
 func TestWeb_WrongPIN(t *testing.T) {
 	e := newWebEnv(t)
-	w := e.do(postLogin("10.0.0.1", "000000", "/app/notes/1"))
-	wantBody(t, w, http.StatusUnauthorized, "Wrong PIN", `name="next" value="/app/notes/1"`)
+	w := e.do(postLogin("10.0.0.1", "000000", "/note/1"))
+	wantBody(t, w, http.StatusUnauthorized, "Wrong PIN", `name="next" value="/note/1"`)
 	if len(w.Result().Cookies()) != 0 {
 		t.Errorf("wrong PIN set cookies: %v", w.Result().Cookies())
 	}
@@ -269,9 +273,9 @@ func TestWeb_AppPage(t *testing.T) {
 	e := newWebEnv(t)
 	c := e.login(t)
 
-	w := e.do(get("/app", c))
+	w := e.do(get("/", c))
 	wantBody(t, w, http.StatusOK,
-		"Scribble v9.8.7", `action="/app/logout"`, "Log out",
+		"Scribble v9.8.7", `action="/logout"`, "Log out",
 		`<meta name="viewport"`, `/assets/css/app.css`,
 	)
 	if got := w.Header().Get("Cache-Control"); got != "no-store" {
@@ -294,7 +298,7 @@ func TestWeb_SessionExpiresAndIsNotExtended(t *testing.T) {
 	c := e.login(t)
 
 	e.clock.Add(167 * time.Hour)
-	w := e.do(get("/app", c))
+	w := e.do(get("/", c))
 	if w.Code != http.StatusOK {
 		t.Fatalf("before expiry: %d", w.Code)
 	}
@@ -302,7 +306,7 @@ func TestWeb_SessionExpiresAndIsNotExtended(t *testing.T) {
 		t.Errorf("a page view set cookies (extending the session?): %v", w.Result().Cookies())
 	}
 	e.clock.Add(time.Hour)
-	wantRedirect(t, e.do(get("/app", c)), "/app/login?next=/app")
+	wantRedirect(t, e.do(get("/", c)), "/login?next=/")
 }
 
 func TestWeb_ForgedCookies(t *testing.T) {
@@ -320,7 +324,7 @@ func TestWeb_ForgedCookies(t *testing.T) {
 	edited := *good
 	edited.Value = "A" + good.Value[1:]
 	for name, c := range map[string]*http.Cookie{"other secret": otherSecret, "edited": &edited} {
-		if w := e.do(get("/app", c)); w.Code != http.StatusSeeOther {
+		if w := e.do(get("/", c)); w.Code != http.StatusSeeOther {
 			t.Errorf("%s: %d, want a redirect to login", name, w.Code)
 		}
 	}
@@ -329,15 +333,15 @@ func TestWeb_ForgedCookies(t *testing.T) {
 func TestWeb_Logout(t *testing.T) {
 	e := newWebEnv(t)
 
-	w := e.do(httptest.NewRequest("POST", "/app/logout", nil))
-	wantRedirect(t, w, "/app/login")
+	w := e.do(httptest.NewRequest("POST", "/logout", nil))
+	wantRedirect(t, w, "/login")
 	c := sessionCookie(t, w)
-	if c.MaxAge >= 0 || c.Value != "" || c.Path != "/app" {
+	if c.MaxAge >= 0 || c.Value != "" || c.Path != "/" {
 		t.Errorf("logout cookie = %+v", c)
 	}
 
-	if w := e.do(get("/app/logout")); w.Code != http.StatusMethodNotAllowed {
-		t.Errorf("GET /app/logout = %d, want 405", w.Code)
+	if w := e.do(get("/logout")); w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("GET /logout = %d, want 405", w.Code)
 	}
 }
 
@@ -353,10 +357,10 @@ func TestWeb_PerAddressLimit(t *testing.T) {
 	if len(w.Result().Cookies()) != 0 {
 		t.Error("a refused attempt started a session")
 	}
-	wantRedirect(t, e.do(postLogin("10.0.0.2", webPIN, "")), "/app")
+	wantRedirect(t, e.do(postLogin("10.0.0.2", webPIN, "")), "/")
 
 	e.clock.Add(auth.DefaultFailureWindow)
-	wantRedirect(t, e.do(postLogin("10.0.0.1", webPIN, "")), "/app")
+	wantRedirect(t, e.do(postLogin("10.0.0.1", webPIN, "")), "/")
 }
 
 func burnAddress(e *webEnv, remoteAddr, forwardedFor string) {
@@ -442,12 +446,12 @@ func TestWeb_AlertAndLockout(t *testing.T) {
 		"Web login is locked after too many wrong PINs. Restart the service (or wait 24 hours) to unlock it.")
 
 	// Existing sessions keep working, and see the alert.
-	wantBody(t, e.do(get("/app", session)), http.StatusOK,
+	wantBody(t, e.do(get("/", session)), http.StatusOK,
 		"20 wrong PINs since "+first.Local().Format("2006-01-02 15:04"), "change WEB_PIN")
 
 	// A restart (a new Authenticator) clears the lock and the alert.
 	restarted := newWebEnv(t)
-	wantRedirect(t, restarted.do(postLogin("10.2.0.1", webPIN, "")), "/app")
+	wantRedirect(t, restarted.do(postLogin("10.2.0.1", webPIN, "")), "/")
 }
 
 func TestWeb_NotRequestLogged(t *testing.T) {
@@ -468,7 +472,7 @@ func TestWeb_NotRequestLogged(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, req := range []*http.Request{get("/app/login"), postLogin("10.0.0.1", "000000", ""), postLogin("10.0.0.1", webPIN, ""), get("/app"), httptest.NewRequest("POST", "/app/logout", nil)} {
+	for _, req := range []*http.Request{get("/login"), postLogin("10.0.0.1", "000000", ""), postLogin("10.0.0.1", webPIN, ""), get("/"), httptest.NewRequest("POST", "/logout", nil)} {
 		r.ServeHTTP(httptest.NewRecorder(), req)
 	}
 	if len(sink.entries) != 0 {
@@ -476,18 +480,8 @@ func TestWeb_NotRequestLogged(t *testing.T) {
 	}
 
 	for _, route := range router.GetRoutes(h) {
-		if !route.Web {
-			if strings.HasPrefix(route.Pattern, "/app") {
-				t.Errorf("route %q under /app is not marked Web", route.Name)
-			}
-			continue
-		}
-		if route.UseLogger || route.UseAuth {
+		if route.Web && (route.UseLogger || route.UseAuth) {
 			t.Errorf("web route %q: UseLogger=%v UseAuth=%v", route.Name, route.UseLogger, route.UseAuth)
-		}
-		// Share links (#83) are the one web page outside /app.
-		if !strings.HasPrefix(route.Pattern, "/app") && route.Pattern != "/s/:token" {
-			t.Errorf("web route %q is outside /app: %s", route.Name, route.Pattern)
 		}
 	}
 }
@@ -503,9 +497,9 @@ func TestNewRouter_WebOriginCheck(t *testing.T) {
 	}
 	ok := func(c *gin.Context) error { c.String(http.StatusOK, "ok"); return nil }
 	routes := router.Routes{
-		{Name: "Open", Method: "POST", Pattern: "/app/open", HandlerFunc: ok, Web: true},
-		{Name: "Session", Method: "POST", Pattern: "/app/session", HandlerFunc: ok, Web: true, UseSession: true},
-		{Name: "Cross", Method: "POST", Pattern: "/app/cross", HandlerFunc: ok, Web: true, AllowCrossOrigin: true},
+		{Name: "Open", Method: "POST", Pattern: "/open", HandlerFunc: ok, Web: true},
+		{Name: "Session", Method: "POST", Pattern: "/session", HandlerFunc: ok, Web: true, UseSession: true},
+		{Name: "Cross", Method: "POST", Pattern: "/cross", HandlerFunc: ok, Web: true, AllowCrossOrigin: true},
 	}
 	newRouter := func(a *auth.Authenticator) *gin.Engine {
 		r, err := router.NewRouter(router.Config{
@@ -527,26 +521,26 @@ func TestNewRouter_WebOriginCheck(t *testing.T) {
 
 	r := newRouter(a)
 	for path, want := range map[string]int{
-		"/app/open": http.StatusForbidden, "/app/session": http.StatusForbidden, "/app/cross": http.StatusOK,
+		"/open": http.StatusForbidden, "/session": http.StatusForbidden, "/cross": http.StatusOK,
 	} {
 		if got := post(r, path, "https://evil.example"); got != want {
 			t.Errorf("foreign POST %s = %d, want %d", path, got, want)
 		}
 	}
-	if got := post(r, "/app/open", "http://notes.example"); got != http.StatusOK {
-		t.Errorf("same-origin POST /app/open = %d, want 200", got)
+	if got := post(r, "/open", "http://notes.example"); got != http.StatusOK {
+		t.Errorf("same-origin POST /open = %d, want 200", got)
 	}
 
 	// With the web app off, web routes aren't registered at all.
-	if got := post(newRouter(nil), "/app/cross", "http://notes.example"); got != http.StatusNotFound {
-		t.Errorf("web off: POST /app/cross = %d, want 404", got)
+	if got := post(newRouter(nil), "/cross", "http://notes.example"); got != http.StatusNotFound {
+		t.Errorf("web off: POST /cross = %d, want 404", got)
 	}
 }
 
 func TestSameOrigin(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.POST("/app/x", router.WrapHandler(router.SameOrigin(func(c *gin.Context) error {
+	r.POST("/x", router.WrapHandler(router.SameOrigin(func(c *gin.Context) error {
 		c.String(http.StatusOK, "ok")
 		return nil
 	})))
@@ -560,13 +554,13 @@ func TestSameOrigin(t *testing.T) {
 		{"same origin over http", "http://notes.example", "", http.StatusOK},
 		{"foreign origin", "https://evil.example", "", http.StatusForbidden},
 		{"null origin", "null", "", http.StatusForbidden},
-		{"foreign origin beats same referer", "https://evil.example", "https://notes.example/app", http.StatusForbidden},
-		{"referer when no origin", "", "https://notes.example/app/x", http.StatusOK},
-		{"foreign referer", "", "https://evil.example/app", http.StatusForbidden},
+		{"foreign origin beats same referer", "https://evil.example", "https://notes.example/", http.StatusForbidden},
+		{"referer when no origin", "", "https://notes.example/x", http.StatusOK},
+		{"foreign referer", "", "https://evil.example/", http.StatusForbidden},
 		{"neither", "", "", http.StatusForbidden},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest("POST", "https://notes.example/app/x", nil)
+			req := httptest.NewRequest("POST", "https://notes.example/x", nil)
 			if tc.origin != "" {
 				req.Header.Set("Origin", tc.origin)
 			}

@@ -87,7 +87,7 @@
 			.then(function (res) {
 				if (res.redirected) {
 					// A post from an ended session is sent to the login.
-					if (new URL(res.url).pathname === "/app/login") {
+					if (new URL(res.url).pathname === "/login") {
 						show(".session-ended");
 						return;
 					}

@@ -11,8 +11,8 @@ import (
 	"github.com/johansundell/scribble/notes"
 )
 
-func notePath(n *notes.Note) string  { return fmt.Sprintf("/app/notes/%d", n.ID) }
-func sharePath(n *notes.Note) string { return fmt.Sprintf("/app/notes/%d/share", n.ID) }
+func notePath(n *notes.Note) string  { return fmt.Sprintf("/note/%d", n.ID) }
+func sharePath(n *notes.Note) string { return fmt.Sprintf("/note/%d/share", n.ID) }
 
 // shareToken is the note's token in e's store, "" when it isn't shared.
 func (e *webEnv) shareToken(t *testing.T, n *notes.Note) string {
@@ -27,8 +27,8 @@ func (e *webEnv) shareToken(t *testing.T, n *notes.Note) string {
 func TestWebShare_RequireSessionAndOrigin(t *testing.T) {
 	e := newWebEnv(t)
 	n := e.note(t, "# Alpha")
-	wantRedirect(t, e.do(get(sharePath(n))), fmt.Sprintf("/app/login?next=/app/notes/%d/share", n.ID))
-	wantRedirect(t, e.do(postForm(sharePath(n), url.Values{"action": {"share"}})), "/app/login")
+	wantRedirect(t, e.do(get(sharePath(n))), fmt.Sprintf("/login?next=/note/%d/share", n.ID))
+	wantRedirect(t, e.do(postForm(sharePath(n), url.Values{"action": {"share"}})), "/login")
 
 	c := e.login(t)
 	req := postForm(sharePath(n), url.Values{"action": {"share"}}, c)
@@ -48,15 +48,15 @@ func TestWebShare_Pane(t *testing.T) {
 
 	// The note page links to the share pane, keeping the filter.
 	wantBody(t, e.do(get(notePath(n)+"?project=work", c)), http.StatusOK,
-		fmt.Sprintf(`href="/app/notes/%d/share?project=work"`, n.ID), ">Share<")
+		fmt.Sprintf(`href="/note/%d/share?project=work"`, n.ID), ">Share<")
 
 	// Not shared yet: only the way to share it.
 	w := e.do(get(sharePath(n)+"?project=work", c))
 	wantBody(t, w, http.StatusOK,
 		"<title>Share Alpha – Scribble</title>",
-		fmt.Sprintf(`action="/app/notes/%d/share?project=work"`, n.ID), `method="post"`,
+		fmt.Sprintf(`action="/note/%d/share?project=work"`, n.ID), `method="post"`,
 		`name="action" value="share"`, ">Create public link</button>",
-		fmt.Sprintf(`href="/app/notes/%d?project=work"`, n.ID),
+		fmt.Sprintf(`href="/note/%d?project=work"`, n.ID),
 	)
 	wantNot(t, w.Body.String(), "/s/", "<svg", "Revoke")
 	if tok := e.shareToken(t, n); tok != "" {
@@ -105,8 +105,8 @@ func TestWebShare_Pane(t *testing.T) {
 func TestWebShare_NotFound(t *testing.T) {
 	e := newWebEnv(t)
 	c := e.login(t)
-	wantBody(t, e.do(get("/app/notes/999/share", c)), http.StatusNotFound, "Note not found")
-	wantBody(t, e.do(postForm("/app/notes/999/share", url.Values{"action": {"share"}}, c)), http.StatusNotFound, "Note not found")
+	wantBody(t, e.do(get("/note/999/share", c)), http.StatusNotFound, "Note not found")
+	wantBody(t, e.do(postForm("/note/999/share", url.Values{"action": {"share"}}, c)), http.StatusNotFound, "Note not found")
 	n := e.note(t, "# Alpha")
 	if w := e.do(postForm(sharePath(n), url.Values{"action": {"bogus"}}, c)); w.Code != http.StatusBadRequest {
 		t.Errorf("unknown action = %d, want 400", w.Code)
@@ -131,11 +131,11 @@ func TestWebShare_PublicPage(t *testing.T) {
 		"Updated 2",
 		// [[links]] and #project tags go through the PIN screen, and a link
 		// to a note that doesn't exist looks like any other.
-		`<a href="/app/login?next=/app/title/Other">Other</a>`,
-		`<a href="/app/login?next=/app/title/Private%2520Plans">Private Plans</a>`,
-		`<a href="/app/login?next=/app%3Fproject%3Dwork">#work</a>`,
+		`<a href="/login?next=/title/Other">Other</a>`,
+		`<a href="/login?next=/title/Private%2520Plans">Private Plans</a>`,
+		`<a href="/login?next=/%3Fproject%3Dwork">#work</a>`,
 	)
-	wantNot(t, body, "<script>alert", `class="missing"`, "note-list", "/app/new", "Log out", "Edit", "Delete", "Search", "app.js", "manifest")
+	wantNot(t, body, "<script>alert", `class="missing"`, "note-list", "/new", "Log out", "Edit", "Delete", "Search", "app.js", "manifest")
 	// The token must not leak to sites the note links to.
 	if got := w.Header().Get("Referrer-Policy"); got != "no-referrer" {
 		t.Errorf("Referrer-Policy = %q, want no-referrer", got)

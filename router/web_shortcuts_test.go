@@ -9,7 +9,7 @@ import (
 func TestWebShortcuts_Overlay(t *testing.T) {
 	e := newWebEnv(t)
 	c := e.login(t)
-	w := e.do(get("/app", c))
+	w := e.do(get("/", c))
 	wantBody(t, w, http.StatusOK,
 		// Hidden until shortcuts.js shows it: without JavaScript there are none.
 		`<button type="button" class="link-button" data-shortcuts-open hidden>Keyboard shortcuts</button>`,
@@ -31,7 +31,7 @@ func TestWebShortcuts_Overlay(t *testing.T) {
 		`data-shortcut="new"`,
 		`data-shortcut="search"`,
 	)
-	wantNot(t, e.do(get("/app/login")).Body.String(), `id="shortcuts"`, "data-shortcuts-open")
+	wantNot(t, e.do(get("/login")).Body.String(), `id="shortcuts"`, "data-shortcuts-open")
 	if w := e.do(get("/assets/js/shortcuts.js")); w.Code != http.StatusOK {
 		t.Errorf("GET shortcuts.js = %d, want 200", w.Code)
 	}
@@ -43,20 +43,20 @@ func TestWebShortcuts_Targets(t *testing.T) {
 	n := e.note(t, "# Alpha")
 
 	// The open note: Ctrl+E edits, F2 renames.
-	wantBody(t, e.do(get(fmt.Sprintf("/app/notes/%d", n.ID), c)), http.StatusOK,
-		fmt.Sprintf(`href="/app/notes/%d/edit" data-filtered="edit" data-shortcut="edit"`, n.ID),
-		fmt.Sprintf(`href="/app/notes/%d/rename" data-filtered="rename" data-shortcut="rename"`, n.ID),
+	wantBody(t, e.do(get(fmt.Sprintf("/note/%d", n.ID), c)), http.StatusOK,
+		fmt.Sprintf(`href="/note/%d/edit" data-filtered="edit" data-shortcut="edit"`, n.ID),
+		fmt.Sprintf(`href="/note/%d/rename" data-filtered="rename" data-shortcut="rename"`, n.ID),
 	)
 
 	// Its editor: Ctrl+S saves, Ctrl+E goes back to the note, F2 renames.
 	wantBody(t, e.do(get(editPath(n), c)), http.StatusOK,
 		`value="save" data-shortcut="save"`,
-		fmt.Sprintf(`href="/app/notes/%d" data-filtered="cancel" data-shortcut="view">Cancel`, n.ID),
+		fmt.Sprintf(`href="/note/%d" data-filtered="cancel" data-shortcut="view">Cancel`, n.ID),
 		`data-filtered="rename" data-rename data-shortcut="rename"`,
 	)
 
 	// A new note has no note to view yet.
-	w := e.do(get("/app/new", c))
+	w := e.do(get("/new", c))
 	wantBody(t, w, http.StatusOK, `value="save" data-shortcut="save"`)
 	wantNot(t, w.Body.String(), `data-shortcut="view"`)
 }

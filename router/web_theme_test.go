@@ -13,7 +13,7 @@ import (
 func TestWebTheme_Button(t *testing.T) {
 	e := newWebEnv(t)
 	c := e.login(t)
-	for _, req := range []*http.Request{get("/app", c), get("/app/login")} {
+	for _, req := range []*http.Request{get("/", c), get("/login")} {
 		w := e.do(req)
 		wantBody(t, w, http.StatusOK,
 			// Hidden until theme.js shows it: without JavaScript it can't work.
@@ -35,7 +35,7 @@ func TestWebTheme_Button(t *testing.T) {
 
 func TestWebTheme_Shortcut(t *testing.T) {
 	e := newWebEnv(t)
-	wantBody(t, e.do(get("/app", e.login(t))), http.StatusOK,
+	wantBody(t, e.do(get("/", e.login(t))), http.StatusOK,
 		"<kbd data-alt>Alt</kbd>+<kbd>T</kbd>, or <kbd>t</kbd>",
 	)
 }

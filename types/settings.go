@@ -38,7 +38,7 @@ type FileMakerSettings struct {
 	InsecureSkipVerify bool          `json:"insecureSkipVerify"`
 }
 
-// WebSettings configures the web app at /app. An empty PIN turns it off.
+// WebSettings configures the web app at /. An empty PIN turns it off.
 type WebSettings struct {
 	PIN            string        `json:"pin"`            // WEB_PIN
 	SessionSecret  string        `json:"sessionSecret"`  // SESSION_SECRET

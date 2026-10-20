@@ -9,7 +9,7 @@ The JSON API, the CLI and the desktop app use one Bearer token, `AUTH_TOKEN`. A 
 
 ## Decision
 
-- **`WEB_PIN`** (6–12 digits) logs in to the web app. When it is unset, the web app is off and every `/app` path answers 404.
+- **`WEB_PIN`** (6–12 digits) logs in to the web app. When it is unset, the web app is off and every web app path answers 404 (since #92, `/` redirects to `/healthz` instead).
 - A right PIN gives a **signed cookie with a fixed expiry** (HMAC-SHA256 under `SESSION_SECRET`, 7 days by default). The expiry is never extended.
 - **Per-address limit:** after 5 wrong PINs from one address within 15 minutes, that address gets 429 without the PIN being checked.
 - **PIN Alert:** after 20 checked wrong PINs within 24 hours from any addresses, the service logs a warning and every logged-in session sees a banner.

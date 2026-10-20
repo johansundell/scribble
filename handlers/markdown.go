@@ -23,7 +23,7 @@ var webMarkdown = goldmark.New(
 	goldmark.WithRendererOptions(renderer.WithNodeRenderers(util.Prioritized(escapedHTML{}, 100))),
 )
 
-// renderNote renders body as HTML. [[links]] point at /app/title/<title>,
+// renderNote renders body as HTML. [[links]] point at /title/<title>,
 // with class "missing" when exists says there is no such note, and #project
 // tags at that project's list. Links to anything but http(s) and mailto are
 // dropped, keeping their text.

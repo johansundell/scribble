@@ -126,7 +126,7 @@ func (p *program) run(startup chan<- error) error {
 		return err
 	}
 	if webAuth != nil {
-		logInfo("web app is on at /app")
+		logInfo("web app is on at /")
 	}
 
 	handler, err := handlers.NewHandler(st, settings.UseFileSystem, embeddedTemplates, nameOfService, Version, handlers.WithAuth(webAuth))

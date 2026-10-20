@@ -8,7 +8,7 @@ import (
 )
 
 // PreviewPath renders the editor's text for its Preview tab (#53).
-const PreviewPath = AppHome + "/preview"
+const PreviewPath = "/preview"
 
 // AppPreview answers with the posted text rendered as the note view renders
 // it, as an HTML fragment. It saves nothing.

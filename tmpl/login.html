@@ -1,7 +1,7 @@
 {{define "content"}}
 <main class="login">
 	<h1>Enter PIN</h1>
-	<form method="post" action="/app/login" class="pin-form">
+	<form method="post" action="/login" class="pin-form">
 		<input type="hidden" name="next" value="{{.Next}}" />
 		<input type="password" name="pin" id="pin" class="pin-field" inputmode="numeric" pattern="[0-9]*"
 			minlength="6" maxlength="12" autocomplete="current-password" aria-label="PIN" required autofocus />

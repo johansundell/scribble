@@ -1,7 +1,8 @@
 # 4. The web app is server-rendered
 
 - **Status:** Accepted (not built yet)
-- **Tickets:** #46, #47
+- **Tickets:** #46, #47, #92
+- **Update (#92):** the web app moved from `/app` to the root, `/`. Its note pages are at `/note/<id>`, apart from the JSON API's `/notes/<id>`; the health check stays at `/healthz`.
 
 ## Context
 

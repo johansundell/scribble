@@ -33,7 +33,7 @@ type Route struct {
 	HandlerFunc HandlerFuncWithError
 	UseLogger   bool
 	UseAuth     bool
-	// Web marks a web app route: one under /app, or a share link's public
+	// Web marks a web app route: one of its pages, or a share link's public
 	// page (#83). It is registered only when WEB_PIN is set, is never
 	// request-logged, is sent with Cache-Control: no-store, and a POST (any
 	// method but GET and HEAD) must come from the same origin unless
@@ -45,6 +45,9 @@ type Route struct {
 	// AllowCrossOrigin skips the same-origin check. Only login and logout
 	// set it (#47). Web routes only.
 	AllowCrossOrigin bool
+	// WebOff marks a route registered only when WEB_PIN is unset, in place
+	// of the web app on the same path.
+	WebOff bool
 	// CheckClient refuses clients below the minimum API level with 426
 	// (ADR 8). Token routes only; the token is checked first.
 	CheckClient bool
@@ -66,7 +69,8 @@ type LogSink interface {
 type Config struct {
 	Handler *handlers.Handler
 	LogSink LogSink // Required when any route has UseLogger
-	// Auth turns on the web app at /app; nil leaves every /app path a 404.
+	// Auth turns on the web app; nil leaves its paths a 404, and the root
+	// a redirect to /healthz.
 	// Pass the same one to the Handler with handlers.WithAuth.
 	Auth     *auth.Authenticator
 	Settings types.AppSettings
@@ -135,8 +139,14 @@ func NewRouter(cfg Config) (*gin.Engine, error) {
 	}
 
 	for _, route := range routes {
+		if route.Web && route.WebOff {
+			return nil, fmt.Errorf("route %q is both Web and WebOff", route.Name)
+		}
 		if route.Web && cfg.Auth == nil {
-			continue // WEB_PIN is unset: the web app is off and /app is a 404
+			continue // WEB_PIN is unset: the web app is off and its paths 404
+		}
+		if route.WebOff && cfg.Auth != nil {
+			continue // the web app is on and has the path
 		}
 		if route.UseAuth && cfg.Settings.AuthToken == "" {
 			return nil, fmt.Errorf("AUTH_TOKEN must be configured for route %q", route.Name)
