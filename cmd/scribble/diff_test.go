@@ -27,6 +27,10 @@ func TestUnifiedDiff(t *testing.T) {
 			"a\n1\n2\n3\n4\n5\n6\n7\n8\nb\n", "A\n1\n2\n3\n4\n5\n6\n7\n8\nB\n",
 			"--- A r1\n+++ A r2\n@@ -1,4 +1,4 @@\n-a\n+A\n 1\n 2\n 3\n@@ -7,4 +7,4 @@\n 6\n 7\n 8\n-b\n+B\n",
 		},
+		"newline added at end": {
+			"x", "x\n",
+			"--- A r1\n+++ A r2\n@@ -1 +1 @@\n-x\n\\ No newline at end of file\n+x\n",
+		},
 		"close changes share a hunk": {
 			"a\n1\n2\n3\n4\n5\n6\nb\n", "A\n1\n2\n3\n4\n5\n6\nB\n",
 			"--- A r1\n+++ A r2\n@@ -1,8 +1,8 @@\n-a\n+A\n 1\n 2\n 3\n 4\n 5\n 6\n-b\n+B\n",
@@ -56,6 +60,17 @@ func TestParseRevision(t *testing.T) {
 	for _, in := range []string{"", "r", "x1", "0", "-2", "r1.5"} {
 		if _, err := parseRevision(in); err == nil {
 			t.Errorf("parseRevision(%q) should fail", in)
+		}
+	}
+}
+
+func TestShellQuote(t *testing.T) {
+	for in, want := range map[string]string{
+		"Plans": "Plans", "École-2": "École-2", "Work log": "'Work log'",
+		"$HOME": "'$HOME'", "it's": `'it'\''s'`, "": "''",
+	} {
+		if got := shellQuote(in); got != want {
+			t.Errorf("shellQuote(%q) = %s, want %s", in, got, want)
 		}
 	}
 }

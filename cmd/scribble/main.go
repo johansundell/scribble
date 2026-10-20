@@ -48,6 +48,14 @@ Usage:
   scribble completion [bash]         output shell completion script
   scribble version                   print the client's and the server's versions
 
+Examples:
+  scribble history "Work log"        see its versions
+  scribble show "Work log" -r 3      print version r3
+  scribble diff "Work log"           what the last change did
+  scribble diff "Work log" 3 5       what changed from r3 to r5
+  scribble restore "Work log" r3     make r3 the current text again
+  scribble deleted                   then: scribble undelete "Work log"
+
 Environment:
   SCRIBBLE_URL    server address (default http://localhost:8080)
   SCRIBBLE_TOKEN  the server's AUTH_TOKEN

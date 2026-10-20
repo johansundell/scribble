@@ -117,6 +117,9 @@ scribble show -r r3 Ideas > ideas-r3.md
 If the note has no such revision, the error is
 `no revision r3 of "Ideas" (see: scribble history Ideas)`.
 
+Because `show` and `restore` take flags, a title that starts with `-` goes
+after `--`: `scribble show -- -todo`.
+
 ### edit
 
 Writes the note to a temporary `.md` file, opens it in your editor, and saves

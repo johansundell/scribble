@@ -63,7 +63,7 @@ func unifiedDiff(aName, bName, a, b string, colour bool) string {
 		aLen, bLen := lineNumbers(ops[start:end])
 		out.WriteString(paint("36", fmt.Sprintf("@@ -%s +%s @@", hunkRange(aStart, aLen), hunkRange(bStart, bLen))) + "\n")
 		for _, op := range ops[start:end] {
-			line := string(op.kind) + op.line
+			line, noEOL := strings.CutSuffix(string(op.kind)+op.line, noNewline)
 			switch op.kind {
 			case '-':
 				line = paint("31", line)
@@ -71,6 +71,9 @@ func unifiedDiff(aName, bName, a, b string, colour bool) string {
 				line = paint("32", line)
 			}
 			out.WriteString(line + "\n")
+			if noEOL {
+				out.WriteString("\\ No newline at end of file\n")
+			}
 		}
 		i = end
 	}
@@ -102,9 +105,16 @@ func hunkRange(before, n int) string {
 	return fmt.Sprintf("%d,%d", before+1, n)
 }
 
+// noNewline marks a last line that has no newline, so that it differs
+// from the same line with one, as in diff -u.
+const noNewline = "\x00no newline"
+
 func splitLines(s string) []string {
 	if s == "" {
 		return nil
+	}
+	if !strings.HasSuffix(s, "\n") {
+		s += noNewline + "\n"
 	}
 	return strings.Split(strings.TrimSuffix(s, "\n"), "\n")
 }

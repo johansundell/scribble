@@ -91,6 +91,14 @@ func TestCmdShowRevision(t *testing.T) {
 	if err := cmdShow(ctx, c, &bytes.Buffer{}, []string{"Plans", "extra"}); err == nil {
 		t.Error("two titles should be refused")
 	}
+
+	if _, err := c.Create(ctx, "# -todo\nx"); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := cmdShow(ctx, c, &out, []string{"-r", "1", "--", "-todo"}); err != nil || out.String() != "# -todo\nx\n" {
+		t.Errorf("show after -- printed %q, %v", out.String(), err)
+	}
 }
 
 func TestCmdDiff(t *testing.T) {
@@ -145,6 +153,10 @@ func TestCmdDiff(t *testing.T) {
 }
 
 func TestDiffColour(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	if diffColour() {
+		t.Error("stdout under go test is not a terminal, so there should be no colour")
+	}
 	t.Setenv("NO_COLOR", "1")
 	if diffColour() {
 		t.Error("NO_COLOR should turn colour off")
@@ -257,6 +269,9 @@ func TestCmdRestore(t *testing.T) {
 		}
 		if err := run(nil, "Plans"); err == nil {
 			t.Error("a missing revision should be refused")
+		}
+		if err := run(nil, "-x", "Plans", "1"); err == nil || !strings.Contains(err.Error(), "-x") {
+			t.Errorf("unknown flag err = %v, want it named", err)
 		}
 	})
 }
