@@ -34,9 +34,10 @@ type Route struct {
 	UseLogger   bool
 	UseAuth     bool
 	// Web marks a web app route: one under /app, or a share link's public
-	// page (#83). It is registered only when WEB_PIN is set, is never request-logged, is sent with
-	// Cache-Control: no-store, and a POST (any method but GET and HEAD) must
-	// come from the same origin unless AllowCrossOrigin is set.
+	// page (#83). It is registered only when WEB_PIN is set, is never
+	// request-logged, is sent with Cache-Control: no-store, and a POST (any
+	// method but GET and HEAD) must come from the same origin unless
+	// AllowCrossOrigin is set.
 	Web bool
 	// UseSession requires a web app session; anyone else is sent to the PIN
 	// screen. Web routes only.

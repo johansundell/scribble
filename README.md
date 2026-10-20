@@ -212,7 +212,9 @@ The server refuses to start if the PIN isn't 6–12 digits, or if
   `#project` tags lead to the PIN screen. Revoke link clears the token, and
   the old link answers 404 at once; sharing again makes a new one. Notes are
   private until shared. The page is sent with `Referrer-Policy: no-referrer`,
-  so the link doesn't leak to sites the note links to. (#83)
+  so the link doesn't leak to sites the note links to. Share links are part
+  of the web app: with `WEB_PIN` unset they answer 404. Deleting a note
+  revokes its link. (#83)
 - **Add to Home Screen:** in Safari on iPhone, Share → *Add to Home Screen*;
   in Chrome on Android, ⋮ → *Add to Home screen* (or *Install app*). The
   Scribble icon then opens `/app` without the browser bars. The app is

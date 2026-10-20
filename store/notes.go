@@ -256,11 +256,12 @@ func (s *SQLStore) UpdateNote(ctx context.Context, id int64, body string, baseRe
 }
 
 // DeleteNote soft-deletes, leaving a tombstone so synced clients learn of it.
+// The share link goes with the note.
 func (s *SQLStore) DeleteNote(ctx context.Context, id int64) error {
 	if err := s.checkNotes(); err != nil {
 		return err
 	}
-	res, err := s.db.ExecContext(ctx, `UPDATE notes SET deleted = 1, revision = revision + 1,
+	res, err := s.db.ExecContext(ctx, `UPDATE notes SET deleted = 1, share_token = NULL, revision = revision + 1,
 		seq = `+nextSeq+`, updated_at = ? WHERE id = ? AND deleted = 0`, s.nowArg(), id)
 	if err != nil {
 		return err

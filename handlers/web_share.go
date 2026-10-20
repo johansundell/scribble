@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -96,24 +95,18 @@ func (h *Handler) AppShare(c *gin.Context) error {
 // sharedPage is the data of a shared note's public page.
 type sharedPage struct {
 	Title    string
-	Version  string
 	NoteHTML template.HTML
 	Updated  string
 }
 
 // Shared shows the note shared with :token to anyone, with no session and
-// none of the app around it. An unknown or revoked token is a plain 404, the
-// same as any other missing page.
+// none of the app around it. An unknown or revoked token is a plain 404.
 func (h *Handler) Shared(c *gin.Context) error {
 	ns, err := h.noteStore()
 	if err != nil {
 		return err
 	}
 	n, err := ns.GetSharedNote(c.Request.Context(), c.Param("token"))
-	if errors.Is(err, store.ErrNoteNotFound) {
-		c.String(http.StatusNotFound, http.StatusText(http.StatusNotFound))
-		return nil
-	}
 	if err != nil {
 		return noteError(err)
 	}
@@ -132,18 +125,12 @@ func (h *Handler) Shared(c *gin.Context) error {
 	c.Status(http.StatusOK)
 	if err := tmpl.Execute(c.Writer, sharedPage{
 		Title:    n.Title,
-		Version:  h.versionOfService,
 		NoteHTML: out,
 		Updated:  n.UpdatedAt.UTC().Format("2006-01-02 15:04 UTC"),
 	}); err != nil {
 		return httperror.ReturnWithHTTPStatus(err, http.StatusInternalServerError)
 	}
 	return nil
-}
-
-// LoginTo is the PIN screen, going on to next after login.
-func LoginTo(next string) string {
-	return LoginPath + "?next=" + url.QueryEscape(next)
 }
 
 // siteURL is the scheme and host r was sent to, as the browser sees them.

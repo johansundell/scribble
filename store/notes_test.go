@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"path/filepath"
 	"slices"
@@ -217,6 +218,11 @@ func TestShareNote(t *testing.T) {
 	}
 	if _, err := s.GetSharedNote(ctx, otherTok); !errors.Is(err, ErrNoteNotFound) {
 		t.Errorf("deleted note's token: want ErrNoteNotFound, got %v", err)
+	}
+	// The tombstone keeps no token, so nothing could bring the link back.
+	var left sql.NullString
+	if err := s.db.QueryRow(`SELECT share_token FROM notes WHERE id = ?`, other.ID).Scan(&left); err != nil || left.Valid {
+		t.Errorf("tombstone share_token = %v (%v), want NULL", left, err)
 	}
 	if _, err := s.ShareNote(ctx, other.ID); !errors.Is(err, ErrNoteNotFound) {
 		t.Errorf("share deleted note: want ErrNoteNotFound, got %v", err)

@@ -27,6 +27,12 @@ const (
 	LoginPath = "/app/login"
 )
 
+// LoginTo is the PIN screen, going on to next after login. The slashes in
+// next are left as they are, for readability.
+func LoginTo(next string) string {
+	return LoginPath + "?next=" + strings.ReplaceAll(url.QueryEscape(next), "%2F", "/")
+}
+
 // NotePath is the web app page of the note with id.
 func NotePath(id int64) string {
 	return AppHome + "/notes/" + strconv.FormatInt(id, 10)

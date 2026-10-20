@@ -11,6 +11,7 @@ import (
 	"github.com/johansundell/scribble/notes"
 )
 
+func notePath(n *notes.Note) string  { return fmt.Sprintf("/app/notes/%d", n.ID) }
 func sharePath(n *notes.Note) string { return fmt.Sprintf("/app/notes/%d/share", n.ID) }
 
 // shareToken is the note's token in e's store, "" when it isn't shared.
@@ -46,7 +47,7 @@ func TestWebShare_Pane(t *testing.T) {
 	n := e.note(t, "# Alpha\nbody")
 
 	// The note page links to the share pane, keeping the filter.
-	wantBody(t, e.do(get(noteLinkPath(n)+"?project=work", c)), http.StatusOK,
+	wantBody(t, e.do(get(notePath(n)+"?project=work", c)), http.StatusOK,
 		fmt.Sprintf(`href="/app/notes/%d/share?project=work"`, n.ID), ">Share<")
 
 	// Not shared yet: only the way to share it.
@@ -130,9 +131,9 @@ func TestWebShare_PublicPage(t *testing.T) {
 		"Updated 2",
 		// [[links]] and #project tags go through the PIN screen, and a link
 		// to a note that doesn't exist looks like any other.
-		`<a href="/app/login?next=%2Fapp%2Ftitle%2FOther">Other</a>`,
-		`<a href="/app/login?next=%2Fapp%2Ftitle%2FPrivate%2520Plans">Private Plans</a>`,
-		`<a href="/app/login?next=%2Fapp%3Fproject%3Dwork">#work</a>`,
+		`<a href="/app/login?next=/app/title/Other">Other</a>`,
+		`<a href="/app/login?next=/app/title/Private%2520Plans">Private Plans</a>`,
+		`<a href="/app/login?next=/app%3Fproject%3Dwork">#work</a>`,
 	)
 	wantNot(t, body, "<script>alert", `class="missing"`, "note-list", "/app/new", "Log out", "Edit", "Delete", "Search", "app.js", "manifest")
 	// The token must not leak to sites the note links to.
@@ -157,5 +158,3 @@ func TestWebShare_PublicPage(t *testing.T) {
 		t.Errorf("deleted note's link = %d, want 404", w.Code)
 	}
 }
-
-func noteLinkPath(n *notes.Note) string { return fmt.Sprintf("/app/notes/%d", n.ID) }
