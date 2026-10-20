@@ -331,6 +331,9 @@ Rename or delete that note first.
 
 Outputs the shell completion script for bash. Does not require `SCRIBBLE_TOKEN`.
 
+It completes commands, note titles (also after `show -r <rev>` and
+`restore -y`), deleted notes' titles for `undelete`, and projects.
+
 ```sh
 # Load in your current shell:
 source <(scribble completion)

@@ -39,14 +39,15 @@ _scribble() {
 
     local cmd="${words[1]}"
     case "$cmd" in
-        show|edit|append|links|backlinks|autolink|rm|history|diff|restore)
-            if [[ $cword -eq 2 ]]; then
-                _scribble_complete_titles "$cur"
+        show|edit|append|links|backlinks|autolink|rm|history|diff|restore|rename)
+            if _scribble_at_first_arg; then
+                _scribble_complete_titles "$cur" "$(scribble ls 2>/dev/null)"
             fi
             ;;
-        rename)
-            if [[ $cword -eq 2 ]]; then
-                _scribble_complete_titles "$cur"
+        undelete)
+            if _scribble_at_first_arg; then
+                # Drop the "YYYY-MM-DD HH:MM  " each line of deleted starts with.
+                _scribble_complete_titles "$cur" "$(scribble deleted 2>/dev/null | cut -c19- | sort -u)"
             fi
             ;;
         projects)
@@ -73,10 +74,29 @@ _scribble() {
     esac
 }
 
+# _scribble_at_first_arg succeeds when the word being completed is the
+# command's first argument. Flags before it are skipped, with the value of -r;
+# after --, a word that starts with - is an argument too.
+_scribble_at_first_arg() {
+    local i args=0 dashdash=0
+    for (( i=2; i<cword; i++ )); do
+        if [[ $dashdash -eq 0 && "${words[i]}" == -* ]]; then
+            case "${words[i]}" in
+                --) dashdash=1 ;;
+                -r|--r) (( i++ )) ;;
+            esac
+            continue
+        fi
+        (( args++ ))
+    done
+    [[ $i -eq $cword && $args -eq 0 ]] || return 1
+    [[ $dashdash -eq 1 || "$cur" != -* ]]
+}
+
+# _scribble_complete_titles completes cur from titles, one per line.
 _scribble_complete_titles() {
     local cur="$1"
-    local titles
-    titles="$(scribble ls 2>/dev/null)" || return 0
+    local titles="$2"
     [[ -z "$titles" ]] && return 0
 
     local prefix="$cur"

@@ -93,6 +93,11 @@ scribble() {
         echo "Groceries"
         echo "Shopping List"
         echo "Work Notes"
+        echo "-todo"
+    elif [[ "$1" == "deleted" ]]; then
+        echo "2026-10-20 12:00  Old Plans"
+        echo "2026-10-19 09:30  Old Plans"
+        echo "2026-10-18 08:15  Recipes"
     elif [[ "$1" == "projects" ]]; then
         echo "home"
         echo "work"
@@ -160,6 +165,41 @@ run_comp "scribble" "help" "ed"
 if [[ "${COMPREPLY[*]}" != 'edit' ]]; then
     echo "help argument failed: expected 'edit', got '${COMPREPLY[*]}'"
     exit 9
+fi
+
+# 9. Flags before the title are skipped
+run_comp "scribble" "restore" "-y" "Shop"
+if [[ "${COMPREPLY[*]}" != 'Shopping\ List' ]]; then
+    echo "title after -y failed: expected 'Shopping\\ List', got '${COMPREPLY[*]}'"
+    exit 10
+fi
+run_comp "scribble" "show" "-r" "3" "groc"
+if [[ "${COMPREPLY[*]}" != 'Groceries' ]]; then
+    echo "title after -r 3 failed: expected 'Groceries', got '${COMPREPLY[*]}'"
+    exit 11
+fi
+
+# 10. No titles for the value of -r, a flag being typed, or a later argument
+for words in "show -r G" "show -" "restore Groceries G"; do
+    run_comp scribble $words
+    if [[ ${#COMPREPLY[@]} -ne 0 ]]; then
+        echo "expected no completion for '$words', got '${COMPREPLY[*]}'"
+        exit 12
+    fi
+done
+
+# 11. After --, a word starting with - is a title
+run_comp "scribble" "show" "--" "-t"
+if [[ "${COMPREPLY[*]}" != '-todo' ]]; then
+    echo "title after -- failed: expected '-todo', got '${COMPREPLY[*]}'"
+    exit 13
+fi
+
+# 12. undelete completes deleted titles, once each
+run_comp "scribble" "undelete" "old"
+if [[ "${COMPREPLY[*]}" != 'Old\ Plans' ]]; then
+    echo "undelete completion failed: expected 'Old\\ Plans', got '${COMPREPLY[*]}'"
+    exit 14
 fi
 `
 
