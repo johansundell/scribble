@@ -42,21 +42,6 @@ type NoteStore interface {
 	RenameNote(ctx context.Context, id int64, newTitle string) (*notes.Note, error)
 }
 
-const createNotesTable = `
-CREATE TABLE IF NOT EXISTS notes (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	title TEXT NOT NULL,
-	body TEXT NOT NULL,
-	revision INTEGER NOT NULL DEFAULT 1,
-	seq INTEGER NOT NULL,
-	deleted INTEGER NOT NULL DEFAULT 0,
-	created_at TEXT NOT NULL,
-	updated_at TEXT NOT NULL
-);
-CREATE UNIQUE INDEX IF NOT EXISTS notes_title ON notes(lower(title)) WHERE deleted = 0;
-CREATE INDEX IF NOT EXISTS notes_seq ON notes(seq);
-`
-
 const noteCols = `id, title, body, revision, seq, deleted, created_at, updated_at`
 
 // nextSeq is the global change counter: every write takes the next number.
