@@ -331,6 +331,8 @@ If the archive is damaged, `gunzip` stops the restore with an error before the d
 
 Then check `/healthz` and that notes are what you expect.
 
+**Going back to an older release.** Database migrations only go forward. An older `scribble-server` refuses to start on a database that a newer release has migrated, with `database schema version N is newer than this binary (M)`. To go back, stop the service, put the older binary in place and restore an archive taken before the upgrade, as above.
+
 ## Layout
 
 ```

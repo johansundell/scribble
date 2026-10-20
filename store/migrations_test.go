@@ -196,17 +196,58 @@ func TestMigrate_FailureRollsBackVersionBump(t *testing.T) {
 
 func TestNewSQLite_FailingMigrationAbortsOpen(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "bad.db")
-	saved := migrations
-	t.Cleanup(func() { migrations = saved })
-	migrations = append(append([]migration{}, saved...), migration{name: "bad", sql: `NOT VALID SQL`})
+	ms := append(append([]migration{}, migrations...), migration{name: "bad", sql: `NOT VALID SQL`})
 
-	if s, err := NewSQLite(file); err == nil {
-		s.Close()
-		t.Fatal("Expected NewSQLite to fail")
+	if db, err := openSQLite(file, ms); err == nil {
+		db.Close()
+		t.Fatal("Expected openSQLite to fail")
 	}
 
 	db := openRaw(t, file)
-	if got := userVersion(t, db); got != len(saved) {
-		t.Errorf("Expected user_version %d after the failure, got %d", len(saved), got)
+	if got := userVersion(t, db); got != len(migrations) {
+		t.Errorf("Expected user_version %d after the failure, got %d", len(migrations), got)
+	}
+}
+
+func TestMigrate_RefusesNewerSchemaVersion(t *testing.T) {
+	db := openRaw(t, filepath.Join(t.TempDir(), "m.db"))
+	if _, err := db.Exec(`PRAGMA user_version = 3`); err != nil {
+		t.Fatalf("Failed to set user_version: %v", err)
+	}
+
+	ran := false
+	ms := []migration{{name: "one", fn: func(*sql.Tx) error { ran = true; return nil }}}
+	err := migrate(db, ms)
+	if err == nil {
+		t.Fatal("Expected migrate to refuse a newer schema version")
+	}
+	if want := "database schema version 3 is newer than this binary (1)"; !strings.Contains(err.Error(), want) {
+		t.Errorf("Expected error to contain %q, got %q", want, err)
+	}
+	if ran {
+		t.Error("Expected no migration to run")
+	}
+	if got := userVersion(t, db); got != 3 {
+		t.Errorf("Expected user_version to stay at 3, got %d", got)
+	}
+}
+
+func TestNewSQLite_RefusesNewerSchemaVersion(t *testing.T) {
+	// A newer release migrated this database; an older binary must not run on it.
+	file := filepath.Join(t.TempDir(), "newer.db")
+	ms := append(append([]migration{}, migrations...), migration{name: "future", sql: `CREATE TABLE future (x INTEGER)`})
+	db, err := openSQLite(file, ms)
+	if err != nil {
+		t.Fatalf("Failed to create the newer database: %v", err)
+	}
+	db.Close()
+
+	s, err := NewSQLite(file)
+	if err == nil {
+		s.Close()
+		t.Fatal("Expected NewSQLite to refuse a newer schema version")
+	}
+	if want := "is newer than this binary"; !strings.Contains(err.Error(), want) {
+		t.Errorf("Expected error to contain %q, got %q", want, err)
 	}
 }

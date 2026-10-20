@@ -2,7 +2,7 @@
 
 This guide sets up a VPS so that each new GitHub release of scribble is installed on it automatically. The setup has three parts:
 
-- **On the server:** [`scripts/deploy.sh`](../scripts/deploy.sh) downloads the release for a tag, checks its SHA-512 checksum, replaces the `scribble-server` binary and restarts the service. If `/healthz` does not answer within about 30 seconds, it puts the previous binary back.
+- **On the server:** [`scripts/deploy.sh`](../scripts/deploy.sh) downloads the release for a tag, checks its SHA-512 checksum, replaces the `scribble-server` binary and restarts the service. If `/healthz` does not answer within about 30 seconds, it puts the previous binary back. If the new release had already migrated the database, the previous binary refuses to start on it, and you need to [restore an archive](../README.md#backups) taken before the deploy.
 - **On GitHub:** the `Deploy` workflow ([`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml)) runs when a release is published. It connects to the server over SSH and sends the tag. That is all it does.
 - **Between them:** a `deploy` user whose SSH key for scribble can run `deploy.sh` and nothing else. GitHub never gets a shell or file access on the server.
 

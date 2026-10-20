@@ -27,7 +27,7 @@ const sqliteTimeLayout = "2006-01-02T15:04:05.000000Z07:00"
 // NewSQLite opens (or creates) the SQLite database at file and returns a store
 // that owns the connection.
 func NewSQLite(file string) (*SQLStore, error) {
-	db, err := openSQLite(file)
+	db, err := openSQLite(file, migrations)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +39,8 @@ func NewSQLite(file string) (*SQLStore, error) {
 	}, nil
 }
 
-func openSQLite(file string) (*sql.DB, error) {
+// openSQLite opens file and brings it to the schema version of ms.
+func openSQLite(file string, ms []migration) (*sql.DB, error) {
 	// SQLite-specific pragmas for better concurrency and durability, set in the
 	// DSN so the driver applies them to every connection it opens.
 	// WAL mode and a busy timeout reduce SQLITE_BUSY errors under contention.
@@ -53,7 +54,7 @@ func openSQLite(file string) (*sql.DB, error) {
 	db.SetMaxIdleConns(1)
 	db.SetConnMaxLifetime(0 * time.Second)
 
-	err = migrate(db, migrations)
+	err = migrate(db, ms)
 	if err != nil {
 		db.Close()
 		return nil, err
