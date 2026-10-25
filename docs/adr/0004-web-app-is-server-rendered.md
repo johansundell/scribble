@@ -1,8 +1,9 @@
 # 4. The web app is server-rendered
 
 - **Status:** Accepted (not built yet)
-- **Tickets:** #46, #47, #92
+- **Tickets:** #46, #47, #92, #107
 - **Update (#92):** the web app moved from `/app` to the root, `/`. Its note pages are at `/note/<id>`, apart from the JSON API's `/notes/<id>`; the health check stays at `/healthz`.
+- **Update (#107):** opening a note from the list, a backlink or a [[link]] swaps in only the note pane (with `pushState`), so the page doesn't go blank. Every page is still rendered by the server, and anything else loads in full.
 
 ## Context
 

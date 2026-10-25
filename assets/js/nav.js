@@ -8,11 +8,13 @@
 	// A note's page, and the open-by-title page that sends on to it.
 	var NOTE = /^\/note\/\d+$/;
 	var TITLE = /^\/title\//;
+	// The note pane's pages with a form, which load in full.
+	var FORM = "form, .note-form";
 
 	// seq drops answers that arrive after a newer request was sent.
 	var seq = 0;
-	// shown is the path of the note pane on show.
-	var shown = location.pathname;
+	// shownPath is the path of the page on show.
+	var shownPath = location.pathname;
 	// loaded holds the scripts already on the page; a note pane brings its
 	// own (note.js), which only run once.
 	var loaded = {};
@@ -22,11 +24,12 @@
 
 	// swappable reports whether the note pane shows a note or nothing yet.
 	function swappable() {
-		return !!document.querySelector(".note-view") && !document.querySelector(".note-view form, .note-view .note-form");
+		var view = document.querySelector(".note-view");
+		return !!view && !view.querySelector(FORM);
 	}
 
-	// target is the note link a was clicked on, or null.
-	function target(a) {
+	// noteURL is where a goes, if it is a link to a note, or null.
+	function noteURL(a) {
 		if (!a.closest(".note-items, .backlinks, .note-body") || a.target || a.hasAttribute("download") || a.classList.contains("missing")) {
 			return null;
 		}
@@ -46,8 +49,9 @@
 		});
 	}
 
-	// open swaps in the note at url. push adds it to the history; a failure
-	// loads the page instead.
+	// open swaps in the note at url, or the list's empty pane for Back to
+	// the home page. push adds it to the history; a failure loads the page
+	// instead.
 	function open(url, push) {
 		var mine = ++seq;
 		if (NOTE.test(url.pathname)) highlight(url.pathname);
@@ -56,13 +60,13 @@
 				// A [[link]] is sent on to its note; anything else, such as an
 				// ended session sent to the login, loads in full.
 				var to = new URL(res.url);
-				if (!res.ok || !NOTE.test(to.pathname)) throw new Error("not a note");
+				if (!res.ok || !(NOTE.test(to.pathname) || (!push && to.pathname === "/"))) throw new Error("not a note");
 				return res.text().then(function (html) {
 					if (mine !== seq) return;
 					var doc = new DOMParser().parseFromString(html, "text/html");
 					if (!swap(doc)) throw new Error("not a note");
-					if (push) history.pushState(null, "", to.href);
-					shown = to.pathname;
+					if (push && to.href !== location.href) history.pushState(null, "", to.href);
+					shownPath = to.pathname;
 					highlight(to.pathname);
 				});
 			})
@@ -81,7 +85,7 @@
 	function swap(doc) {
 		var view = doc.querySelector(".note-view");
 		var main = doc.querySelector(".app-main");
-		if (!view || !main || view.querySelector("form, .note-form")) return false;
+		if (!view || !main || view.querySelector(FORM)) return false;
 		var scripts = [];
 		view.querySelectorAll("script[src]").forEach(function (s) {
 			scripts.push(s.getAttribute("src"));
@@ -108,18 +112,19 @@
 		if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
 		var a = e.target.closest && e.target.closest("a[href]");
 		if (!a || !swappable()) return;
-		var url = target(a);
+		var url = noteURL(a);
 		if (!url) return;
 		e.preventDefault();
 		open(url, true);
 	});
 
-	// Back and Forward between notes swapped in here. A step that only
-	// changes the #fragment, or the list's filter, is left alone.
+	// Back and Forward between the notes swapped in here, and the home page.
+	// A step that only changes the #fragment, or the list's filter, is left
+	// alone.
 	window.addEventListener("popstate", function () {
-		if (location.pathname === shown) return;
-		shown = location.pathname;
-		if (NOTE.test(location.pathname) && swappable()) {
+		if (location.pathname === shownPath) return;
+		shownPath = location.pathname;
+		if ((NOTE.test(location.pathname) || location.pathname === "/") && swappable()) {
 			open(new URL(location.href), false);
 		} else {
 			location.reload();

@@ -80,6 +80,23 @@ func TestWebNavBrowser(t *testing.T) {
 		d.waitNote(alpha)
 		d.exec(`history.forward()`)
 		d.waitNote(beta)
+		// Back to the home page, where no note is open.
+		d.exec(`history.go(-3)`)
+		d.waitPath("/")
+		var home struct {
+			Text    string
+			Current int
+		}
+		for i := 0; i < 50 && home.Text != "Select a note."; i++ {
+			d.execInto(&home, `return {text: document.querySelector(".note-view").textContent.trim(),
+				current: document.querySelectorAll('.note-items a[aria-current]').length}`)
+			time.Sleep(100 * time.Millisecond)
+		}
+		if home.Text != "Select a note." || home.Current != 0 {
+			t.Errorf("home: pane %q, %d titles highlighted", home.Text, home.Current)
+		}
+		d.exec(`history.go(3)`)
+		d.waitNote(beta)
 		d.wantSamePage("history")
 
 		// note.js came with the swapped-in note: Delete asks.
