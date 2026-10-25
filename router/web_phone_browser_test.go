@@ -158,6 +158,14 @@ func checkPhone(t *testing.T, d *webDriver, srv string, n *notes.Note) {
 // phoneNote and the note it links to. It returns the URL the browser uses.
 func newPhoneServer(t *testing.T) (string, *notes.Note) {
 	t.Helper()
+	srv, ns := newBrowserServer(t, phoneNote, "# Beta\n#work")
+	return srv, ns[0]
+}
+
+// newBrowserServer serves the web app over HTTP to the browser, with a note
+// for each of bodies. It returns the URL the browser uses.
+func newBrowserServer(t *testing.T, bodies ...string) (string, []*notes.Note) {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
 	a, err := auth.New(auth.Config{
 		PIN:        webPIN,
@@ -175,21 +183,22 @@ func newPhoneServer(t *testing.T) (string, *notes.Note) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	n, err := s.CreateNote(context.Background(), phoneNote)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.CreateNote(context.Background(), "# Beta\n#work"); err != nil {
-		t.Fatal(err)
+	var ns []*notes.Note
+	for _, body := range bodies {
+		n, err := s.CreateNote(context.Background(), body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ns = append(ns, n)
 	}
 	srv := httptest.NewServer(newWebRouter(t, s, a, &testLogger{}, nil))
 	t.Cleanup(srv.Close)
 	host := os.Getenv("SCRIBBLE_WEBDRIVER_HOST")
 	if host == "" {
-		return srv.URL, n
+		return srv.URL, ns
 	}
 	_, port, _ := net.SplitHostPort(strings.TrimPrefix(srv.URL, "http://"))
-	return "http://" + net.JoinHostPort(host, port), n
+	return "http://" + net.JoinHostPort(host, port), ns
 }
 
 // webDriver is a WebDriver session, driven over its HTTP protocol.
