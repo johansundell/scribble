@@ -273,8 +273,9 @@ The server refuses to start if the PIN isn't 6–12 digits, or if
   Scribble icon then opens the web app without the browser bars. The app is
   online only ([ADR 6](docs/adr/0006-web-app-is-online-only.md)): it needs a
   connection to the server, and opened without one it shows the browser's
-  offline page. The icons are made from `assets/img/favicon.png` with
-  `make icons` (ImageMagick).
+  offline page. Every app icon (web, `scribble-gui` and the Windows `.ico`)
+  is rendered from `assets/img/icon.svg` with `make icons` (librsvg and
+  ImageMagick).
 
 Why it works this way: [ADR 4](docs/adr/0004-web-app-is-server-rendered.md)
 and [ADR 5](docs/adr/0005-web-pin-login-and-shared-api-token.md).

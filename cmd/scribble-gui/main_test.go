@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"errors"
+	"image/png"
 	"os"
 	"path/filepath"
 	"testing"
@@ -101,5 +103,29 @@ func TestOpenCacheLocksAndPreventsSecondInstance(t *testing.T) {
 	}
 	if !errors.Is(err, offline.ErrLocked) {
 		t.Fatalf("second openCache error %v, want ErrLocked", err)
+	}
+}
+
+// iconApp keeps the icon it is given, which the test app drops.
+type iconApp struct {
+	fyne.App
+	icon fyne.Resource
+}
+
+func (a *iconApp) Icon() fyne.Resource     { return a.icon }
+func (a *iconApp) SetIcon(r fyne.Resource) { a.icon = r }
+
+func TestNewAppSetsTheAppIcon(t *testing.T) {
+	a, _ := newApp(func() error { return nil }, func() fyne.App { return &iconApp{App: test.NewTempApp(t)} })
+	icon := a.Icon()
+	if icon == nil {
+		t.Fatal("the app has no icon")
+	}
+	cfg, err := png.DecodeConfig(bytes.NewReader(icon.Content()))
+	if err != nil {
+		t.Fatalf("the app icon is not a PNG: %v", err)
+	}
+	if cfg.Width != 512 || cfg.Height != 512 {
+		t.Errorf("the app icon is %dx%d, want 512x512", cfg.Width, cfg.Height)
 	}
 }

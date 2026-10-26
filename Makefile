@@ -50,7 +50,7 @@ compile:
 	-env=GOTOOLCHAIN=auto \
 	-app-id=com.johansundell.scribble \
 	-app-version=$(patsubst v%,%,$(VERSION)) \
-	-icon=assets/img/logo.png \
+	-icon=cmd/scribble-gui/Icon.png \
 	-name=scribble-gui \
 	-ldflags="-X=main.Version=$(VERSION)" \
 	./cmd/scribble-gui
@@ -60,7 +60,7 @@ compile:
 	-env=GOTOOLCHAIN=auto \
 	-app-id=com.johansundell.scribble \
 	-app-version=$(patsubst v%,%,$(VERSION)) \
-	-icon=assets/img/logo.png \
+	-icon=cmd/scribble-gui/Icon.png \
 	-name=scribble-gui.exe \
 	-ldflags="-X=main.Version=$(VERSION)" \
 	./cmd/scribble-gui
@@ -115,12 +115,18 @@ release: dist #docker-push
 # The web app's home-screen icons (#65), made from favicon.png on white.
 # The mark fills 80% of the plain icons and 60% of the maskable one, which
 # keeps it inside the circle a launcher may cut it to.
-ICON_SRC := assets/img/favicon.png
+# Renders every app icon from the vector source (#106). The maskable and
+# Apple icons are full-bleed: launchers and iOS cut their own shape, and the
+# maskable one keeps the artwork inside the 80% safe zone.
+ICON_SRC := assets/img/icon.svg
 icons:
-	magick $(ICON_SRC) -resize 154x154 -background white -gravity center -extent 192x192 -alpha remove assets/img/icon-192.png
-	magick $(ICON_SRC) -resize 410x410 -background white -gravity center -extent 512x512 -alpha remove assets/img/icon-512.png
-	magick $(ICON_SRC) -resize 307x307 -background white -gravity center -extent 512x512 -alpha remove assets/img/icon-maskable-512.png
-	magick $(ICON_SRC) -resize 144x144 -background white -gravity center -extent 180x180 -alpha remove assets/img/apple-touch-icon.png
+	rsvg-convert -w 512 -h 512 $(ICON_SRC) -o assets/img/icon-512.png
+	rsvg-convert -w 192 -h 192 $(ICON_SRC) -o assets/img/icon-192.png
+	rsvg-convert -w 64 -h 64 $(ICON_SRC) -o assets/img/favicon.png
+	rsvg-convert -w 410 -h 410 $(ICON_SRC) | magick png:- -background '#0f172a' -gravity center -extent 512x512 -alpha remove -alpha off -strip assets/img/icon-maskable-512.png
+	rsvg-convert -w 180 -h 180 $(ICON_SRC) | magick png:- -background '#0f172a' -alpha remove -alpha off -strip assets/img/apple-touch-icon.png
+	rsvg-convert -w 256 -h 256 $(ICON_SRC) | magick png:- -define icon:auto-resize=256,128,64,48,32,16 assets/img/icon.ico
+	cp assets/img/icon-512.png cmd/scribble-gui/Icon.png
 
 # Bumps version, runs tests, commits and pushes to master, and runs make release.
 # Usage: make bump-release [BUMP=patch|minor|major|vX.Y.Z] [DRY_RUN=1]

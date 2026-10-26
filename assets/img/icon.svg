@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="strokeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="50%" stop-color="#818cf8"/>
+      <stop offset="100%" stop-color="#c084fc"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Squircle Background -->
+  <rect width="512" height="512" rx="115" fill="url(#bg)"/>
+
+  <!-- Dynamic Scribble Loop -->
+  <path d="M 110 350 C 140 190, 290 190, 250 320 C 220 410, 140 310, 240 230 C 310 175, 390 240, 355 340"
+        fill="none"
+        stroke="url(#strokeGrad)"
+        stroke-width="36"
+        stroke-linecap="round"
+        stroke-linejoin="round"/>
+
+  <!-- Minimalist Pen / Stylus Nib -->
+  <g transform="translate(355, 340) rotate(-35)">
+    <polygon points="0,0 -22,-65 22,-65" fill="#f8fafc"/>
+    <polygon points="0,0 -9,-26 9,-26" fill="#38bdf8"/>
+    <rect x="-22" y="-155" width="44" height="82" rx="8" fill="#e2e8f0"/>
+  </g>
+</svg>
