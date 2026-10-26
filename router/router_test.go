@@ -195,6 +195,8 @@ func TestGetRoutes(t *testing.T) {
 		"AppPreview":    {method: "POST", pattern: "/preview", web: true, useSession: true},
 		"AppShareForm":  {method: "GET", pattern: "/note/:id/share", web: true, useSession: true},
 		"AppShare":      {method: "POST", pattern: "/note/:id/share", web: true, useSession: true},
+		"AppHistory":    {method: "GET", pattern: "/note/:id/history", web: true, useSession: true},
+		"AppRestore":    {method: "POST", pattern: "/note/:id/history", web: true, useSession: true},
 		// A share link's public page: web, but no session.
 		"Shared": {method: "GET", pattern: "/s/:token", web: true},
 		// With the web app off, the root goes to the health check.

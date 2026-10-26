@@ -649,6 +649,104 @@ body.web:has(.app-main) {
 	margin: 0;
 }
 
+/* The note view's revision line (#110). */
+.note-meta {
+	margin: 0 0 0.75rem;
+	font-size: 0.875rem;
+}
+
+/* A note's history pane (#110): the versions, newest first, the banner of
+   the one on show, and its text. */
+.history {
+	max-width: 48rem;
+}
+
+.history h1 {
+	margin: 0 0 0.5rem;
+	font-size: 1.5rem;
+}
+
+.history-list {
+	margin: 0 0 1rem;
+	padding: 0;
+	list-style: none;
+	max-height: 40vh;
+	overflow-y: auto;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+}
+
+.history-list li + li {
+	border-top: 1px solid var(--border);
+}
+
+.history-list a {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.25rem 0.75rem;
+	min-height: 44px;
+	padding: 0.25rem 0.75rem;
+	color: var(--text);
+	text-decoration: none;
+}
+
+.history-list a:hover {
+	background: var(--border);
+}
+
+.history-list a[aria-current="true"] {
+	background: var(--accent);
+	color: var(--accent-text);
+	font-weight: 600;
+}
+
+.history-list a:focus-visible {
+	outline: 3px solid var(--accent);
+	outline-offset: -3px;
+}
+
+.rev-badge {
+	min-width: 2.5rem;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.event-badge,
+.current-badge {
+	padding: 0 0.5rem;
+	border: 1px solid currentColor;
+	border-radius: 999px;
+	font-size: 0.8125rem;
+}
+
+.current-badge {
+	font-weight: 600;
+}
+
+.history-banner {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	margin-bottom: 1rem;
+	padding: 0.75rem 1rem;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: var(--surface);
+}
+
+.history-banner p {
+	margin: 0;
+	font-weight: 600;
+}
+
+.history-banner [hidden] {
+	display: none;
+}
+
+.history-banner form {
+	margin: 0;
+}
+
 /* A shared note's public page: just the note. */
 .shared {
 	flex: 1;

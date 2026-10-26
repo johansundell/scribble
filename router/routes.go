@@ -75,6 +75,8 @@ func GetRoutes(handler *handlers.Handler) Routes {
 		Route{Name: "AppDelete", Method: "POST", Pattern: handlers.NotePrefix + ":id/delete", HandlerFunc: handler.AppDelete, Web: true, UseSession: true},
 		Route{Name: "AppShareForm", Method: "GET", Pattern: handlers.NotePrefix + ":id/share", HandlerFunc: handler.AppShareForm, Web: true, UseSession: true},
 		Route{Name: "AppShare", Method: "POST", Pattern: handlers.NotePrefix + ":id/share", HandlerFunc: handler.AppShare, Web: true, UseSession: true},
+		Route{Name: "AppHistory", Method: "GET", Pattern: handlers.NotePrefix + ":id/history", HandlerFunc: handler.AppHistory, Web: true, UseSession: true},
+		Route{Name: "AppRestore", Method: "POST", Pattern: handlers.NotePrefix + ":id/history", HandlerFunc: handler.AppRestore, Web: true, UseSession: true},
 		// A shared note's public page (#83): no session, the token is the key.
 		Route{Name: "Shared", Method: "GET", Pattern: handlers.SharedPath(":token"), HandlerFunc: handler.Shared, Web: true},
 		Route{Name: "AppNew", Method: "GET", Pattern: handlers.NewPath, HandlerFunc: handler.AppNew, Web: true, UseSession: true},

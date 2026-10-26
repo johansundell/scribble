@@ -253,7 +253,7 @@ The server refuses to start if the PIN isn't 6–12 digits, or if
   | `Esc` | | Close the shortcuts, or leave the search box |
 - **On a phone** (below 700 px wide) the app shows one screen at a time: the
   list, or the open note with "← Notes" to go back (the search and project
-  filter stay). Edit is at the top; Share, Rename and Delete are under **⋯**. In
+  filter stay). Edit is at the top; History, Share, Rename and Delete are under **⋯**. In
   the editor, Save, Done and Cancel sit in a bar at the bottom, above the
   on-screen keyboard. The keyboard shortcuts are simply not used on touch
   screens.
@@ -268,6 +268,15 @@ The server refuses to start if the PIN isn't 6–12 digits, or if
   so the link doesn't leak to sites the note links to. Share links are part
   of the web app: with `WEB_PIN` unset they answer 404. Deleting a note
   revokes its link. (#83)
+- **History:** a note shows its revision and how many changes its history
+  keeps ("Revision 4 (3 edits)"), and **History (r4)** opens the note's
+  kept versions ([ADR 7](docs/adr/0007-note-history.md)), newest first, each
+  with what changed it: Created, Edited, Renamed, Links updated, Restored or
+  Sync conflict. It opens on the version before the current one, rendered as
+  Markdown; `?rev=<n>` picks another. **Restore this version** makes it the
+  note's text again, as a new revision, after a confirm() (without
+  JavaScript it restores straight away), and is refused if the note changed
+  since the page was loaded. (#110)
 - **Add to Home Screen:** in Safari on iPhone, Share → *Add to Home Screen*;
   in Chrome on Android, ⋮ → *Add to Home screen* (or *Install app*). The
   Scribble icon then opens the web app without the browser bars. The app is
