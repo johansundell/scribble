@@ -41,8 +41,9 @@ type UI struct {
 	Project *widget.Select // allNotes or a #project the list is narrowed to
 	Search  *TextField
 	List    *NoteList
-	Viewer  *Viewer    // view mode: the open note rendered as Markdown
-	Editor  *TextField // edit mode: the open note's raw Markdown
+	Viewer  *Viewer         // view mode: the open note rendered as Markdown
+	Editor  *TextField      // edit mode: the open note's raw Markdown
+	Format  *widget.Toolbar // edit mode: the Markdown formatting toolbar above Editor
 
 	EditToggle *widget.Button // switches between view and edit mode
 	Save       *widget.Button
@@ -54,8 +55,8 @@ type UI struct {
 	// the open one, hidden when there are none.
 	Backlinks *fyne.Container
 
-	Status *widget.Label // the last error, empty when all is well
-	ConnStatus *ConnStatus   // connection indicator in status bar
+	Status     *widget.Label  // the last error, empty when all is well
+	ConnStatus *ConnStatus    // connection indicator in status bar
 	ConnDot    *canvas.Circle // status dot: grey/green/red
 	ConnLabel  *widget.Label  // "Connecting...", "Connected", "Offline", "Update needed"
 
@@ -73,17 +74,17 @@ type UI struct {
 	saveItem, renameItem, deleteItem, toggleItem *fyne.MenuItem // greyed out like their toolbar buttons
 	lastFocus                                    editable       // the text field or viewer that had focus last, nil if another widget did
 
-	w        fyne.Window
-	c        *client.Client
-	store    *offline.Store // the local copy all reads come from
-	hasTray  bool
-	offline  bool // the last sync could not reach the server
+	w       fyne.Window
+	c       *client.Client
+	store   *offline.Store // the local copy all reads come from
+	hasTray bool
+	offline bool // the last sync could not reach the server
 	// outdated is set once the server refuses this version as too old
 	// (426): syncing stops for good. The sync goroutine reads it too.
 	outdated   atomic.Bool
 	newRelease string // the newer release NewRelease shows, "" if none
-	notes    []notes.Note
-	projects []string // the #projects in use, as of the last reload
+	notes      []notes.Note
+	projects   []string // the #projects in use, as of the last reload
 	// current is the open note, nil when none; ID 0 for a new, unsaved
 	// note, negative for one saved only on this computer so far. Its
 	// working text, saved or not, is always Editor.Text.
@@ -120,6 +121,8 @@ func New(w fyne.Window, c *client.Client, store *offline.Store) *UI {
 	ui.Editor.MultiLine = true
 	ui.Editor.Wrapping = fyne.TextWrapWord
 	ui.Editor.OnChanged = func(string) { ui.updateButtons() }
+	ui.Editor.markdown = true
+	ui.Format = ui.newFormatBar()
 	ui.EditToggle = widget.NewButton("Edit", ui.toggleMode)
 	ui.Save = widget.NewButton("Save", ui.save)
 	ui.NewNote = widget.NewButton("New", func() { ui.unlessUnsaved(ui.startNote) })
@@ -139,7 +142,7 @@ func New(w fyne.Window, c *client.Client, store *offline.Store) *UI {
 	split := container.NewHSplit(
 		container.NewBorder(container.NewVBox(ui.Project, ui.Search), nil, nil, nil, ui.List),
 		container.NewBorder(toolbar, ui.Backlinks, nil, nil,
-			container.NewStack(container.NewVScroll(ui.Viewer), ui.Editor)),
+			container.NewStack(container.NewVScroll(ui.Viewer), container.NewBorder(ui.Format, nil, nil, nil, ui.Editor))),
 	)
 	split.Offset = 0.3
 	statusBar := container.NewBorder(nil, nil, container.NewHBox(ui.Upgrade, ui.NewRelease), ui.ConnStatus, ui.Status)
@@ -421,6 +424,7 @@ func (ui *UI) showView() {
 		ui.w.Canvas().Unfocus()
 	}
 	ui.Editor.Hide()
+	ui.Format.Hide()
 	ui.Viewer.Show()
 	ui.EditToggle.SetText("Edit")
 	ui.updateButtons()
@@ -467,6 +471,7 @@ func (ui *UI) activeProject() string {
 // showEdit switches to edit mode on the open note.
 func (ui *UI) showEdit() {
 	ui.Viewer.Hide()
+	ui.Format.Show()
 	ui.Editor.Show()
 	ui.EditToggle.SetText("View")
 	ui.updateButtons()

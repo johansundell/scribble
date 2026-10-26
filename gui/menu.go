@@ -225,10 +225,25 @@ type editable interface {
 }
 
 // TextField is a text entry that remembers it had focus last, so a clicked
-// Edit menu item still reaches it.
+// Edit menu item still reaches it. The note editor's also edits Markdown
+// (#54): the formatting shortcuts, lists that continue on Enter and smart
+// paste. mdedit.go works each change out; TextField makes it.
 type TextField struct {
 	widget.Entry
 	ui *UI
+
+	markdown bool // the Markdown editing is on: the note editor, not the search box
+	shift    bool // a Shift key is held
+	// undo holds the Markdown changes that took Entry more than one undo
+	// step, newest last, and redo the ones undone. See applyEdit.
+	undo, redo []undoGroup
+}
+
+// undoGroup is a Markdown change that Ctrl+Z undoes as one: the text
+// before and after it, and the undo steps it took Entry.
+type undoGroup struct {
+	before, after string
+	steps         int
 }
 
 func newTextField(ui *UI) *TextField {

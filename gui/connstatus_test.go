@@ -198,7 +198,3 @@ func TestConnectionStatusLayout(t *testing.T) {
 		t.Error("expected status bar container to contain ConnStatus")
 	}
 }
-
-
-
-

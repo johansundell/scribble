@@ -82,6 +82,15 @@ The window has a menu bar (on macOS, the system menu bar; there Ctrl is Cmd):
 | Edit | Find (focus the search box) | `Ctrl+F` |
 | View | Edit note / View note | `Ctrl+E` |
 | Help | About Scribble | none |
+| (editor) | Bold / Italic / Link | `Ctrl+B` / `Ctrl+I` / `Ctrl+K` |
+
+In edit mode a GitHub-style formatting toolbar sits above the editor:
+heading, bold, italic, quote, code, link, and bulleted, numbered and task
+lists, with GitHub's Octicons. Lists continue on Enter (Enter on an empty
+item ends the list, Shift+Enter is a plain newline), a URL pasted over
+selected text makes a link, and cells pasted from a spreadsheet make a
+table. The rules are the web editor's, and one `Ctrl+Z` undoes one
+formatting change.
 
 `scribble-gui` keeps its copy of the notes in the user config directory
 (`scribble/<host>-<hash of the server URL>.json`) and syncs every 30 seconds through
@@ -439,7 +448,7 @@ librsvg imagemagick`). Older distributions ship ImageMagick 6, which has
 - [ ] Web app at `/`: log in with a PIN, then browse, search, read,
       edit, rename and delete notes like in the desktop app (#46), on
       phones too, with "Add to Home Screen" (#65)
-- [ ] GitHub-style Markdown editing (toolbar, `Ctrl+B` / `Ctrl+I` /
+- [x] GitHub-style Markdown editing (toolbar, `Ctrl+B` / `Ctrl+I` /
       `Ctrl+K`, lists that continue on Enter, smart paste) in the web app
       (#53) and the desktop app (#54)
 - [ ] FileMaker replica: SQLite stays the master, and a two-way sync keeps
