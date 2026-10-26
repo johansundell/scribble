@@ -106,17 +106,17 @@ func TestOpenCacheLocksAndPreventsSecondInstance(t *testing.T) {
 	}
 }
 
-// iconApp keeps the icon it is given, which the test app drops.
-type iconApp struct {
+// appWithIcon keeps its icon, which the test app drops.
+type appWithIcon struct {
 	fyne.App
 	icon fyne.Resource
 }
 
-func (a *iconApp) Icon() fyne.Resource     { return a.icon }
-func (a *iconApp) SetIcon(r fyne.Resource) { a.icon = r }
+func (a *appWithIcon) Icon() fyne.Resource     { return a.icon }
+func (a *appWithIcon) SetIcon(r fyne.Resource) { a.icon = r }
 
 func TestNewAppSetsTheAppIcon(t *testing.T) {
-	a, _ := newApp(func() error { return nil }, func() fyne.App { return &iconApp{App: test.NewTempApp(t)} })
+	a, _ := newApp(func() error { return nil }, func() fyne.App { return &appWithIcon{App: test.NewTempApp(t)} })
 	icon := a.Icon()
 	if icon == nil {
 		t.Fatal("the app has no icon")

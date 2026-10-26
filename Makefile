@@ -112,20 +112,19 @@ release: dist #docker-push
 	github-release $(GHACCOUNT)/$(GHREPO) $(VERSION) "$$(git rev-parse --abbrev-ref HEAD)" "**Changelog**<br/>$$changelog" 'dist/*'; \
 	git pull
 
-# The web app's home-screen icons (#65), made from favicon.png on white.
-# The mark fills 80% of the plain icons and 60% of the maskable one, which
-# keeps it inside the circle a launcher may cut it to.
 # Renders every app icon from the vector source (#106). The maskable and
-# Apple icons are full-bleed: launchers and iOS cut their own shape, and the
-# maskable one keeps the artwork inside the 80% safe zone.
+# Apple icons are the square without its rounded corners, since launchers and
+# iOS cut their own shape; the artwork already sits inside the maskable safe
+# zone (the middle 80%). Each .ico size is rendered on its own, so the small
+# ones stay sharp.
 ICON_SRC := assets/img/icon.svg
 icons:
 	rsvg-convert -w 512 -h 512 $(ICON_SRC) -o assets/img/icon-512.png
 	rsvg-convert -w 192 -h 192 $(ICON_SRC) -o assets/img/icon-192.png
 	rsvg-convert -w 64 -h 64 $(ICON_SRC) -o assets/img/favicon.png
-	rsvg-convert -w 410 -h 410 $(ICON_SRC) | magick png:- -background '#0f172a' -gravity center -extent 512x512 -alpha remove -alpha off -strip assets/img/icon-maskable-512.png
-	rsvg-convert -w 180 -h 180 $(ICON_SRC) | magick png:- -background '#0f172a' -alpha remove -alpha off -strip assets/img/apple-touch-icon.png
-	rsvg-convert -w 256 -h 256 $(ICON_SRC) | magick png:- -define icon:auto-resize=256,128,64,48,32,16 assets/img/icon.ico
+	sed 's/ rx="115"//' $(ICON_SRC) | rsvg-convert -w 512 -h 512 | magick png:- -alpha off -strip assets/img/icon-maskable-512.png
+	sed 's/ rx="115"//' $(ICON_SRC) | rsvg-convert -w 180 -h 180 | magick png:- -alpha off -strip assets/img/apple-touch-icon.png
+	d=$$(mktemp -d) && for s in 16 24 32 48 64 128 256; do rsvg-convert -w $$s -h $$s $(ICON_SRC) -o $$d/$$s.png; done && magick $$d/*.png assets/img/icon.ico && rm -r $$d
 	cp assets/img/icon-512.png cmd/scribble-gui/Icon.png
 
 # Bumps version, runs tests, commits and pushes to master, and runs make release.
