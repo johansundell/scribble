@@ -13,6 +13,7 @@
 package main
 
 import (
+	_ "embed"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -35,6 +36,12 @@ import (
 const syncInterval = 30 * time.Second
 
 var Version = "dev"
+
+// iconPNG is the app icon, rendered from assets/img/icon.svg by make icons
+// (#106). fyne package and fyne-cross also take it from here.
+//
+//go:embed Icon.png
+var iconPNG []byte
 
 func main() {
 	a, envErr := newApp(loadEnvNextToExecutable, app.New)
@@ -91,10 +98,13 @@ func main() {
 
 // newApp loads the .env file, then creates the app, so variables Fyne reads
 // while starting up (such as FYNE_THEME) can be set there too. An error from
-// readEnv is returned with the app, for the window to show.
+// readEnv is returned with the app, for the window to show. The app gets the
+// Scribble icon, which its windows show in the title bar and taskbar.
 func newApp(readEnv func() error, create func() fyne.App) (fyne.App, error) {
 	err := readEnv()
-	return create(), err
+	a := create()
+	a.SetIcon(fyne.NewStaticResource("Icon.png", iconPNG))
+	return a, err
 }
 
 // loadEnvNextToExecutable is loadEnv for the directory scribble-gui runs

@@ -5,6 +5,7 @@ import (
 	"runtime"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
@@ -134,12 +135,20 @@ func (ui *UI) typedKey(e *fyne.KeyEvent) bool {
 	return true
 }
 
-// showAbout opens the About Scribble dialog.
+// showAbout opens the About Scribble dialog, with the app icon beside the
+// details.
 func (ui *UI) showAbout() {
-	dialog.NewCustom("About Scribble", "Close", ui.aboutContent(), ui.w).Show()
+	var content fyne.CanvasObject = ui.aboutContent()
+	if icon := fyne.CurrentApp().Icon(); icon != nil {
+		img := canvas.NewImageFromResource(icon)
+		img.FillMode = canvas.ImageFillContain
+		img.SetMinSize(fyne.NewSquareSize(64))
+		content = container.NewBorder(nil, nil, container.NewVBox(img), nil, content)
+	}
+	dialog.NewCustom("About Scribble", "Close", content, ui.w).Show()
 }
 
-// aboutContent is the About dialog's content, with a link to a newer
+// aboutContent is the About dialog's details, with a link to a newer
 // release when the server runs one.
 func (ui *UI) aboutContent() *fyne.Container {
 	u, _ := url.Parse(repoURL)

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
@@ -519,3 +520,34 @@ func TestAboutDialogShowsAppAndServerDetails(t *testing.T) {
 	checkDialog("Scribble v1.2.3")
 }
 
+// appWithIcon keeps its icon, which the test app drops.
+type appWithIcon struct {
+	fyne.App
+	icon fyne.Resource
+}
+
+func (a *appWithIcon) Icon() fyne.Resource { return a.icon }
+
+func TestAboutDialogShowsTheAppIcon(t *testing.T) {
+	c := newServer(t)
+	_, w := open(t, c)
+	icon := fyne.NewStaticResource("Icon.png", []byte("icon"))
+	orig := fyne.CurrentApp()
+	fyne.SetCurrentApp(&appWithIcon{App: orig, icon: icon})
+	t.Cleanup(func() { fyne.SetCurrentApp(orig) })
+
+	menuItem(t, w, "Help", "About Scribble").Action()
+	var shown *canvas.Image
+	for _, o := range test.LaidOutObjects(w.Canvas().Overlays().Top()) {
+		if img, ok := o.(*canvas.Image); ok && img.Resource == icon {
+			shown = img
+		}
+	}
+	if shown == nil {
+		t.Fatal("the About dialog does not show the app icon")
+	}
+	if s := shown.MinSize(); s.Width < 48 || s.Height < 48 {
+		t.Errorf("the app icon's minimum size is %v, too small to see", s)
+	}
+	tapDialogButton(t, w, "Close")
+}

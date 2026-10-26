@@ -273,8 +273,9 @@ The server refuses to start if the PIN isn't 6–12 digits, or if
   Scribble icon then opens the web app without the browser bars. The app is
   online only ([ADR 6](docs/adr/0006-web-app-is-online-only.md)): it needs a
   connection to the server, and opened without one it shows the browser's
-  offline page. The icons are made from `assets/img/favicon.png` with
-  `make icons` (ImageMagick).
+  offline page. Every app icon (web, `scribble-gui` and the Windows `.ico`)
+  is rendered from `assets/img/icon.svg` with `make icons` (librsvg and
+  ImageMagick).
 
 Why it works this way: [ADR 4](docs/adr/0004-web-app-is-server-rendered.md)
 and [ADR 5](docs/adr/0005-web-pin-login-and-shared-api-token.md).
@@ -404,6 +405,13 @@ without one; CI starts chromedriver. With Chrome in Docker
 ```sh
 SCRIBBLE_WEBDRIVER=http://localhost:4444 SCRIBBLE_WEBDRIVER_HOST=host.docker.internal go test ./router -run TestWebPhoneBrowser
 ```
+
+The app icons are committed, so building needs no image tools. After changing
+`assets/img/icon.svg`, run `make icons` to render them again. It needs
+`rsvg-convert` (librsvg) and ImageMagick 7 (`magick`), which `make deps` does
+not install (Debian/Ubuntu: `librsvg2-bin imagemagick`; macOS: `brew install
+librsvg imagemagick`). Older distributions ship ImageMagick 6, which has
+`convert` but no `magick`.
 
 ## Roadmap
 
