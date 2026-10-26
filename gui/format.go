@@ -28,6 +28,11 @@ func octicon(name string) fyne.Resource {
 // [start, end), or its cursor when start == end.
 type formatting func(text string, start, end int) mdEdit
 
+var (
+	bold   = wrapWith("**")
+	italic = wrapWith("_")
+)
+
 func wrapWith(marker string) formatting {
 	return func(_ string, start, end int) mdEdit { return wrapSelection(start, end, marker) }
 }
@@ -41,8 +46,8 @@ func link(_ string, start, end int) mdEdit { return insertLink(start, end) }
 // formatKeys are the formatting shortcuts, Ctrl (Cmd on macOS) plus the
 // key. Ctrl+E is not inline code: it toggles view/edit mode.
 var formatKeys = map[fyne.KeyName]formatting{
-	fyne.KeyB: wrapWith("**"),
-	fyne.KeyI: wrapWith("_"),
+	fyne.KeyB: bold,
+	fyne.KeyI: italic,
 	fyne.KeyK: link,
 }
 
@@ -57,8 +62,8 @@ func (ui *UI) newFormatBar() *widget.Toolbar {
 	}
 	return widget.NewToolbar(
 		button("heading", prefixWith(headingPrefix)),
-		button("bold", wrapWith("**")),
-		button("italic", wrapWith("_")),
+		button("bold", bold),
+		button("italic", italic),
 		widget.NewToolbarSeparator(),
 		button("quote", prefixWith(quotePrefix)),
 		button("code", wrapWith("`")),

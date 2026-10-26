@@ -299,3 +299,57 @@ func TestFormatInWrappedText(t *testing.T) {
 		t.Fatalf("editor holds %q", ui.Editor.Text)
 	}
 }
+
+// Typing straight after a change must not merge into its last undo step,
+// or one Ctrl+Z would leave half the formatting behind.
+func TestUndoAfterTypingIntoAFormat(t *testing.T) {
+	for _, c := range []struct {
+		name, text string
+		selected   int
+		key        fyne.KeyName
+		move       fyne.KeyName // a key pressed before typing, "" for none
+		want       string       // after typing "x"
+	}{
+		{"bold, no selection", "say ", 0, fyne.KeyB, "", "say **x**"},
+		{"bold, typed before the text", "say hi", 2, fyne.KeyB, fyne.KeyLeft, "say **xhi**"},
+		{"italic, typed before the text", "say hi", 2, fyne.KeyI, fyne.KeyLeft, "say _xhi_"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			ui, w := editing(t, c.text)
+			selectBack(ui.Editor, c.selected)
+			ui.Editor.TypedShortcut(ctrl(c.key))
+			formatted := ui.Editor.Text
+			if c.move != "" {
+				ui.Editor.TypedKey(&fyne.KeyEvent{Name: c.move})
+			}
+			test.Type(ui.Editor, "x")
+			if ui.Editor.Text != c.want {
+				t.Fatalf("editor holds %q, want %q", ui.Editor.Text, c.want)
+			}
+			undo := menuItem(t, w, "Edit", "Undo").Action
+			for undo(); ui.Editor.Text != formatted; undo() {
+				if ui.Editor.Text == c.text {
+					t.Fatal("undo skipped the formatted text")
+				}
+				if !strings.Contains(ui.Editor.Text, "x") {
+					t.Fatalf("undo left %q, half formatted", ui.Editor.Text)
+				}
+			}
+			undo()
+			if ui.Editor.Text != c.text {
+				t.Fatalf("undo left %q, want %q", ui.Editor.Text, c.text)
+			}
+		})
+	}
+}
+
+func TestShiftIsForgottenWhenTheEditorLosesFocus(t *testing.T) {
+	ui, w := editing(t, "- a")
+	ui.Editor.KeyDown(shiftKey)
+	w.Canvas().Focus(ui.Search) // Shift is released over there
+	w.Canvas().Focus(ui.Editor)
+	ui.Editor.TypedKey(&fyne.KeyEvent{Name: fyne.KeyReturn})
+	if ui.Editor.Text != "- a\n- " {
+		t.Fatalf("Enter left %q, want the list continued", ui.Editor.Text)
+	}
+}

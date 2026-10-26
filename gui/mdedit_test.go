@@ -131,6 +131,7 @@ func TestContinueList(t *testing.T) {
 		{"rule", "* * *‸", ""},
 		{"dash rule", "- - -‸", ""},
 		{"empty text", "‸", ""},
+		{"number too long", "99999999999999999999. a‸", ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			text, cur, _ := parseState(t, c.in)

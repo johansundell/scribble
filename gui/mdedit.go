@@ -58,10 +58,10 @@ func insertLink(start, end int) mdEdit {
 	if start == end {
 		return mdEdit{ops: []mdOp{{at: start, s: "[](url)"}}, selStart: start + 1, selEnd: start + 1}
 	}
-	url := end + runeLen("[](")
+	u := end + runeLen("[](")
 	return mdEdit{
 		ops:      []mdOp{{at: end, s: "](url)"}, {at: start, s: "["}},
-		selStart: url, selEnd: url + runeLen("url"),
+		selStart: u, selEnd: u + runeLen("url"),
 	}
 }
 
@@ -164,7 +164,10 @@ func continueList(text string, cursor int) (mdEdit, bool) {
 	}
 	marker := m[2]
 	if m[3] != "" {
-		n, _ := strconv.Atoi(m[3])
+		n, err := strconv.Atoi(m[3])
+		if err != nil { // too many digits
+			return mdEdit{}, false
+		}
 		marker = strconv.Itoa(n+1) + "."
 	}
 	next := "\n" + m[1] + marker + " "
