@@ -76,6 +76,26 @@ INSERT OR IGNORE INTO note_versions (note_id, revision, title, body, deleted, re
 	SELECT id, revision, title, body, deleted, 'create', created_at, created_at FROM notes;
 `,
 	},
+	{
+		// The FileMaker replica's sync state (#66, ADR 10): one row with how
+		// far the push got and the last PendingEdits row applied, plus the
+		// outcome of each applied row until FileMaker has been cleaned up.
+		name: "replica_state",
+		sql: `
+CREATE TABLE replica_state (
+	id INTEGER PRIMARY KEY CHECK (id = 1),
+	last_pushed_seq INTEGER NOT NULL DEFAULT 0,
+	last_applied_pending_id INTEGER NOT NULL DEFAULT 0
+);
+INSERT INTO replica_state (id) VALUES (1);
+CREATE TABLE replica_pending_results (
+	id INTEGER PRIMARY KEY,
+	status TEXT NOT NULL,
+	message TEXT NOT NULL,
+	note_id INTEGER NOT NULL
+);
+`,
+	},
 }
 
 // migrate applies the migrations the database's user_version has not yet

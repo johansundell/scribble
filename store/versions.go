@@ -24,6 +24,10 @@ const (
 	reasonRestore     = "restore"
 	reasonDelete      = "delete"
 	reasonUndelete    = "undelete"
+	// A FileMaker edit that lost a conflict (#66), and the app's text
+	// written again straight after it.
+	reasonFileMakerConflict = "filemaker-conflict"
+	reasonConflictKeptApp   = "conflict-kept-app"
 )
 
 // versionMergeWindow is how long an edit keeps replacing the edit version

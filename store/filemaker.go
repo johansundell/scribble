@@ -37,22 +37,11 @@ type FileMakerStore struct {
 // created here. cfg.CAFile adds trusted CAs and cfg.InsecureSkipVerify
 // disables certificate checks.
 func NewFileMaker(ctx context.Context, cfg types.FileMakerSettings) (*FileMakerStore, error) {
-	tlsConfig, err := fileMakerTLSConfig(cfg)
+	client, err := NewFileMakerClient(cfg)
 	if err != nil {
 		return nil, err
 	}
-
-	s := &FileMakerStore{
-		client: fmsodata.NewClient(fmsodata.ClientConfig{
-			Host:      strings.TrimSuffix(cfg.Host, "/"),
-			Database:  cfg.Database,
-			Username:  cfg.Username,
-			Password:  cfg.Password,
-			Timeout:   cfg.Timeout,
-			TLSConfig: tlsConfig,
-		}),
-		table: cfg.LogTable,
-	}
+	s := &FileMakerStore{client: client, table: cfg.LogTable}
 
 	query := url.Values{}
 	query.Set("$select", fileMakerSelectFields)
@@ -62,6 +51,23 @@ func NewFileMaker(ctx context.Context, cfg types.FileMakerSettings) (*FileMakerS
 		return nil, fmt.Errorf("check FileMaker log table %q: %w", s.table, err)
 	}
 	return s, nil
+}
+
+// NewFileMakerClient returns an OData client for the FMS_* connection
+// settings; the replica (#66) shares them with the log table.
+func NewFileMakerClient(cfg types.FileMakerSettings) (*fmsodata.Client, error) {
+	tlsConfig, err := fileMakerTLSConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return fmsodata.NewClient(fmsodata.ClientConfig{
+		Host:      strings.TrimSuffix(cfg.Host, "/"),
+		Database:  cfg.Database,
+		Username:  cfg.Username,
+		Password:  cfg.Password,
+		Timeout:   cfg.Timeout,
+		TLSConfig: tlsConfig,
+	}), nil
 }
 
 func fileMakerTLSConfig(cfg types.FileMakerSettings) (*tls.Config, error) {

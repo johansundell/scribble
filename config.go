@@ -92,6 +92,16 @@ func loadSettings(filenames ...string) {
 	settings.FileMaker.CAFile = os.Getenv("FMS_CA_FILE")
 	settings.FileMaker.InsecureSkipVerify, _ = strconv.ParseBool(os.Getenv("FMS_INSECURE_SKIP_VERIFY"))
 
+	settings.Replica.Mode = strings.ToLower(strings.TrimSpace(os.Getenv("NOTES_REPLICA")))
+	settings.Replica.NotesTable = envOr("FMS_NOTES_TABLE", "Notes")
+	settings.Replica.PendingTable = envOr("FMS_PENDING_TABLE", "PendingEdits")
+	settings.Replica.InfoTable = envOr("FMS_INFO_TABLE", "ScribbleInfo")
+	settings.Replica.Interval = 30 * time.Second
+	if v := os.Getenv("NOTES_REPLICA_INTERVAL"); v != "" {
+		// An invalid value becomes 0, which Validate rejects.
+		settings.Replica.Interval, _ = time.ParseDuration(v)
+	}
+
 	settings.Web.PIN = os.Getenv("WEB_PIN")
 	settings.Web.SessionSecret = os.Getenv("SESSION_SECRET")
 	settings.Web.SessionTimeout = 168 * time.Hour
@@ -108,4 +118,13 @@ func loadSettings(filenames ...string) {
 			settings.TrustedProxies = append(settings.TrustedProxies, p)
 		}
 	}
+}
+
+// envOr returns the environment variable key, or def when it is unset or
+// empty.
+func envOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
 }

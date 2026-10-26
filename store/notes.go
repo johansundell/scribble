@@ -133,28 +133,13 @@ func (s *SQLStore) CreateNote(ctx context.Context, body string) (*notes.Note, er
 	if err := s.checkNotes(); err != nil {
 		return nil, err
 	}
-	if notes.TitleOf(body) == "" {
-		return nil, ErrNoTitle
-	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
-	now := time.Now()
-	res, err := tx.ExecContext(ctx, `INSERT INTO notes (title, body, seq, created_at, updated_at)
-		VALUES (?, ?, `+nextSeq+`, ?, ?)`, notes.TitleOf(body), body, s.timeArg(now), s.timeArg(now))
-	if isUniqueViolation(err) {
-		return nil, ErrTitleTaken
-	}
+	id, err := s.createNote(ctx, tx, body)
 	if err != nil {
-		return nil, err
-	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return nil, err
-	}
-	if err := s.recordVersion(ctx, tx, now, id, reasonCreate); err != nil {
 		return nil, err
 	}
 	n, err := getNote(ctx, tx, id)
@@ -162,6 +147,27 @@ func (s *SQLStore) CreateNote(ctx context.Context, body string) (*notes.Note, er
 		return nil, err
 	}
 	return n, tx.Commit()
+}
+
+// createNote adds a note with body and its first version, and returns its id.
+func (s *SQLStore) createNote(ctx context.Context, x dbx, body string) (int64, error) {
+	if notes.TitleOf(body) == "" {
+		return 0, ErrNoTitle
+	}
+	now := time.Now()
+	res, err := x.ExecContext(ctx, `INSERT INTO notes (title, body, seq, created_at, updated_at)
+		VALUES (?, ?, `+nextSeq+`, ?, ?)`, notes.TitleOf(body), body, s.timeArg(now), s.timeArg(now))
+	if isUniqueViolation(err) {
+		return 0, ErrTitleTaken
+	}
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	return id, s.recordVersion(ctx, x, now, id, reasonCreate)
 }
 
 func (s *SQLStore) GetNote(ctx context.Context, id int64) (*notes.Note, error) {
@@ -294,8 +300,15 @@ func (s *SQLStore) DeleteNote(ctx context.Context, id int64) error {
 		return err
 	}
 	defer tx.Rollback()
+	if err := s.deleteNote(ctx, tx, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *SQLStore) deleteNote(ctx context.Context, x dbx, id int64) error {
 	now := time.Now()
-	res, err := tx.ExecContext(ctx, `UPDATE notes SET deleted = 1, share_token = NULL, revision = revision + 1,
+	res, err := x.ExecContext(ctx, `UPDATE notes SET deleted = 1, share_token = NULL, revision = revision + 1,
 		seq = `+nextSeq+`, updated_at = ? WHERE id = ? AND deleted = 0`, s.timeArg(now), id)
 	if err != nil {
 		return err
@@ -303,10 +316,7 @@ func (s *SQLStore) DeleteNote(ctx context.Context, id int64) error {
 	if n, _ := res.RowsAffected(); n == 0 {
 		return ErrNoteNotFound
 	}
-	if err := s.recordVersion(ctx, tx, now, id, reasonDelete); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return s.recordVersion(ctx, x, now, id, reasonDelete)
 }
 
 func backlinks(ctx context.Context, x dbx, n *notes.Note) ([]notes.Note, error) {

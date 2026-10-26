@@ -28,6 +28,11 @@ func main() {
 		os.Exit(runBackup(os.Args[2:], settings, os.Stdout, os.Stderr))
 	}
 
+	if len(os.Args) > 1 && os.Args[1] == "replica" {
+		loadSettings()
+		os.Exit(runReplica(os.Args[2:], settings, os.Stdout, os.Stderr))
+	}
+
 	svcFlag := flag.String("service", "", "Control the system service.")
 	flag.Parse()
 

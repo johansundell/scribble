@@ -38,6 +38,22 @@ type FileMakerSettings struct {
 	InsecureSkipVerify bool          `json:"insecureSkipVerify"`
 }
 
+// NOTES_REPLICA values: the FileMaker replica of the notes (#66).
+const ReplicaFileMaker = "filemaker"
+
+// ReplicaSettings configures the FileMaker replica of the notes
+// (NOTES_REPLICA). It connects with the FMS_* settings.
+type ReplicaSettings struct {
+	Mode         string        `json:"mode"`         // NOTES_REPLICA; empty is off
+	NotesTable   string        `json:"notesTable"`   // FMS_NOTES_TABLE
+	PendingTable string        `json:"pendingTable"` // FMS_PENDING_TABLE
+	InfoTable    string        `json:"infoTable"`    // FMS_INFO_TABLE
+	Interval     time.Duration `json:"interval"`     // NOTES_REPLICA_INTERVAL
+}
+
+// Enabled reports whether the replica is turned on.
+func (r ReplicaSettings) Enabled() bool { return r.Mode != "" }
+
 // WebSettings configures the web app at /. An empty PIN turns it off.
 type WebSettings struct {
 	PIN            string        `json:"pin"`            // WEB_PIN
@@ -64,6 +80,7 @@ type AppSettings struct {
 	BackupRetentionDays int               `json:"backupRetentionDays"`
 	MySQL               MySQLSettings     `json:"mysql"`
 	FileMaker           FileMakerSettings `json:"filemaker"`
+	Replica             ReplicaSettings   `json:"replica"`
 	Web                 WebSettings       `json:"web"`
 	TrustedProxies      []string          `json:"trustedProxies"` // TRUSTED_PROXIES; empty trusts no proxy
 }
@@ -83,24 +100,59 @@ func (s AppSettings) Validate() error {
 			return fmt.Errorf("MYSQL_USERNAME, MYSQL_HOST and MYSQL_DATABASE must be set when STORAGE=mysql")
 		}
 	case StorageFileMaker:
-		fm := s.FileMaker
-		if fm.Host == "" || fm.Database == "" || fm.Username == "" || fm.Password == "" {
-			return fmt.Errorf("FMS_HOST, FMS_DATABASE, FMS_USERNAME and FMS_PASSWORD must be set when STORAGE=filemaker")
+		if err := s.FileMaker.validateConnection("STORAGE=filemaker"); err != nil {
+			return err
 		}
-		// Basic auth is sent with every request, so plain HTTP would leak the password.
-		if !strings.HasPrefix(fm.Host, "https://") {
-			return fmt.Errorf("FMS_HOST must start with https://, got %q", fm.Host)
-		}
-		if fm.Timeout <= 0 {
-			return fmt.Errorf("FMS_TIMEOUT must be a positive duration such as 10s")
-		}
-		if fm.LogTable == "" {
+		if s.FileMaker.LogTable == "" {
 			return fmt.Errorf("FMS_LOG_TABLE must not be empty")
 		}
 	default:
 		return fmt.Errorf("STORAGE must be one of %s, got %q", strings.Join(StorageBackends, ", "), s.Storage)
 	}
+	if err := s.validateReplica(); err != nil {
+		return err
+	}
 	return s.validateWeb()
+}
+
+// validateConnection checks the FMS_* connection settings, which when
+// names the setting that needs them.
+func (fm FileMakerSettings) validateConnection(when string) error {
+	if fm.Host == "" || fm.Database == "" || fm.Username == "" || fm.Password == "" {
+		return fmt.Errorf("FMS_HOST, FMS_DATABASE, FMS_USERNAME and FMS_PASSWORD must be set when %s", when)
+	}
+	// Basic auth is sent with every request, so plain HTTP would leak the password.
+	if !strings.HasPrefix(fm.Host, "https://") {
+		return fmt.Errorf("FMS_HOST must start with https://, got %q", fm.Host)
+	}
+	if fm.Timeout <= 0 {
+		return fmt.Errorf("FMS_TIMEOUT must be a positive duration such as 10s")
+	}
+	return nil
+}
+
+func (s AppSettings) validateReplica() error {
+	r := s.Replica
+	switch r.Mode {
+	case "":
+		return nil
+	case ReplicaFileMaker:
+	default:
+		return fmt.Errorf("NOTES_REPLICA must be %s or empty, got %q", ReplicaFileMaker, r.Mode)
+	}
+	if s.Storage != StorageSQLite {
+		return fmt.Errorf("NOTES_REPLICA=filemaker needs STORAGE=sqlite, because SQLite is the master of the notes; got STORAGE=%s", s.Storage)
+	}
+	if err := s.FileMaker.validateConnection("NOTES_REPLICA=filemaker"); err != nil {
+		return err
+	}
+	if r.NotesTable == "" || r.PendingTable == "" || r.InfoTable == "" {
+		return fmt.Errorf("FMS_NOTES_TABLE, FMS_PENDING_TABLE and FMS_INFO_TABLE must not be empty")
+	}
+	if r.Interval <= 0 {
+		return fmt.Errorf("NOTES_REPLICA_INTERVAL must be a positive duration such as 30s")
+	}
+	return nil
 }
 
 // validateWeb checks the web app settings when WEB_PIN is set. The messages

@@ -79,6 +79,48 @@ func TestAppSettingsValidate_FileMaker(t *testing.T) {
 	}
 }
 
+func TestAppSettingsValidate_Replica(t *testing.T) {
+	valid := func() AppSettings {
+		return AppSettings{Port: ":8080", Timeout: 10 * time.Second, Storage: StorageSQLite,
+			FileMaker: FileMakerSettings{Host: "https://fms.example.com", Database: "Notes", Username: "u", Password: "p", Timeout: 10 * time.Second},
+			Replica:   ReplicaSettings{Mode: ReplicaFileMaker, NotesTable: "Notes", PendingTable: "PendingEdits", InfoTable: "ScribbleInfo", Interval: 30 * time.Second},
+		}
+	}
+	tests := []struct {
+		name    string
+		modify  func(*AppSettings)
+		wantErr string
+	}{
+		{"valid", func(*AppSettings) {}, ""},
+		{"off needs nothing", func(s *AppSettings) { s.Replica = ReplicaSettings{}; s.FileMaker = FileMakerSettings{} }, ""},
+		{"unknown mode", func(s *AppSettings) { s.Replica.Mode = "mysql" }, "NOTES_REPLICA"},
+		{"not sqlite", func(s *AppSettings) {
+			s.Storage = StorageFileMaker
+			s.FileMaker.LogTable = "Logs"
+		}, "needs STORAGE=sqlite"},
+		{"missing host", func(s *AppSettings) { s.FileMaker.Host = "" }, "when NOTES_REPLICA=filemaker"},
+		{"plain http", func(s *AppSettings) { s.FileMaker.Host = "http://fms.example.com" }, "https://"},
+		{"empty table", func(s *AppSettings) { s.Replica.PendingTable = "" }, "FMS_PENDING_TABLE"},
+		{"no interval", func(s *AppSettings) { s.Replica.Interval = 0 }, "NOTES_REPLICA_INTERVAL"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s := valid()
+			tc.modify(&s)
+			err := s.Validate()
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("expected an error mentioning %q, got %v", tc.wantErr, err)
+			}
+		})
+	}
+}
+
 func TestAppSettingsValidate_Web(t *testing.T) {
 	const secret = "0123456789abcdef0123456789abcdef"
 	valid := func() AppSettings {
