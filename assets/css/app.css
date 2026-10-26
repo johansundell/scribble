@@ -711,7 +711,7 @@ body.web:has(.app-main) {
 	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-.event-badge,
+.reason-badge,
 .current-badge {
 	padding: 0 0.5rem;
 	border: 1px solid currentColor;

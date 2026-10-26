@@ -37,9 +37,10 @@ type historyView struct {
 	// Back is the note's page, Action where Restore posts.
 	Back   string
 	Action string
-	// Revision is the note's current revision, sent back with a restore.
-	Revision int64
-	Versions []historyItem
+	// BaseRevision is the note's current revision, sent back with a
+	// restore.
+	BaseRevision int64
+	Versions     []historyItem
 	// Shown is the version on show, rendered as ShownHTML.
 	Shown     historyItem
 	ShownHTML template.HTML
@@ -49,7 +50,7 @@ type historyView struct {
 // historyItem is one version in the history pane's list.
 type historyItem struct {
 	Revision int64
-	Event    string
+	Reason   string
 	At       time.Time
 	Href     string
 	Current  bool
@@ -65,9 +66,9 @@ type noteMeta struct {
 	Updated time.Time
 }
 
-// historyEvents are the words for a version's reason. A reason not listed
+// reasonLabels are the words for a version's reason. A reason not listed
 // is shown as it is.
-var historyEvents = map[string]string{
+var reasonLabels = map[string]string{
 	"create":             "Created",
 	"edit":               "Edited",
 	"rename":             "Renamed",
@@ -79,9 +80,9 @@ var historyEvents = map[string]string{
 	"conflict-kept-app":  "Sync conflict",
 }
 
-// historyEvent is the badge text for reason.
-func historyEvent(reason string) string {
-	if e, ok := historyEvents[reason]; ok {
+// reasonLabel is the badge text for reason.
+func reasonLabel(reason string) string {
+	if e, ok := reasonLabels[reason]; ok {
 		return e
 	}
 	return reason
@@ -108,7 +109,7 @@ func (h *Handler) AppHistory(c *gin.Context) error {
 	return h.renderHistory(c, http.StatusOK, p, ns, n, rev, "")
 }
 
-// AppRestore makes the posted revision the note's text again, as a new
+// AppRestore makes the posted version the note's text again, as a new
 // revision, and shows the note. base_revision, when sent, must still be the
 // note's revision, as with a save.
 func (h *Handler) AppRestore(c *gin.Context) error {
@@ -161,17 +162,17 @@ func (h *Handler) renderHistory(c *gin.Context, status int, p webPage, ns store.
 		return noteError(err)
 	}
 	hv := &historyView{
-		ID:       n.ID,
-		Title:    n.Title,
-		Back:     NotePath(n.ID) + p.Filter(),
-		Action:   HistoryPath(n.ID) + p.Filter(),
-		Revision: n.Revision,
-		Error:    msg,
+		ID:           n.ID,
+		Title:        n.Title,
+		Back:         NotePath(n.ID) + p.Filter(),
+		Action:       HistoryPath(n.ID) + p.Filter(),
+		BaseRevision: n.Revision,
+		Error:        msg,
 	}
 	for _, ver := range versions {
 		it := historyItem{
 			Revision: ver.Revision,
-			Event:    historyEvent(ver.Reason),
+			Reason:   reasonLabel(ver.Reason),
 			At:       ver.UpdatedAt,
 			Href:     historyRevPath(n.ID, ver.Revision, p),
 			Current:  ver.Revision == n.Revision,

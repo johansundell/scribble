@@ -65,8 +65,8 @@ a note, the list otherwise. */}}
 					</div>
 				</details>
 			</div>
-			<script src="/assets/js/note.js" defer></script>
-			{{- else if .History}}
+			{{- end}}
+			{{- if or (and .Note (not .Message)) .History}}
 			<script src="/assets/js/note.js" defer></script>
 			{{- end}}
 		</div>
@@ -140,7 +140,7 @@ a note, the list otherwise. */}}
 				<li><a href="{{.Href}}"{{if .Selected}} aria-current="true"{{end}}>
 					<span class="rev-badge">r{{.Revision}}</span>
 					{{timeTag .At}}
-					<span class="event-badge">{{.Event}}</span>
+					<span class="reason-badge">{{.Reason}}</span>
 					{{- if .Current}}
 					<span class="current-badge">Current version</span>
 					{{- end}}
@@ -154,7 +154,7 @@ a note, the list otherwise. */}}
 					<a class="button" href="{{.Back}}" data-filtered="back-to-note">← Back to note</a>
 					{{- if not .Shown.Current}}
 					<input type="hidden" name="revision" value="{{.Shown.Revision}}" />
-					<input type="hidden" name="base_revision" value="{{.Revision}}" />
+					<input type="hidden" name="base_revision" value="{{.BaseRevision}}" />
 					<button type="submit" class="button primary" name="action" value="restore" data-confirm="{{restoreQuestion .Shown.Revision .Title}}">Restore this version</button>
 					{{- end}}
 				</form>
