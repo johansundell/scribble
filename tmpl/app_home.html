@@ -4,7 +4,7 @@ a note, the list otherwise. */}}
 <main class="app-main{{if .NotePane}} has-note{{end}}">
 	<nav class="note-list" aria-label="Notes">
 		{{- $open := 0}}{{with .Note}}{{$open = .ID}}{{end}}{{with .Edit}}{{$open = .ID}}{{end}}
-		{{- with .Rename}}{{$open = .ID}}{{end}}{{with .Delete}}{{$open = .ID}}{{end}}{{with .Share}}{{$open = .ID}}{{end}}
+		{{- with .Rename}}{{$open = .ID}}{{end}}{{with .Delete}}{{$open = .ID}}{{end}}{{with .Share}}{{$open = .ID}}{{end}}{{with .History}}{{$open = .ID}}{{end}}
 		{{- $filter := .Filter}}
 		<div class="list-actions">
 			<a class="button" href="/new{{$filter}}" data-filtered="new" data-shortcut="new">New</a>
@@ -51,18 +51,22 @@ a note, the list otherwise. */}}
 			on phones, a <details> so it opens without JavaScript. */}}
 			<div class="note-actions">
 				<a class="button" href="{{editPath .Note.ID}}{{.Filter}}" data-filtered="edit" data-shortcut="edit">Edit</a>
+				<a class="button wide-only" href="{{historyPath .Note.ID}}{{.Filter}}" data-filtered="history">History (r{{.Note.Revision}})</a>
 				<a class="button wide-only" href="{{sharePath .Note.ID}}{{.Filter}}" data-filtered="share">Share</a>
 				<a class="button wide-only" href="{{renamePath .Note.ID}}{{.Filter}}" data-filtered="rename" data-shortcut="rename">Rename</a>
 				<a class="button danger wide-only" href="{{deletePath .Note.ID}}{{.Filter}}" data-filtered="delete" data-confirm="{{deleteQuestion .Note.Title}}">Delete</a>
 				<details class="more-menu">
 					<summary class="button" aria-label="More actions">⋯</summary>
 					<div class="more-items">
+						<a class="button" href="{{historyPath .Note.ID}}{{.Filter}}" data-filtered="history-more">History (r{{.Note.Revision}})</a>
 						<a class="button" href="{{sharePath .Note.ID}}{{.Filter}}" data-filtered="share-more">Share</a>
 						<a class="button" href="{{renamePath .Note.ID}}{{.Filter}}" data-filtered="rename-more">Rename</a>
 						<a class="button danger" href="{{deletePath .Note.ID}}{{.Filter}}" data-filtered="delete-more" data-confirm="{{deleteQuestion .Note.Title}}">Delete</a>
 					</div>
 				</details>
 			</div>
+			{{- end}}
+			{{- if or (and .Note (not .Message)) .History}}
 			<script src="/assets/js/note.js" defer></script>
 			{{- end}}
 		</div>
@@ -125,7 +129,43 @@ a note, the list otherwise. */}}
 			{{- end}}
 		</div>
 		{{- end}}
+		{{- else if .History}}{{with .History}}
+		{{/* The history pane (#110). Each version is a link and Restore a
+		form, so it all works without JavaScript; note.js asks before a
+		restore. */}}
+		<div class="history">
+			<h1>History</h1>
+			<ol class="history-list" aria-label="Versions">
+				{{- range .Versions}}
+				<li><a href="{{.Href}}"{{if .Selected}} aria-current="true"{{end}}>
+					<span class="rev-badge">r{{.Revision}}</span>
+					{{timeTag .At}}
+					<span class="reason-badge">{{.Reason}}</span>
+					{{- if .Current}}
+					<span class="current-badge">Current version</span>
+					{{- end}}
+				</a></li>
+				{{- end}}
+			</ol>
+			<div class="history-banner">
+				<p>Viewing revision r{{.Shown.Revision}} from {{timeTag .Shown.At}}</p>
+				<p class="editor-error" role="alert"{{if not .Error}} hidden{{end}}>{{.Error}}</p>
+				<form method="post" action="{{.Action}}" class="editor-buttons" data-filtered="restore-form">
+					<a class="button" href="{{.Back}}" data-filtered="back-to-note">← Back to note</a>
+					{{- if not .Shown.Current}}
+					<input type="hidden" name="revision" value="{{.Shown.Revision}}" />
+					<input type="hidden" name="base_revision" value="{{.BaseRevision}}" />
+					<button type="submit" class="button primary" name="action" value="restore" data-confirm="{{restoreQuestion .Shown.Revision .Title}}">Restore this version</button>
+					{{- end}}
+				</form>
+			</div>
+			<article class="note-body">{{.ShownHTML}}</article>
+		</div>
+		{{- end}}
 		{{- else if .Note}}
+		{{- with .Meta}}
+		<p class="note-meta muted">Revision {{.Revision}} ({{.Edits}} edit{{if ne .Edits 1}}s{{end}}) · Updated {{timeTag .Updated}}</p>
+		{{- end}}
 		<article class="note-body">{{.NoteHTML}}</article>
 		{{- with .Backlinks}}
 		<aside class="backlinks" aria-labelledby="backlinks-heading">

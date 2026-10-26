@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/johansundell/scribble/auth"
@@ -87,6 +88,10 @@ type webPage struct {
 	Rename *noteForm
 	Delete *noteForm
 	Share  *shareForm
+	// History is the note's history pane (#110), and Meta the note view's
+	// line about its revision.
+	History *historyView
+	Meta    *noteMeta
 	// The list's filter: Query searches titles and bodies, and Project (a
 	// name, without '#') keeps the notes tagged with it. Projects are the
 	// ones to choose from.
@@ -99,6 +104,15 @@ type webPage struct {
 // with none. Links and redirects carry it, so the filter stays as the user
 // moves around.
 func (p webPage) Filter() string {
+	v := p.filterValues()
+	if len(v) == 0 {
+		return ""
+	}
+	return "?" + v.Encode()
+}
+
+// filterValues is the list's filter as query values.
+func (p webPage) filterValues() url.Values {
 	v := url.Values{}
 	if p.Query != "" {
 		v.Set("q", p.Query)
@@ -106,16 +120,13 @@ func (p webPage) Filter() string {
 	if p.Project != "" {
 		v.Set("project", p.Project)
 	}
-	if len(v) == 0 {
-		return ""
-	}
-	return "?" + v.Encode()
+	return v
 }
 
 // NotePane reports whether the page is about a note (or says why there is
 // none), so that phones show it in place of the list (#65).
 func (p webPage) NotePane() bool {
-	return p.Note != nil || p.Edit != nil || p.Rename != nil || p.Delete != nil || p.Share != nil || p.Message != ""
+	return p.Note != nil || p.Edit != nil || p.Rename != nil || p.Delete != nil || p.Share != nil || p.History != nil || p.Message != ""
 }
 
 // Filtered reports whether the list is filtered.
@@ -196,7 +207,11 @@ func (h *Handler) AppNote(c *gin.Context) error {
 	if p.NoteHTML, err = renderNoteBody(ctx, ns, n.Body); err != nil {
 		return err
 	}
-	p.Title, p.Note = n.Title, n
+	versions, err := ns.NoteVersions(ctx, n.ID)
+	if err != nil {
+		return noteError(err)
+	}
+	p.Title, p.Note, p.Meta = n.Title, n, noteMetaOf(n, versions)
 	return h.renderNotes(c, http.StatusOK, p)
 }
 
@@ -309,12 +324,22 @@ func (h *Handler) renderLogin(c *gin.Context, status int, msg string) error {
 
 // webFuncs are the functions web templates may call.
 var webFuncs = template.FuncMap{
-	"notePath":       NotePath,
-	"editPath":       EditPath,
-	"renamePath":     RenamePath,
-	"deletePath":     DeletePath,
-	"sharePath":      SharePath,
-	"deleteQuestion": deleteQuestion,
+	"notePath":        NotePath,
+	"editPath":        EditPath,
+	"renamePath":      RenamePath,
+	"deletePath":      DeletePath,
+	"sharePath":       SharePath,
+	"historyPath":     HistoryPath,
+	"deleteQuestion":  deleteQuestion,
+	"restoreQuestion": restoreQuestion,
+	"timeTag":         timeTag,
+}
+
+// timeTag shows t in UTC, in a <time> that note.js shows in the reader's
+// own time zone and language.
+func timeTag(t time.Time) template.HTML {
+	t = t.UTC()
+	return template.HTML(`<time datetime="` + t.Format(time.RFC3339) + `">` + t.Format("2006-01-02 15:04 UTC") + `</time>`)
 }
 
 // renderWeb renders tmplFile inside the app layout. Web pages use

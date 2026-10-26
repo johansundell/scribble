@@ -97,6 +97,8 @@
 		document.title = doc.title;
 		// On phones the page scrolls, not the note pane.
 		window.scrollTo(0, 0);
+		// For the scripts already loaded, such as note.js.
+		document.dispatchEvent(new Event("scribble:pane"));
 		scripts.forEach(function (src) {
 			if (loaded[src]) return;
 			loaded[src] = true;
