@@ -393,6 +393,13 @@ without one; CI starts chromedriver. With Chrome in Docker
 SCRIBBLE_WEBDRIVER=http://localhost:4444 SCRIBBLE_WEBDRIVER_HOST=host.docker.internal go test ./router -run TestWebPhoneBrowser
 ```
 
+The app icons are committed, so building needs no image tools. After changing
+`assets/img/icon.svg`, run `make icons` to render them again. It needs
+`rsvg-convert` (librsvg) and ImageMagick 7 (`magick`), which `make deps` does
+not install (Debian/Ubuntu: `librsvg2-bin imagemagick`; macOS: `brew install
+librsvg imagemagick`). Older distributions ship ImageMagick 6, which has
+`convert` but no `magick`.
+
 ## Roadmap
 
 - [x] `cmd/scribble-gui`: Fyne desktop client (Windows first): browse,
