@@ -57,6 +57,9 @@ var newFileMakerStore = func(ctx context.Context, cfg types.FileMakerSettings) (
 	if err != nil {
 		return nil, err
 	}
+	if s.CreatedLogTable() {
+		logWarning("FMS_CREATE_LOG_TABLE: created FileMaker log table %s in %s", cfg.LogTable, cfg.Database)
+	}
 	return s, nil
 }
 var newReplicaClient = func(cfg types.FileMakerSettings) (replica.Client, error) {

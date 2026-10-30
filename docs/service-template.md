@@ -196,6 +196,7 @@ The application is configured via environment variables. You can set these in a 
 | `FMS_PASSWORD` | string | - | Password for that account. |
 | `FMS_TIMEOUT` | duration | `10s` | Timeout for each FileMaker request, and for the startup check. |
 | `FMS_LOG_TABLE` | string | `Logs` | FileMaker table for request logs. |
+| `FMS_CREATE_LOG_TABLE` | bool | `false` | Create `FMS_LOG_TABLE` at startup when it doesn't exist (see [FileMaker storage](#filemaker-storage)). The account then needs schema privileges. |
 | `FMS_CA_FILE` | string | - | PEM file with extra CA certificates to trust, for a server with a private CA. |
 | `FMS_INSECURE_SKIP_VERIFY` | bool | `false` | Skip certificate verification. Logs a warning on every start; prefer `FMS_CA_FILE`. |
 | `NOTES_REPLICA` | string | empty | `filemaker` turns on the FileMaker replica of the notes (see [FileMaker replica of the notes](#filemaker-replica-of-the-notes)). Empty means no replica. Needs `STORAGE=sqlite` and the `FMS_HOST`, `FMS_DATABASE`, `FMS_USERNAME` and `FMS_PASSWORD` settings. |
@@ -206,7 +207,9 @@ The application is configured via environment variables. You can set these in a 
 
 ## FileMaker storage
 
-With `STORAGE=filemaker`, request logs are written to a FileMaker table through the FileMaker OData API. The service never creates or changes the table: a FileMaker developer sets it up once, and at startup the service checks that it can read the table and every field. A missing table or field, a wrong password or an unreachable server stops startup with FileMaker's error.
+With `STORAGE=filemaker`, request logs are written to a FileMaker table through the FileMaker OData API. A FileMaker developer sets up the table once, and at startup the service checks that it can read the table and every field. A missing table or field, a wrong password or an unreachable server stops startup with FileMaker's error.
+
+**Creating the table.** With `FMS_CREATE_LOG_TABLE=true`, startup creates the table when FileMaker says it doesn't exist, logs a warning that it did, and checks it again ([ADR 12](adr/0012-service-may-create-the-filemaker-log-table.md)). The account needs schema privileges for that. Any other error still stops startup, and an existing table is never changed. OData can't create an auto-enter serial, so in a created table `ID` stays empty until a developer makes it one; the field types are the ones below, without the indexing settings.
 
 Create the table (default name `Logs`, see `FMS_LOG_TABLE`) with these fields:
 
@@ -227,7 +230,7 @@ The account needs the `fmodata` extended privilege and create and view access to
 
 **Writes.** Log entries are sent in batches as one OData `$batch` request each, asking FileMaker not to send the records back (`Prefer: return=minimal`) to save the server's data-transfer allowance. A rejected batch (a 4xx response, for example a changed field) is dropped and logged at once; network errors and 5xx responses are retried.
 
-**Testing against a real server.** `go test -tags filemaker ./store` runs an integration test when `FMS_TEST_HOST`, `FMS_TEST_DATABASE`, `FMS_TEST_USERNAME` and `FMS_TEST_PASSWORD` (and optionally `FMS_TEST_CA_FILE`) are set. It uses its own variables so it never touches a service's database, and creates and deletes a temporary `LogsTest_<timestamp>` table; the account needs schema privileges for that.
+**Testing against a real server.** `go test -tags filemaker ./store` runs an integration test when `FMS_TEST_HOST`, `FMS_TEST_DATABASE`, `FMS_TEST_USERNAME` and `FMS_TEST_PASSWORD` (and optionally `FMS_TEST_CA_FILE`) are set. It uses its own variables so it never touches a service's database, and creates and deletes temporary `LogsTest_<timestamp>` and `LogsCreate_<timestamp>` tables; the account needs schema privileges for that.
 
 ## FileMaker replica of the notes
 

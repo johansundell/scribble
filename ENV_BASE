@@ -24,13 +24,15 @@ MYSQL_PASSWORD=""
 MYSQL_HOST="127.0.0.1"
 MYSQL_PORT="3306"
 MYSQL_DATABASE="test"
-# FileMaker (STORAGE=filemaker); the log table must exist, see README
+# FileMaker (STORAGE=filemaker); the log table must exist, see README,
+# unless FMS_CREATE_LOG_TABLE=true lets startup create it (needs schema privileges)
 FMS_HOST="https://fms.example.com"
 FMS_DATABASE=""
 FMS_USERNAME=""
 FMS_PASSWORD=""
 FMS_TIMEOUT="10s"
 FMS_LOG_TABLE="Logs"
+FMS_CREATE_LOG_TABLE=false
 # optional PEM file with a private CA; FMS_INSECURE_SKIP_VERIFY disables checks
 FMS_CA_FILE=""
 FMS_INSECURE_SKIP_VERIFY=false

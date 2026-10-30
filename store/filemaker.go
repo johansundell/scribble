@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -17,9 +18,28 @@ import (
 	"github.com/johansundell/scribble/types"
 )
 
-// fileMakerFields are the log table's fields, in the order they are selected.
-var fileMakerFields = []string{"ID", "Status", "Method", "Error", "Endpoint", "CreatedAt", "Request", "Response"}
-var fileMakerSelectFields = strings.Join(fileMakerFields, ",")
+// logTableFields are the log table's fields, in the order they are selected,
+// with the types startup creates them with. OData can't make ID an
+// auto-enter serial, so in a created table it stays empty until a developer
+// changes it in FileMaker.
+var logTableFields = []fmsodata.FieldDefinition{
+	{Name: "ID", Type: "NUMERIC"},
+	{Name: "Status", Type: "NUMERIC"},
+	{Name: "Method", Type: "VARCHAR"},
+	{Name: "Error", Type: "VARCHAR"},
+	{Name: "Endpoint", Type: "VARCHAR"},
+	{Name: "CreatedAt", Type: "TIMESTAMP"},
+	{Name: "Request", Type: "VARCHAR"},
+	{Name: "Response", Type: "VARCHAR"},
+}
+
+var fileMakerSelectFields = func() string {
+	names := make([]string, len(logTableFields))
+	for i, f := range logTableFields {
+		names[i] = f.Name
+	}
+	return strings.Join(names, ",")
+}()
 
 // fileMakerTimeLayout writes CreatedAt as UTC without an offset: FileMaker
 // timestamps have no time zone, and an offset is read relative to the
@@ -28,29 +48,79 @@ const fileMakerTimeLayout = "2006-01-02T15:04:05"
 
 // FileMakerStore keeps request logs in a FileMaker table through the OData API.
 type FileMakerStore struct {
-	client *fmsodata.Client
-	table  string
+	client  *fmsodata.Client
+	table   string
+	created bool
 }
 
 // NewFileMaker connects to FileMaker Server and checks, within ctx, that the
-// log table (cfg.LogTable) and all its fields can be read. The table is never
-// created here. cfg.CAFile adds trusted CAs and cfg.InsecureSkipVerify
-// disables certificate checks.
+// log table (cfg.LogTable) and all its fields can be read. With
+// cfg.CreateLogTable it creates the table when FileMaker says it doesn't
+// exist (#113, ADR 12); any other error, and an existing table, are left as
+// they are. cfg.CAFile adds trusted CAs and cfg.InsecureSkipVerify disables
+// certificate checks.
 func NewFileMaker(ctx context.Context, cfg types.FileMakerSettings) (*FileMakerStore, error) {
 	client, err := NewFileMakerClient(cfg)
 	if err != nil {
 		return nil, err
 	}
 	s := &FileMakerStore{client: client, table: cfg.LogTable}
+	err = s.checkTable(ctx)
+	if err != nil && cfg.CreateLogTable && isMissingTable(err) {
+		if err = s.client.CreateTable(ctx, logTableDefinition(s.table)); err != nil {
+			err = fmt.Errorf("create FileMaker log table %q: %w", s.table, err)
+		} else if err = s.checkTable(ctx); err != nil {
+			err = fmt.Errorf("created FileMaker log table %q, but: %w", s.table, err)
+		} else {
+			s.created = true
+		}
+	}
+	if err != nil {
+		s.client.CloseIdleConnections()
+		return nil, err
+	}
+	return s, nil
+}
 
+// CreatedLogTable reports whether NewFileMaker created the log table.
+func (s *FileMakerStore) CreatedLogTable() bool {
+	return s.created
+}
+
+// checkTable reads no records but every field of the log table, so a missing
+// table or field fails.
+func (s *FileMakerStore) checkTable(ctx context.Context) error {
 	query := url.Values{}
 	query.Set("$select", fileMakerSelectFields)
 	query.Set("$top", "0")
 	if _, err := s.client.GetRecords(ctx, s.table, query); err != nil {
-		s.client.CloseIdleConnections()
-		return nil, fmt.Errorf("check FileMaker log table %q: %w", s.table, err)
+		return fmt.Errorf("check FileMaker log table %q: %w", s.table, err)
 	}
-	return s, nil
+	return nil
+}
+
+// fileMakerCodeTableMissing is FileMaker's error code for a table that isn't
+// defined in the database, sent with 404.
+const fileMakerCodeTableMissing = "-1020"
+
+// isMissingTable reports whether err is FileMaker saying the table doesn't
+// exist, and not a missing field, a wrong password or a network error.
+func isMissingTable(err error) bool {
+	var se *fmsodata.StatusError
+	if !errors.As(err, &se) || se.StatusCode != http.StatusNotFound {
+		return false
+	}
+	var body struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	return json.Unmarshal([]byte(se.Body), &body) == nil && body.Error.Code == fileMakerCodeTableMissing
+}
+
+// logTableDefinition is the log table as startup creates it.
+func logTableDefinition(name string) fmsodata.TableDefinition {
+	return fmsodata.TableDefinition{TableName: name, Fields: logTableFields}
 }
 
 // NewFileMakerClient returns an OData client for the FMS_* connection
