@@ -7,7 +7,7 @@
 //
 // The account needs to create and delete tables (fmodata and schema
 // privileges). It uses its own FMS_TEST_* variables so it never touches a
-// service's FMS_* database, and creates and deletes a temporary table.
+// service's FMS_* database, and creates and deletes temporary tables.
 //
 // OData cannot create an auto-enter serial field, so ID stays empty in the
 // temporary table; check the auto-enter ID once by hand on a table set up in
@@ -26,7 +26,10 @@ import (
 	"github.com/johansundell/scribble/types"
 )
 
-func TestFileMakerIntegration(t *testing.T) {
+// integrationSettings connects with the FMS_TEST_* variables to a new
+// table named prefix_<unix time>, or skips the test when they aren't set.
+func integrationSettings(t *testing.T, prefix string) types.FileMakerSettings {
+	t.Helper()
 	cfg := types.FileMakerSettings{
 		Host:     os.Getenv("FMS_TEST_HOST"),
 		Database: os.Getenv("FMS_TEST_DATABASE"),
@@ -34,11 +37,16 @@ func TestFileMakerIntegration(t *testing.T) {
 		Password: os.Getenv("FMS_TEST_PASSWORD"),
 		CAFile:   os.Getenv("FMS_TEST_CA_FILE"),
 		Timeout:  30 * time.Second,
-		LogTable: fmt.Sprintf("LogsTest_%d", time.Now().Unix()),
+		LogTable: fmt.Sprintf("%s_%d", prefix, time.Now().Unix()),
 	}
 	if cfg.Host == "" || cfg.Database == "" || cfg.Username == "" {
 		t.Skip("set FMS_TEST_HOST, FMS_TEST_DATABASE, FMS_TEST_USERNAME and FMS_TEST_PASSWORD to run")
 	}
+	return cfg
+}
+
+func TestFileMakerIntegration(t *testing.T) {
+	cfg := integrationSettings(t, "LogsTest")
 	ctx := context.Background()
 
 	tlsConfig, err := fileMakerTLSConfig(cfg)
@@ -98,19 +106,8 @@ func TestFileMakerIntegration(t *testing.T) {
 // TestFileMakerIntegration_CreatesMissingTable checks FMS_CREATE_LOG_TABLE
 // (#113): startup creates a missing log table, and leaves it alone after.
 func TestFileMakerIntegration_CreatesMissingTable(t *testing.T) {
-	cfg := types.FileMakerSettings{
-		Host:           os.Getenv("FMS_TEST_HOST"),
-		Database:       os.Getenv("FMS_TEST_DATABASE"),
-		Username:       os.Getenv("FMS_TEST_USERNAME"),
-		Password:       os.Getenv("FMS_TEST_PASSWORD"),
-		CAFile:         os.Getenv("FMS_TEST_CA_FILE"),
-		Timeout:        30 * time.Second,
-		LogTable:       fmt.Sprintf("LogsCreate_%d", time.Now().Unix()),
-		CreateLogTable: true,
-	}
-	if cfg.Host == "" || cfg.Database == "" || cfg.Username == "" {
-		t.Skip("set FMS_TEST_HOST, FMS_TEST_DATABASE, FMS_TEST_USERNAME and FMS_TEST_PASSWORD to run")
-	}
+	cfg := integrationSettings(t, "LogsCreate")
+	cfg.CreateLogTable = true
 	ctx := context.Background()
 
 	// Off, a missing table still stops startup.
@@ -120,16 +117,21 @@ func TestFileMakerIntegration_CreatesMissingTable(t *testing.T) {
 		t.Fatalf("without CreateLogTable: want the missing-table error, got %v", err)
 	}
 
+	admin, err := NewFileMakerClient(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Registered before the create, so a half-done create is cleaned up too.
+	t.Cleanup(func() {
+		if err := admin.DeleteTable(context.Background(), cfg.LogTable); err != nil && !t.Failed() {
+			t.Errorf("delete table %s: %v", cfg.LogTable, err)
+		}
+	})
 	s, err := NewFileMaker(ctx, cfg)
 	if err != nil {
 		t.Fatalf("NewFileMaker (create): %v", err)
 	}
-	t.Cleanup(func() {
-		if err := s.client.DeleteTable(context.Background(), cfg.LogTable); err != nil {
-			t.Errorf("delete table %s: %v", cfg.LogTable, err)
-		}
-		s.Close()
-	})
+	defer s.Close()
 	if !s.CreatedLogTable() {
 		t.Fatal("CreatedLogTable() = false on a new table")
 	}

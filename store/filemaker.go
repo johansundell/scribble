@@ -69,9 +69,10 @@ func NewFileMaker(ctx context.Context, cfg types.FileMakerSettings) (*FileMakerS
 	if err != nil && cfg.CreateLogTable && isMissingTable(err) {
 		if err = s.client.CreateTable(ctx, logTableDefinition(s.table)); err != nil {
 			err = fmt.Errorf("create FileMaker log table %q: %w", s.table, err)
+		} else if err = s.checkTable(ctx); err != nil {
+			err = fmt.Errorf("created FileMaker log table %q, but: %w", s.table, err)
 		} else {
 			s.created = true
-			err = s.checkTable(ctx)
 		}
 	}
 	if err != nil {
@@ -98,9 +99,9 @@ func (s *FileMakerStore) checkTable(ctx context.Context) error {
 	return nil
 }
 
-// fileMakerTableMissing is FileMaker's error code for a table that isn't
+// fileMakerCodeTableMissing is FileMaker's error code for a table that isn't
 // defined in the database, sent with 404.
-const fileMakerTableMissing = "-1020"
+const fileMakerCodeTableMissing = "-1020"
 
 // isMissingTable reports whether err is FileMaker saying the table doesn't
 // exist, and not a missing field, a wrong password or a network error.
@@ -114,7 +115,7 @@ func isMissingTable(err error) bool {
 			Code string `json:"code"`
 		} `json:"error"`
 	}
-	return json.Unmarshal([]byte(se.Body), &body) == nil && body.Error.Code == fileMakerTableMissing
+	return json.Unmarshal([]byte(se.Body), &body) == nil && body.Error.Code == fileMakerCodeTableMissing
 }
 
 // logTableDefinition is the log table as startup creates it.

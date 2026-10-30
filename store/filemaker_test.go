@@ -440,6 +440,18 @@ func TestNewFileMaker_CreateOnlyForMissingTable(t *testing.T) {
 	}
 }
 
+func TestNewFileMaker_CreatedTableFailsCheck(t *testing.T) {
+	// The table is created, but the check after still fails: say so, as
+	// the table now exists.
+	f := &fakeFileMaker{noTable: true, checkStatus: http.StatusBadRequest}
+	cfg := startFakeFileMaker(t, f)
+	cfg.CreateLogTable = true
+	_, err := NewFileMaker(context.Background(), cfg)
+	if err == nil || !strings.Contains(err.Error(), `created FileMaker log table "Logs", but`) || !strings.Contains(err.Error(), "field Endpoint not found") {
+		t.Fatalf("expected the check error, saying the table was created, got %v", err)
+	}
+}
+
 func TestNewFileMaker_CreateFails(t *testing.T) {
 	f := &fakeFileMaker{noTable: true, createStatus: http.StatusForbidden}
 	cfg := startFakeFileMaker(t, f)
