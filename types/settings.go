@@ -28,14 +28,17 @@ type MySQLSettings struct {
 
 // FileMakerSettings configures STORAGE=filemaker (FMS_* variables).
 type FileMakerSettings struct {
-	Host               string        `json:"host"`
-	Database           string        `json:"database"`
-	Username           string        `json:"username"`
-	Password           string        `json:"password"`
-	Timeout            time.Duration `json:"timeout"`
-	LogTable           string        `json:"logTable"`
-	CAFile             string        `json:"caFile"`
-	InsecureSkipVerify bool          `json:"insecureSkipVerify"`
+	Host     string        `json:"host"`
+	Database string        `json:"database"`
+	Username string        `json:"username"`
+	Password string        `json:"password"`
+	Timeout  time.Duration `json:"timeout"`
+	LogTable string        `json:"logTable"`
+	// CreateLogTable lets startup create LogTable when it doesn't exist
+	// (FMS_CREATE_LOG_TABLE, #113).
+	CreateLogTable     bool   `json:"createLogTable"`
+	CAFile             string `json:"caFile"`
+	InsecureSkipVerify bool   `json:"insecureSkipVerify"`
 }
 
 // NOTES_REPLICA values: the FileMaker replica of the notes (#66).

@@ -190,7 +190,9 @@ available".
 
 Notes need `STORAGE=sqlite` (the default). With `mysql` or `filemaker`, request
 logs still work but the notes endpoints answer **501**, and the service logs a
-warning at startup.
+warning at startup. With `filemaker`, `FMS_CREATE_LOG_TABLE=true` lets
+startup create the log table when it is missing
+([ADR 12](docs/adr/0012-service-may-create-the-filemaker-log-table.md)).
 
 ## Web app
 

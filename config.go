@@ -89,6 +89,7 @@ func loadSettings(filenames ...string) {
 	if settings.FileMaker.LogTable == "" {
 		settings.FileMaker.LogTable = "Logs"
 	}
+	settings.FileMaker.CreateLogTable, _ = strconv.ParseBool(os.Getenv("FMS_CREATE_LOG_TABLE"))
 	settings.FileMaker.CAFile = os.Getenv("FMS_CA_FILE")
 	settings.FileMaker.InsecureSkipVerify, _ = strconv.ParseBool(os.Getenv("FMS_INSECURE_SKIP_VERIFY"))
 

@@ -49,19 +49,7 @@ func TestFileMakerIntegration(t *testing.T) {
 		Host: cfg.Host, Database: cfg.Database, Username: cfg.Username, Password: cfg.Password,
 		Timeout: cfg.Timeout, TLSConfig: tlsConfig,
 	})
-	table := fmsodata.TableDefinition{
-		TableName: cfg.LogTable,
-		Fields: []fmsodata.FieldDefinition{
-			{Name: "ID", Type: "NUMERIC"},
-			{Name: "Status", Type: "NUMERIC"},
-			{Name: "Method", Type: "VARCHAR"},
-			{Name: "Error", Type: "VARCHAR"},
-			{Name: "Endpoint", Type: "VARCHAR"},
-			{Name: "CreatedAt", Type: "TIMESTAMP"},
-			{Name: "Request", Type: "VARCHAR"},
-			{Name: "Response", Type: "VARCHAR"},
-		},
-	}
+	table := logTableDefinition(cfg.LogTable)
 	if err := admin.CreateTable(ctx, table); err != nil {
 		t.Fatalf("create table %s: %v", cfg.LogTable, err)
 	}
@@ -104,5 +92,57 @@ func TestFileMakerIntegration(t *testing.T) {
 	}
 	if logs[1].Status != 404 || logs[1].Error != "Nope" || string(logs[0].Response) != `{"result":"a"}` {
 		t.Errorf("fields did not round-trip: %+v", logs)
+	}
+}
+
+// TestFileMakerIntegration_CreatesMissingTable checks FMS_CREATE_LOG_TABLE
+// (#113): startup creates a missing log table, and leaves it alone after.
+func TestFileMakerIntegration_CreatesMissingTable(t *testing.T) {
+	cfg := types.FileMakerSettings{
+		Host:           os.Getenv("FMS_TEST_HOST"),
+		Database:       os.Getenv("FMS_TEST_DATABASE"),
+		Username:       os.Getenv("FMS_TEST_USERNAME"),
+		Password:       os.Getenv("FMS_TEST_PASSWORD"),
+		CAFile:         os.Getenv("FMS_TEST_CA_FILE"),
+		Timeout:        30 * time.Second,
+		LogTable:       fmt.Sprintf("LogsCreate_%d", time.Now().Unix()),
+		CreateLogTable: true,
+	}
+	if cfg.Host == "" || cfg.Database == "" || cfg.Username == "" {
+		t.Skip("set FMS_TEST_HOST, FMS_TEST_DATABASE, FMS_TEST_USERNAME and FMS_TEST_PASSWORD to run")
+	}
+	ctx := context.Background()
+
+	// Off, a missing table still stops startup.
+	off := cfg
+	off.CreateLogTable = false
+	if _, err := NewFileMaker(ctx, off); err == nil || !isMissingTable(err) {
+		t.Fatalf("without CreateLogTable: want the missing-table error, got %v", err)
+	}
+
+	s, err := NewFileMaker(ctx, cfg)
+	if err != nil {
+		t.Fatalf("NewFileMaker (create): %v", err)
+	}
+	t.Cleanup(func() {
+		if err := s.client.DeleteTable(context.Background(), cfg.LogTable); err != nil {
+			t.Errorf("delete table %s: %v", cfg.LogTable, err)
+		}
+		s.Close()
+	})
+	if !s.CreatedLogTable() {
+		t.Fatal("CreatedLogTable() = false on a new table")
+	}
+	if err := s.LogRequests(ctx, []types.UsageLog{{Status: 200, Method: "GET", Endpoint: "/created", CreatedAt: time.Now(), Request: "{}", Response: "{}"}}); err != nil {
+		t.Fatalf("LogRequests into the created table: %v", err)
+	}
+
+	again, err := NewFileMaker(ctx, cfg)
+	if err != nil {
+		t.Fatalf("NewFileMaker (existing): %v", err)
+	}
+	defer again.Close()
+	if again.CreatedLogTable() {
+		t.Error("created the table a second time")
 	}
 }

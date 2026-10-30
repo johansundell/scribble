@@ -31,6 +31,11 @@ type fakeFileMaker struct {
 	prefer      []string         // Prefer header of each create
 	lastQuery   map[string]string
 	records     []map[string]any // returned by filtered reads
+	// noTable makes the log table missing until it is created; createStatus
+	// answers the create (0 = 201). tables holds the definitions received.
+	noTable      bool
+	createStatus int
+	tables       []map[string]any
 }
 
 func (f *fakeFileMaker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -45,6 +50,19 @@ func (f *fakeFileMaker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == base:
 		json.NewEncoder(w).Encode(map[string]any{"value": []any{}})
+	case r.Method == http.MethodGet && r.URL.Path == base+"/Logs" && f.noTable:
+		http.Error(w, `{"error": {"code": "-1020","message": "Table 'Logs' not defined in database"}}`, http.StatusNotFound)
+	case r.Method == http.MethodPost && r.URL.Path == base+"/FileMaker_Tables":
+		var def map[string]any
+		json.NewDecoder(r.Body).Decode(&def)
+		f.tables = append(f.tables, def)
+		if f.createStatus != 0 {
+			http.Error(w, `{"error":{"code":"-1","message":"no schema privilege"}}`, f.createStatus)
+			return
+		}
+		f.noTable = false
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(def)
 	case r.Method == http.MethodGet && r.URL.Path == base+"/Logs":
 		q := r.URL.Query()
 		f.lastQuery = map[string]string{"$select": q.Get("$select"), "$filter": q.Get("$filter"), "$orderby": q.Get("$orderby"), "$top": q.Get("$top"), "$skip": q.Get("$skip")}
@@ -343,5 +361,91 @@ func TestFileMaker_GetLogsPage(t *testing.T) {
 	}
 	if f.lastQuery["$top"] != "" || f.lastQuery["$skip"] != "" {
 		t.Errorf("expected no $top/$skip without a page, got $top=%q $skip=%q", f.lastQuery["$top"], f.lastQuery["$skip"])
+	}
+}
+
+func TestNewFileMaker_MissingTableFailsWithoutCreate(t *testing.T) {
+	f := &fakeFileMaker{noTable: true}
+	_, err := NewFileMaker(context.Background(), startFakeFileMaker(t, f))
+	if err == nil || !strings.Contains(err.Error(), "-1020") {
+		t.Fatalf("expected startup to fail on the missing table, got %v", err)
+	}
+	if len(f.tables) != 0 {
+		t.Errorf("created a table without FMS_CREATE_LOG_TABLE: %v", f.tables)
+	}
+}
+
+func TestNewFileMaker_CreatesMissingTable(t *testing.T) {
+	f := &fakeFileMaker{noTable: true}
+	cfg := startFakeFileMaker(t, f)
+	cfg.CreateLogTable = true
+	s, err := NewFileMaker(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("NewFileMaker: %v", err)
+	}
+	defer s.Close()
+	if !s.CreatedLogTable() {
+		t.Error("CreatedLogTable() = false after creating the table")
+	}
+	if len(f.tables) != 1 {
+		t.Fatalf("expected one create, got %v", f.tables)
+	}
+	def := f.tables[0]
+	if def["tableName"] != "Logs" {
+		t.Errorf("created table %v, want Logs", def["tableName"])
+	}
+	var fields []string
+	for _, fd := range def["fields"].([]any) {
+		m := fd.(map[string]any)
+		fields = append(fields, m["name"].(string)+" "+m["type"].(string))
+	}
+	want := "ID NUMERIC,Status NUMERIC,Method VARCHAR,Error VARCHAR,Endpoint VARCHAR,CreatedAt TIMESTAMP,Request VARCHAR,Response VARCHAR"
+	if got := strings.Join(fields, ","); got != want {
+		t.Errorf("fields %s, want %s", got, want)
+	}
+	// The check ran again on the new table.
+	if f.lastQuery["$select"] == "" {
+		t.Error("the table was not checked after it was created")
+	}
+}
+
+func TestNewFileMaker_LeavesExistingTable(t *testing.T) {
+	f := &fakeFileMaker{}
+	cfg := startFakeFileMaker(t, f)
+	cfg.CreateLogTable = true
+	s, err := NewFileMaker(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("NewFileMaker: %v", err)
+	}
+	defer s.Close()
+	if s.CreatedLogTable() || len(f.tables) != 0 {
+		t.Errorf("touched an existing table: %v", f.tables)
+	}
+}
+
+func TestNewFileMaker_CreateOnlyForMissingTable(t *testing.T) {
+	// A missing field, or a wrong password, is not a missing table.
+	f := &fakeFileMaker{checkStatus: http.StatusBadRequest}
+	cfg := startFakeFileMaker(t, f)
+	cfg.CreateLogTable = true
+	if _, err := NewFileMaker(context.Background(), cfg); err == nil || !strings.Contains(err.Error(), "field Endpoint not found") {
+		t.Fatalf("expected the field error, got %v", err)
+	}
+	cfg.Password = "wrong"
+	if _, err := NewFileMaker(context.Background(), cfg); err == nil || !strings.Contains(err.Error(), "status 401") {
+		t.Fatalf("expected a 401 error, got %v", err)
+	}
+	if len(f.tables) != 0 {
+		t.Errorf("created a table for another error: %v", f.tables)
+	}
+}
+
+func TestNewFileMaker_CreateFails(t *testing.T) {
+	f := &fakeFileMaker{noTable: true, createStatus: http.StatusForbidden}
+	cfg := startFakeFileMaker(t, f)
+	cfg.CreateLogTable = true
+	_, err := NewFileMaker(context.Background(), cfg)
+	if err == nil || !strings.Contains(err.Error(), "no schema privilege") || !strings.Contains(err.Error(), `"Logs"`) {
+		t.Fatalf("expected FileMaker's create error, got %v", err)
 	}
 }
