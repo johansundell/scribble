@@ -1172,7 +1172,7 @@ func TestSystemTrayKeepsAppResidentAndReopensWindow(t *testing.T) {
 
 	ui, w := openWithSpy(t, c)
 	tray := &fakeTray{}
-	ui.SetupTray(tray)
+	ui.SetupTray(tray, nil)
 
 	if tray.icon == nil {
 		t.Fatal("expected system tray icon to be set")
@@ -1218,7 +1218,7 @@ func TestSystemTrayQuitAsksBeforeDiscardingEdits(t *testing.T) {
 
 	ui, w := openWithSpy(t, c)
 	tray := &fakeTray{}
-	ui.SetupTray(tray)
+	ui.SetupTray(tray, nil)
 
 	ui.List.Select(0)
 	test.Tap(ui.EditToggle)
@@ -1245,7 +1245,7 @@ func TestSystemTrayQuitAsksBeforeDiscardingEdits(t *testing.T) {
 	// and must show the hidden window so the user can dismiss the dialog.
 	ui2, w2 := openWithSpy(t, c)
 	tray2 := &fakeTray{}
-	ui2.SetupTray(tray2)
+	ui2.SetupTray(tray2, nil)
 	ui2.List.Select(0)
 	test.Tap(ui2.Delete)
 	ui2.Close() // hidden to tray while Delete dialog is open
@@ -1269,7 +1269,7 @@ func TestOpenNewNoteFromTrayOrHotkey(t *testing.T) {
 
 	ui, w := openWithSpy(t, c)
 	tray := &fakeTray{}
-	ui.SetupTray(tray)
+	ui.SetupTray(tray, nil)
 
 	ui.List.Select(0)
 	ui.Close() // hidden to tray
@@ -1320,7 +1320,7 @@ func TestTrayAndHotkeyRestoreMinimizedWindow(t *testing.T) {
 
 	ui, w := openWithSpy(t, c)
 	tray := &fakeTray{}
-	ui.SetupTray(tray)
+	ui.SetupTray(tray, nil)
 
 	// Open Scribble restores a minimized window.
 	w.minimized = true
@@ -1404,7 +1404,7 @@ func TestHotkeyEventOpensFocusedNewNoteEditor(t *testing.T) {
 	c := newServer(t)
 	ui, w := openWithSpy(t, c)
 	tray := &fakeTray{}
-	ui.SetupTray(tray)
+	ui.SetupTray(tray, nil)
 	ui.Close()
 
 	ch := make(chan hotkey.Event, 1)
@@ -1428,7 +1428,7 @@ func TestSystemTrayShowsTheAppIcon(t *testing.T) {
 	withAppIcon(t, icon)
 
 	tray := &fakeTray{}
-	ui.SetupTray(tray)
+	ui.SetupTray(tray, nil)
 
 	if tray.icon != icon {
 		t.Errorf("tray icon = %v, want the app icon", tray.icon)
@@ -1443,9 +1443,23 @@ func TestSystemTrayFallsBackToDocumentIconWithoutAppIcon(t *testing.T) {
 	}
 
 	tray := &fakeTray{}
-	ui.SetupTray(tray)
+	ui.SetupTray(tray, nil)
 
 	if tray.icon != theme.DocumentIcon() {
 		t.Errorf("tray icon = %v, want the document icon", tray.icon)
+	}
+}
+
+func TestSystemTrayShowsTheGivenIconOverTheAppIcon(t *testing.T) {
+	c := newServer(t)
+	ui, _ := openWithSpy(t, c)
+	withAppIcon(t, fyne.NewStaticResource("Icon.png", []byte("png")))
+	ico := fyne.NewStaticResource("icon.ico", []byte("ico"))
+
+	tray := &fakeTray{}
+	ui.SetupTray(tray, ico)
+
+	if tray.icon != ico {
+		t.Errorf("tray icon = %v, want the given icon", tray.icon)
 	}
 }

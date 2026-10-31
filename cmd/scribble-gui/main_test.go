@@ -161,3 +161,23 @@ func TestNewWindowSetsTheAppIconOnTheWindow(t *testing.T) {
 		t.Errorf("window icon = %v, want the app icon", got)
 	}
 }
+
+// icon.ico, which the Windows tray embeds, is the multi-size app icon that
+// make icons copies from assets/img (#120). Checked here so it runs on every
+// platform, not only on Windows.
+func TestIconICOIsTheAppIcon(t *testing.T) {
+	ico, err := os.ReadFile("icon.ico")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.HasPrefix(ico, []byte{0x00, 0x00, 0x01, 0x00}) {
+		t.Error("icon.ico does not start with the ICO header")
+	}
+	want, err := os.ReadFile(filepath.Join("..", "..", "assets", "img", "icon.ico"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(ico, want) {
+		t.Error("icon.ico differs from assets/img/icon.ico; run make icons")
+	}
+}

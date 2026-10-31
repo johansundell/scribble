@@ -43,6 +43,11 @@ var Version = "dev"
 //go:embed Icon.png
 var iconPNG []byte
 
+// pngIcon is iconPNG as a resource.
+func pngIcon() fyne.Resource {
+	return fyne.NewStaticResource("Icon.png", iconPNG)
+}
+
 func main() {
 	a, envErr := newApp(loadEnvNextToExecutable, app.New)
 	ver := Version
@@ -83,7 +88,7 @@ func main() {
 		ui := gui.New(w, c, cache)
 		ui.StartSync(syncInterval)
 		if desk, ok := a.(desktop.App); ok {
-			ui.SetupTray(desk)
+			ui.SetupTray(desk, trayIcon())
 		}
 		if unregister, err := ui.RegisterHotkey(os.Getenv("SCRIBBLE_HOTKEY")); err == nil && unregister != nil {
 			defer unregister()
@@ -103,7 +108,7 @@ func main() {
 func newApp(readEnv func() error, create func() fyne.App) (fyne.App, error) {
 	err := readEnv()
 	a := create()
-	a.SetIcon(fyne.NewStaticResource("Icon.png", iconPNG))
+	a.SetIcon(pngIcon())
 	return a, err
 }
 
