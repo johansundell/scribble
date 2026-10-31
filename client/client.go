@@ -12,6 +12,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,6 +28,17 @@ const APILevel = 1
 
 // ReleasesURL is where the latest release can be downloaded.
 const ReleasesURL = "https://github.com/johansundell/scribble/releases/latest"
+
+// DefaultURL is the server the clients use when SCRIBBLE_URL is unset.
+const DefaultURL = "https://notes.sudde.net"
+
+// ServerURL is SCRIBBLE_URL, or DefaultURL when it is unset or empty.
+func ServerURL() string {
+	if u := os.Getenv("SCRIBBLE_URL"); u != "" {
+		return u
+	}
+	return DefaultURL
+}
 
 // Client talks to one scribble server.
 type Client struct {

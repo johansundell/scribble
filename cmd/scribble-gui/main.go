@@ -1,6 +1,6 @@
 // Command scribble-gui is the desktop client for a scribble server.
 //
-//	SCRIBBLE_URL     server address (default http://localhost:8080)
+//	SCRIBBLE_URL     server address (default https://notes.sudde.net)
 //	SCRIBBLE_TOKEN   the server's AUTH_TOKEN
 //	SCRIBBLE_HOTKEY  global new-note shortcut (default Ctrl+Alt+N; "none" to disable)
 //
@@ -59,10 +59,7 @@ func main() {
 	w.Resize(fyne.NewSize(1000, 700))
 
 	token := os.Getenv("SCRIBBLE_TOKEN")
-	baseURL := os.Getenv("SCRIBBLE_URL")
-	if baseURL == "" {
-		baseURL = "http://localhost:8080"
-	}
+	baseURL := client.ServerURL()
 	if envErr != nil {
 		w.SetContent(widget.NewLabel("Cannot read the .env file next to scribble-gui: " + envErr.Error()))
 	} else if token == "" {

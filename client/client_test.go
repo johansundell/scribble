@@ -188,3 +188,14 @@ func TestClientHistory(t *testing.T) {
 		t.Errorf("Undelete onto a taken title: want title-taken, got %v", err)
 	}
 }
+
+func TestServerURLDefaultsToNotesSuddeNet(t *testing.T) {
+	t.Setenv("SCRIBBLE_URL", "")
+	if got, want := client.ServerURL(), "https://notes.sudde.net"; got != want {
+		t.Errorf("unset: got %q, want %q", got, want)
+	}
+	t.Setenv("SCRIBBLE_URL", "http://notes:8080")
+	if got, want := client.ServerURL(), "http://notes:8080"; got != want {
+		t.Errorf("set: got %q, want %q", got, want)
+	}
+}

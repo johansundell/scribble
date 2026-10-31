@@ -164,3 +164,13 @@ func TestHelpAndHintsNameTheSnCommand(t *testing.T) {
 		t.Errorf("got %v, want %q", err, want)
 	}
 }
+
+func TestHelpNamesTheDefaultServer(t *testing.T) {
+	var out bytes.Buffer
+	if err := runWith(&out, []string{"help"}); err != nil {
+		t.Fatal(err)
+	}
+	if want := "SCRIBBLE_URL    server address (default https://notes.sudde.net)"; !strings.Contains(out.String(), want) {
+		t.Errorf("help does not contain %q:\n%s", want, out.String())
+	}
+}
