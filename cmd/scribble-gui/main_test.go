@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"image/png"
 	"os"
@@ -216,7 +215,7 @@ func icoSizes(t *testing.T, ico []byte) []int {
 	return sizes
 }
 
-// go-winres puts every size of icon.ico into scribble-gui.exe, since Fyne's
+// cmd/winicon puts every size of icon.ico into scribble-gui.exe, since Fyne's
 // packager keeps only the largest (#123).
 func TestIconICOHasEverySize(t *testing.T) {
 	ico, err := os.ReadFile("icon.ico")
@@ -226,29 +225,5 @@ func TestIconICOHasEverySize(t *testing.T) {
 	want := []int{16, 24, 32, 48, 64, 128, 256} // as rendered by make icons
 	if got := icoSizes(t, ico); !slices.Equal(got, want) {
 		t.Errorf("icon.ico sizes = %v, want %v", got, want)
-	}
-}
-
-// winres.json replaces the single-size icon groups that fyne-cross writes
-// (#2 and IDI_APPLICATION, #32512) with icon.ico, and leaves its RT_VERSION
-// and RT_MANIFEST alone (#123).
-func TestWinresReplacesBothIconGroupsWithIconICO(t *testing.T) {
-	raw, err := os.ReadFile("winres.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var res map[string]map[string]map[string]string
-	if err := json.Unmarshal(raw, &res); err != nil {
-		t.Fatalf("winres.json: %v", err)
-	}
-	for _, id := range []string{"#2", "#32512"} {
-		if got := res["RT_GROUP_ICON"][id]["0409"]; got != "icon.ico" {
-			t.Errorf("RT_GROUP_ICON %s 0409 = %q, want %q", id, got, "icon.ico")
-		}
-	}
-	for typ := range res {
-		if typ != "RT_GROUP_ICON" {
-			t.Errorf("winres.json sets %s; only RT_GROUP_ICON should change", typ)
-		}
 	}
 }
