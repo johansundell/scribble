@@ -43,6 +43,11 @@ var Version = "dev"
 //go:embed Icon.png
 var iconPNG []byte
 
+// pngIcon is iconPNG as a resource.
+func pngIcon() fyne.Resource {
+	return fyne.NewStaticResource("Icon.png", iconPNG)
+}
+
 func main() {
 	a, envErr := newApp(loadEnvNextToExecutable, app.New)
 	ver := Version
@@ -103,7 +108,7 @@ func main() {
 func newApp(readEnv func() error, create func() fyne.App) (fyne.App, error) {
 	err := readEnv()
 	a := create()
-	a.SetIcon(fyne.NewStaticResource("Icon.png", iconPNG))
+	a.SetIcon(pngIcon())
 	return a, err
 }
 
