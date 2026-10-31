@@ -1,6 +1,6 @@
 // Command sn is the command-line client for a scribble server.
 //
-//	SCRIBBLE_URL    server address (default http://localhost:8080)
+//	SCRIBBLE_URL    server address (default https://notes.sudde.net)
 //	SCRIBBLE_TOKEN  the server's AUTH_TOKEN
 package main
 
@@ -75,7 +75,7 @@ Examples:
   sn deleted                   then: sn undelete "Work log"
 
 Environment:
-  SCRIBBLE_URL    server address (default http://localhost:8080)
+  SCRIBBLE_URL    server address (default https://notes.sudde.net)
   SCRIBBLE_TOKEN  the server's AUTH_TOKEN
 `
 
@@ -110,10 +110,7 @@ func runWith(stdout io.Writer, args []string) error {
 	if args[0] == "completion" {
 		return cmdCompletion(stdout, args[1:])
 	}
-	baseURL := os.Getenv("SCRIBBLE_URL")
-	if baseURL == "" {
-		baseURL = "http://localhost:8080"
-	}
+	baseURL := serverURL()
 	token := os.Getenv("SCRIBBLE_TOKEN")
 	c := client.New(baseURL, token)
 	c.Name, c.Version = "cli", Version
@@ -639,4 +636,12 @@ func cmdEdit(ctx context.Context, c *client.Client, args []string) error {
 		fmt.Printf("saved %q\n", notes.TitleOf(string(edited)))
 		return nil
 	})
+}
+
+// serverURL is SCRIBBLE_URL, or the public server when it is unset.
+func serverURL() string {
+	if u := os.Getenv("SCRIBBLE_URL"); u != "" {
+		return u
+	}
+	return "https://notes.sudde.net"
 }

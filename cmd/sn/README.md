@@ -37,7 +37,7 @@ environment variables:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `SCRIBBLE_URL` | `http://localhost:8080` | address of the scribble server |
+| `SCRIBBLE_URL` | `https://notes.sudde.net` | address of the scribble server |
 | `SCRIBBLE_TOKEN` | none (required) | the server's `AUTH_TOKEN` |
 
 ```sh

@@ -227,3 +227,14 @@ func TestIconICOHasEverySize(t *testing.T) {
 		t.Errorf("icon.ico sizes = %v, want %v", got, want)
 	}
 }
+
+func TestServerURLDefaultsToNotesSuddeNet(t *testing.T) {
+	t.Setenv("SCRIBBLE_URL", "")
+	if got, want := serverURL(), "https://notes.sudde.net"; got != want {
+		t.Errorf("unset: got %q, want %q", got, want)
+	}
+	t.Setenv("SCRIBBLE_URL", "http://notes:8080")
+	if got, want := serverURL(), "http://notes:8080"; got != want {
+		t.Errorf("set: got %q, want %q", got, want)
+	}
+}
