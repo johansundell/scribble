@@ -19,7 +19,7 @@ const timeLayout = "2006-01-02 15:04"
 
 // noRevision is the error when the note titled title has no revision rev.
 func noRevision(title string, rev revision) error {
-	return fmt.Errorf("no revision %v of %q (see: scribble history %s)", rev, title, shellQuote(title))
+	return fmt.Errorf("no revision %v of %q (see: sn history %s)", rev, title, shellQuote(title))
 }
 
 // shellQuote returns s as one shell word: as it is when that is safe,
@@ -56,7 +56,7 @@ func cmdShow(ctx context.Context, c *client.Client, w io.Writer, args []string) 
 	r := fs.String("r", "", "revision to print")
 	args, err := parseFlags(fs, args)
 	if err != nil {
-		return fmt.Errorf("%v (usage: scribble show <title> [-r <rev>])", err)
+		return fmt.Errorf("%v (usage: sn show <title> [-r <rev>])", err)
 	}
 	return withNote(ctx, c, args, 1, func(n *notes.Note, _ []string) error {
 		if *r == "" {
@@ -109,7 +109,7 @@ func diffColour() bool {
 // current, or two revisions.
 func cmdDiff(ctx context.Context, c *client.Client, w io.Writer, colour bool, args []string) error {
 	if len(args) < 1 || len(args) > 3 {
-		return fmt.Errorf("usage: scribble diff <title> [<rev> [<rev2>]]")
+		return fmt.Errorf("usage: sn diff <title> [<rev> [<rev2>]]")
 	}
 	revs := make([]revision, len(args)-1)
 	for i, a := range args[1:] {
@@ -157,10 +157,10 @@ func cmdRestore(ctx context.Context, c *client.Client, w io.Writer, in io.Reader
 	yes := fs.Bool("y", false, "restore without asking")
 	args, err := parseFlags(fs, args)
 	if err != nil {
-		return fmt.Errorf("%v (usage: scribble restore [-y] <title> <rev>)", err)
+		return fmt.Errorf("%v (usage: sn restore [-y] <title> <rev>)", err)
 	}
 	if len(args) != 2 {
-		return fmt.Errorf("usage: scribble restore [-y] <title> <rev>")
+		return fmt.Errorf("usage: sn restore [-y] <title> <rev>")
 	}
 	rev, err := parseRevision(args[1])
 	if err != nil {
@@ -200,7 +200,7 @@ func cmdRestore(ctx context.Context, c *client.Client, w io.Writer, in io.Reader
 // cmdDeleted lists the deleted notes, most recently deleted first.
 func cmdDeleted(ctx context.Context, c *client.Client, w io.Writer, args []string) error {
 	if len(args) != 0 {
-		return fmt.Errorf("usage: scribble deleted")
+		return fmt.Errorf("usage: sn deleted")
 	}
 	list, err := c.Deleted(ctx)
 	if err != nil {
@@ -216,7 +216,7 @@ func cmdDeleted(ctx context.Context, c *client.Client, w io.Writer, args []strin
 // ignoring case.
 func cmdUndelete(ctx context.Context, c *client.Client, w io.Writer, args []string) error {
 	if len(args) != 1 {
-		return fmt.Errorf("usage: scribble undelete <title>")
+		return fmt.Errorf("usage: sn undelete <title>")
 	}
 	list, err := c.Deleted(ctx)
 	if err != nil {

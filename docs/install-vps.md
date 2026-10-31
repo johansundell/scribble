@@ -130,7 +130,7 @@ The first prints the same JSON as in step 3. The second prints `[]` (no notes ye
 - **CLI and desktop app:** set `SCRIBBLE_URL=https://notes.example.com` and `SCRIBBLE_TOKEN=<AUTH_TOKEN>` (see the [README](../README.md#quick-start)).
 - **Web app:** open `https://notes.example.com/` in a browser or on your phone, and enter the PIN.
 
-**Check:** `scribble new "Hello" "first note"` works, and the web app shows the page with "Log out" after the PIN.
+**Check:** `sn new "Hello" "first note"` works, and the web app shows the page with "Log out" after the PIN.
 
 ## Next
 

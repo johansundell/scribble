@@ -1,4 +1,4 @@
-// Command scribble is the command-line client for a scribble server.
+// Command sn is the command-line client for a scribble server.
 //
 //	SCRIBBLE_URL    server address (default http://localhost:8080)
 //	SCRIBBLE_TOKEN  the server's AUTH_TOKEN
@@ -23,44 +23,44 @@ import (
 
 var Version = "dev"
 
-const usage = `scribble - notes from the command line (version %s)
+const usage = `sn - notes from the command line (version %s)
 
 Usage:
-  scribble new <title> [text...]     create a note (text may also be piped in)
-  scribble show <title> [-r <rev>]   print a note's Markdown, or that of an old version
-  scribble edit <title>              edit in $EDITOR
-  scribble append <title> [text...]  add text at the end (creates the note if missing; pipe-friendly)
-  scribble ls                        list all notes
-  scribble search <text>             find notes containing text
-  scribble links <title>             notes this note links to
-  scribble backlinks <title>         notes that link to this note
-  scribble projects [<name>]         list #projects, or the notes in one
-  scribble rename <title> <new>      retitle a note and fix [[links]] to it
-  scribble autolink <title>          turn mentions of other note titles into [[links]]
-  scribble export [file.zip]         save every note as <title>.md in a ZIP archive
-                                     (default scribble-notes-YYYY-MM-DD.zip)
-  scribble import [--overwrite] <path...>
-                                     import ZIP archives of .md/.txt/.note files, and
-                                     Tomboy .note files or directories; existing
-                                     titles are skipped unless --overwrite
-  scribble rm <title>                delete a note
-  scribble history <title>           list a note's versions, newest first
-  scribble diff <title> [<rev> [<rev2>]]
-                                     show what changed between two versions
-  scribble restore [-y] <title> <rev>
-                                     make an old version the current text
-  scribble deleted                   list deleted notes
-  scribble undelete <title>          bring back a deleted note
-  scribble completion [bash]         output shell completion script
-  scribble version                   print the client's and the server's versions
+  sn new <title> [text...]     create a note (text may also be piped in)
+  sn show <title> [-r <rev>]   print a note's Markdown, or that of an old version
+  sn edit <title>              edit in $EDITOR
+  sn append <title> [text...]  add text at the end (creates the note if missing; pipe-friendly)
+  sn ls                        list all notes
+  sn search <text>             find notes containing text
+  sn links <title>             notes this note links to
+  sn backlinks <title>         notes that link to this note
+  sn projects [<name>]         list #projects, or the notes in one
+  sn rename <title> <new>      retitle a note and fix [[links]] to it
+  sn autolink <title>          turn mentions of other note titles into [[links]]
+  sn export [file.zip]         save every note as <title>.md in a ZIP archive
+                               (default scribble-notes-YYYY-MM-DD.zip)
+  sn import [--overwrite] <path...>
+                               import ZIP archives of .md/.txt/.note files, and
+                               Tomboy .note files or directories; existing
+                               titles are skipped unless --overwrite
+  sn rm <title>                delete a note
+  sn history <title>           list a note's versions, newest first
+  sn diff <title> [<rev> [<rev2>]]
+                               show what changed between two versions
+  sn restore [-y] <title> <rev>
+                               make an old version the current text
+  sn deleted                   list deleted notes
+  sn undelete <title>          bring back a deleted note
+  sn completion [bash]         output shell completion script
+  sn version                   print the client's and the server's versions
 
 Examples:
-  scribble history "Work log"        see its versions
-  scribble show "Work log" -r 3      print version r3
-  scribble diff "Work log"           what the last change did
-  scribble diff "Work log" 3 5       what changed from r3 to r5
-  scribble restore "Work log" r3     make r3 the current text again
-  scribble deleted                   then: scribble undelete "Work log"
+  sn history "Work log"        see its versions
+  sn show "Work log" -r 3      print version r3
+  sn diff "Work log"           what the last change did
+  sn diff "Work log" 3 5       what changed from r3 to r5
+  sn restore "Work log" r3     make r3 the current text again
+  sn deleted                   then: sn undelete "Work log"
 
 Environment:
   SCRIBBLE_URL    server address (default http://localhost:8080)
@@ -82,7 +82,7 @@ func errorLine(err error) string {
 	case client.IsUpgradeRequired(err):
 		err = fmt.Errorf("this version (%s) is too old for the server; download the latest from %s", Version, client.ReleasesURL)
 	}
-	return "scribble: " + err.Error()
+	return "sn: " + err.Error()
 }
 
 func run(args []string) error {
@@ -132,7 +132,7 @@ func runWith(stdout io.Writer, args []string) error {
 		return nil
 	case "search":
 		if len(rest) == 0 {
-			return fmt.Errorf("usage: scribble search <text>")
+			return fmt.Errorf("usage: sn search <text>")
 		}
 		list, err := c.List(ctx, strings.Join(rest, " "))
 		if err != nil {
@@ -192,7 +192,7 @@ func runWith(stdout io.Writer, args []string) error {
 	case "undelete":
 		return cmdUndelete(ctx, c, stdout, rest)
 	}
-	return fmt.Errorf("unknown command %q (try: scribble help)", cmd)
+	return fmt.Errorf("unknown command %q (try: sn help)", cmd)
 }
 
 // cmdVersion prints the client's and the server's versions and API levels,
@@ -290,7 +290,7 @@ func cmdProjects(ctx context.Context, c *client.Client, w io.Writer, args []stri
 		printList(w, list)
 		return nil
 	}
-	return fmt.Errorf("usage: scribble projects [<name>]")
+	return fmt.Errorf("usage: sn projects [<name>]")
 }
 
 // cmdAutoLink turns bare mentions of other notes' titles in one note into
@@ -322,7 +322,7 @@ func cmdAutoLink(ctx context.Context, c *client.Client, w io.Writer, args []stri
 // scribble-notes-YYYY-MM-DD.zip for day now in the current directory.
 func cmdExport(ctx context.Context, c *client.Client, w io.Writer, args []string, now time.Time) error {
 	if len(args) > 1 {
-		return fmt.Errorf("usage: scribble export [file.zip]")
+		return fmt.Errorf("usage: sn export [file.zip]")
 	}
 	path := notes.ZipFileName(now)
 	if len(args) == 1 {
@@ -360,7 +360,7 @@ func cmdImport(ctx context.Context, c *client.Client, w io.Writer, args []string
 		return err
 	}
 	if len(args) == 0 {
-		return fmt.Errorf("usage: scribble import [--overwrite] <path...>")
+		return fmt.Errorf("usage: sn import [--overwrite] <path...>")
 	}
 	var archives, others []string
 	for _, p := range args {
@@ -518,7 +518,7 @@ func newBody(title, text string) string {
 
 func cmdNew(ctx context.Context, c *client.Client, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: scribble new <title> [text...]")
+		return fmt.Errorf("usage: sn new <title> [text...]")
 	}
 	title := args[0]
 	text, err := textFrom(args[1:])
@@ -535,7 +535,7 @@ func cmdNew(ctx context.Context, c *client.Client, args []string) error {
 
 func cmdAppend(ctx context.Context, c *client.Client, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: scribble append <title> [text...]")
+		return fmt.Errorf("usage: sn append <title> [text...]")
 	}
 	title := args[0]
 	text, err := textFrom(args[1:])

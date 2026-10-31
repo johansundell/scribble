@@ -1,6 +1,6 @@
-# scribble (CLI)
+# sn (CLI)
 
-`scribble` is the command-line client for a scribble server. It creates,
+`sn` is the command-line client for a scribble server. It creates,
 reads, edits and links notes over the server's HTTP API.
 
 ## Build
@@ -8,9 +8,9 @@ reads, edits and links notes over the server's HTTP API.
 From the repo root:
 
 ```sh
-make build-cli        # writes ./scribble, with the version from git
+make build-cli        # writes ./sn, with the version from git
 # or
-go build -o scribble ./cmd/scribble
+go build -o sn ./cmd/sn
 ```
 
 ## Configuration
@@ -32,22 +32,22 @@ If `SCRIBBLE_TOKEN` is not set, every command except `help`, `completion` and `v
 `SCRIBBLE_TOKEN is not set`. If the server does not accept the token, the
 error is `the server rejected SCRIBBLE_TOKEN`.
 
-`scribble edit` also reads `VISUAL`, then `EDITOR`, to choose the editor
-(fallback: `vi`, or `notepad` on Windows). `scribble diff` reads `NO_COLOR`
+`sn edit` also reads `VISUAL`, then `EDITOR`, to choose the editor
+(fallback: `vi`, or `notepad` on Windows). `sn diff` reads `NO_COLOR`
 (see [diff](#diff)).
 
 ## Usage
 
 ```
-scribble <command> [arguments]
+sn <command> [arguments]
 ```
 
-Titles that contain spaces must be quoted: `scribble show "Work log"`.
+Titles that contain spaces must be quoted: `sn show "Work log"`.
 Title lookups ignore case, and a leading `#` in a note's first line is not
 part of its title.
 
 Each command exits with status 0 on success and 1 on error. Errors go to
-stderr as `scribble: <message>`.
+stderr as `sn: <message>`.
 
 ### Commands
 
@@ -82,8 +82,8 @@ show the most recently changed notes first.
 ### help
 
 ```sh
-scribble help
-scribble            # no arguments does the same
+sn help
+sn            # no arguments does the same
 ```
 
 ### new
@@ -93,9 +93,9 @@ and the text. The text comes from the remaining arguments, or from stdin when
 it is piped and there are no more arguments.
 
 ```sh
-scribble new Ideas
-scribble new "Shopping list" "milk, eggs, bread"
-date | scribble new "Build $(git rev-parse --short HEAD)"
+sn new Ideas
+sn new "Shopping list" "milk, eggs, bread"
+date | sn new "Build $(git rev-parse --short HEAD)"
 ```
 
 If a note with that title already exists, the command fails with
@@ -108,17 +108,17 @@ of that version of the note instead (see [history](#history)). A revision
 may be written `12` or `r12`, and `-r` may come before or after the title.
 
 ```sh
-scribble show Ideas
-scribble show "Work log" | less
-scribble show Ideas -r 3
-scribble show -r r3 Ideas > ideas-r3.md
+sn show Ideas
+sn show "Work log" | less
+sn show Ideas -r 3
+sn show -r r3 Ideas > ideas-r3.md
 ```
 
 If the note has no such revision, the error is
-`no revision r3 of "Ideas" (see: scribble history Ideas)`.
+`no revision r3 of "Ideas" (see: sn history Ideas)`.
 
 Because `show` and `restore` take flags, a title that starts with `-` goes
-after `--`: `scribble show -- -todo`.
+after `--`: `sn show -- -todo`.
 
 ### edit
 
@@ -126,8 +126,8 @@ Writes the note to a temporary `.md` file, opens it in your editor, and saves
 it when the editor exits. If you made no changes, it prints `no changes`.
 
 ```sh
-scribble edit Ideas
-EDITOR="code --wait" scribble edit Ideas
+sn edit Ideas
+EDITOR="code --wait" sn edit Ideas
 ```
 
 If someone else changed the note while you were editing, the save is refused
@@ -141,9 +141,9 @@ If another client saves the note at the same time, `append` reads it again and
 retries (up to three times).
 
 ```sh
-scribble append "Work log" "Fixed the login bug"
-git log --oneline -5 | scribble append "Work log"
-echo "- call the dentist" | scribble append Todo
+sn append "Work log" "Fixed the login bug"
+git log --oneline -5 | sn append "Work log"
+echo "- call the dentist" | sn append Todo
 ```
 
 ### ls
@@ -151,8 +151,8 @@ echo "- call the dentist" | scribble append Todo
 Lists every note title.
 
 ```sh
-scribble ls
-scribble ls | wc -l
+sn ls
+sn ls | wc -l
 ```
 
 ### search
@@ -161,8 +161,8 @@ Lists the notes whose title or body contains the text. Multiple arguments
 are joined with spaces.
 
 ```sh
-scribble search nginx
-scribble search release notes
+sn search nginx
+sn search release notes
 ```
 
 ### links
@@ -170,7 +170,7 @@ scribble search release notes
 Prints the `[[link]]` targets in a note, one per line.
 
 ```sh
-scribble links Ideas
+sn links Ideas
 ```
 
 ### backlinks
@@ -178,7 +178,7 @@ scribble links Ideas
 Lists the notes that contain a `[[link]]` to this note.
 
 ```sh
-scribble backlinks Ideas
+sn backlinks Ideas
 ```
 
 ### projects
@@ -187,8 +187,8 @@ With no argument, lists every `#project` name in use (lowercase, sorted).
 With a name, lists the notes tagged with that project.
 
 ```sh
-scribble projects
-scribble projects scribble
+sn projects
+sn projects scribble
 ```
 
 ### rename
@@ -197,7 +197,7 @@ Gives a note a new title, and rewrites `[[Old title]]` links in other notes
 to point to the new one. The two arguments are the current and the new title.
 
 ```sh
-scribble rename Ideas "Project ideas"
+sn rename Ideas "Project ideas"
 ```
 
 It fails if a note with the new title already exists.
@@ -209,7 +209,7 @@ Finds plain mentions of other notes' titles in one note, turns them into
 `no mentions to link`.
 
 ```sh
-scribble autolink "Work log"
+sn autolink "Work log"
 ```
 
 ### import
@@ -219,8 +219,8 @@ recursively for `.note` files. A note whose title already exists is skipped,
 not overwritten. At the end, it prints how many notes it created and skipped.
 
 ```sh
-scribble import ~/.local/share/tomboy
-scribble import old/Groceries.note old/Ideas.note
+sn import ~/.local/share/tomboy
+sn import old/Groceries.note old/Ideas.note
 ```
 
 ### rm
@@ -228,7 +228,7 @@ scribble import old/Groceries.note old/Ideas.note
 Deletes a note.
 
 ```sh
-scribble rm "Shopping list"
+sn rm "Shopping list"
 ```
 
 ### history
@@ -238,7 +238,7 @@ the revision, the local time it was saved, why it was saved, and the title
 it had then. The current version is marked `(current)`.
 
 ```sh
-$ scribble history Ideas
+$ sn history Ideas
 r7  2026-10-20 14:02  edit  Ideas  (current)
 r5  2026-10-20 13:40  rename  Ideas
 r4  2026-10-19 09:12  edit  Draft
@@ -255,14 +255,14 @@ version, so revision numbers can have gaps.
 Prints a unified diff between two versions of a note, with three lines of
 context:
 
-- `scribble diff <title>` compares the version before the current one with
+- `sn diff <title>` compares the version before the current one with
   the current text.
-- `scribble diff <title> <rev>` compares that version with the current text.
-- `scribble diff <title> <rev> <rev2>` compares the first version with the
+- `sn diff <title> <rev>` compares that version with the current text.
+- `sn diff <title> <rev> <rev2>` compares the first version with the
   second.
 
 ```sh
-$ scribble diff Ideas 4
+$ sn diff Ideas 4
 --- Draft r4
 +++ Ideas r7
 @@ -1,3 +1,4 @@
@@ -292,8 +292,8 @@ had another title.
 work.
 
 ```sh
-scribble restore Ideas 4
-scribble restore -y Ideas r4
+sn restore Ideas 4
+sn restore -y Ideas r4
 ```
 
 It fails with:
@@ -310,7 +310,7 @@ Lists deleted notes, most recently deleted first, with the local time each
 was deleted.
 
 ```sh
-$ scribble deleted
+$ sn deleted
 2026-10-20 13:55  Shopping list
 2026-10-12 08:03  Old ideas
 ```
@@ -321,7 +321,7 @@ Brings back the most recently deleted note with that title (ignoring case),
 with the text it had when it was deleted.
 
 ```sh
-scribble undelete "Shopping list"
+sn undelete "Shopping list"
 ```
 
 It fails with `no deleted note titled "..."` when there is none, and with
@@ -337,14 +337,14 @@ It completes commands, note titles (also after `show -r <rev>` and
 
 ```sh
 # Load in your current shell:
-source <(scribble completion)
+source <(sn completion)
 
 # Install permanently for the current user:
 mkdir -p ~/.local/share/bash-completion/completions
-scribble completion > ~/.local/share/bash-completion/completions/scribble
+sn completion > ~/.local/share/bash-completion/completions/sn
 
 # Or system-wide (requires root):
-sudo scribble completion > /etc/bash_completion.d/scribble
+sudo sn completion > /etc/bash_completion.d/sn
 ```
 
 ### version
@@ -357,7 +357,7 @@ It is the only command that checks for a newer release, so scripts using
 the others see no extra output.
 
 ```sh
-$ scribble version
+$ sn version
 client v0.0.11 (API level 1)
 server v0.0.12 (API level 2, schema 3)
 update available: https://github.com/johansundell/scribble/releases/latest
@@ -367,7 +367,7 @@ If the server answers 426 because this CLI is too old for it, every
 command fails with:
 
 ```
-scribble: this version (v0.0.11) is too old for the server; download the latest from https://github.com/johansundell/scribble/releases/latest
+sn: this version (v0.0.11) is too old for the server; download the latest from https://github.com/johansundell/scribble/releases/latest
 ```
 
 ## Saving shell commands to a note
@@ -381,13 +381,13 @@ Add this to `~/.bashrc`:
 
 ```bash
 # Save the current input line to the "Commands" note without running it.
-bind -x '"\C-xs": printf "%s\n" "$READLINE_LINE" | scribble append Commands'
+bind -x '"\C-xs": printf "%s\n" "$READLINE_LINE" | sn append Commands'
 ```
 
 Press Ctrl+R to find a command in your history, then press Ctrl+X S. Bash
 gives the line to the binding in `$READLINE_LINE`, so nothing is quoted or
 expanded. The line stays on your prompt: run it, edit it, or clear it with
-Ctrl+C. The first time, when the note does not exist yet, `scribble` prints
+Ctrl+C. The first time, when the note does not exist yet, `sn` prints
 `created "Commands"` above your prompt.
 
 ### With the editor (Ctrl+X Ctrl+E)
@@ -397,7 +397,7 @@ bash runs the edited text. Wrap the command in a quoted heredoc, so that bash
 saves it exactly as written:
 
 ```bash
-scribble append Commands <<'EOF'
+sn append Commands <<'EOF'
 awk '{print $1}' access.log | sort | uniq -c | sort -rn | head
 EOF
 ```

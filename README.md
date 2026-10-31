@@ -8,7 +8,7 @@ create and update notes over an HTTP API.
 - **Server** (repo root): Go + Gin + SQLite, built on
   [template-service](https://github.com/johansundell/template-service).
   Runs as a system service or in Docker.
-- **CLI** (`cmd/scribble`): `scribble new / show / edit / append / ls / search / ...`
+- **CLI** (`cmd/sn`): `sn new / show / edit / append / ls / search / ...`
 - **Desktop GUI** (`cmd/scribble-gui`): Fyne app to browse, search, view
   (rendered Markdown), edit, create, rename and delete notes. `[[links]]` are
   clickable, and each note shows the notes that link to it. It keeps a copy
@@ -51,12 +51,12 @@ AUTH_TOKEN=change-me PORT=:8080 SQLITE_PATH=./scribble.db go run .
 # CLI
 make build-cli
 export SCRIBBLE_URL=http://localhost:8080 SCRIBBLE_TOKEN=change-me
-./scribble new "Ideas" "first thought"
-git log --oneline -5 | ./scribble append "Work log"
-./scribble edit Ideas
-./scribble projects            # every #project; `projects <name>` lists its notes
-./scribble export              # every note as <title>.md in scribble-notes-YYYY-MM-DD.zip
-./scribble import notes.zip    # skips titles that exist; --overwrite replaces them
+./sn new "Ideas" "first thought"
+git log --oneline -5 | ./sn append "Work log"
+./sn edit Ideas
+./sn projects            # every #project; `projects <name>` lists its notes
+./sn export              # every note as <title>.md in scribble-notes-YYYY-MM-DD.zip
+./sn import notes.zip    # skips titles that exist; --overwrite replaces them
 
 # GUI (same SCRIBBLE_URL / SCRIBBLE_TOKEN; optional SCRIBBLE_HOTKEY, default Ctrl+Alt+N).
 # Also read from a .env next to the scribble-gui binary; the environment wins.
@@ -172,7 +172,7 @@ message with a download button, sets its indicator to "Update needed",
 stops syncing and goes read-only; edits still queued on this computer
 stay there for a newer version to send. When the server runs a newer
 release than the app, the app shows "Scribble vX.Y.Z is available" in the
-status bar and in Help → About; `scribble version` says "update
+status bar and in Help → About; `sn version` says "update
 available".
 
 | Method | Path | Notes |
@@ -309,7 +309,7 @@ and [ADR 5](docs/adr/0005-web-pin-login-and-shared-api-token.md).
 ## Export and import
 
 Every note can be exported to a ZIP archive and imported from one (#117),
-with `scribble export [file.zip]` and `scribble import [--overwrite]
+with `sn export [file.zip]` and `sn import [--overwrite]
 <path...>`, File → Export notes… / Import notes… in the desktop app, or
 Export notes / Import notes at the bottom of the web app (the import opens a
 dialog with a file picker and the overwrite box). All of them go through
@@ -329,7 +329,7 @@ the server's `GET /export` and `POST /import`; the web app uses
   ("imported 3 notes, skipped 1"). With overwrite they get the archive's
   text as a new revision, so the old text stays in their history; one that
   already has that text counts as skipped.
-- `scribble import` also takes Tomboy `.note` files and directories, as
+- `sn import` also takes Tomboy `.note` files and directories, as
   before; `--overwrite` works for them too.
 
 ## Backups
@@ -425,7 +425,7 @@ tmpl/, assets/                   page templates (web app: app.html), CSS and the
 notes/                           Note type, [[link]] and #project helpers (no server deps)
 client/                          Go API client
 offline/                         the GUI's local copy of the notes and its sync
-cmd/scribble/                    CLI
+cmd/sn/                          CLI
 gui/                             Fyne GUI: windows and widgets
 cmd/scribble-gui/                GUI entry point (reads SCRIBBLE_URL / SCRIBBLE_TOKEN / SCRIBBLE_HOTKEY)
 docs/service-template.md         the template's own docs
@@ -469,16 +469,16 @@ librsvg imagemagick`). Older distributions ship ImageMagick 6, which has
 
 - [x] `cmd/scribble-gui`: Fyne desktop client (Windows first): browse,
       search, view, edit, create and delete
-- [x] `#project` tags: `/projects`, `?project=`, `scribble projects`, and a
+- [x] `#project` tags: `/projects`, `?project=`, `sn projects`, and a
       project filter with clickable tags in the GUI
-- [x] Opt-in auto-linking: `scribble autolink <title>` turns mentions of
+- [x] Opt-in auto-linking: `sn autolink <title>` turns mentions of
       other notes' titles into `[[links]]` (`notes.AutoLink`)
 - [x] GUI: clickable `[[links]]` (a link to a missing note creates it), a
       "Linked from" backlinks panel, and rename that rewrites incoming links
 - [x] GUI: a local cache synced through `/changes`, with offline edits
 - [ ] GUI: conflict resolution
 - [x] Global hotkey / tray icon for "instant new note"
-- [x] Import from Tomboy `.note` XML (`scribble import <path...>`)
+- [x] Import from Tomboy `.note` XML (`sn import <path...>`)
 - [x] Export and import every note as a ZIP archive of Markdown files, in
       the CLI, the web app and the desktop app (#117)
 - [x] Automatic deploys: each published release is installed on the VPS,
@@ -488,7 +488,7 @@ librsvg imagemagick`). Older distributions ship ImageMagick 6, which has
 - [x] API level and minimum client version, so the server can tell
       desktop apps and CLIs that are too old to upgrade (#57)
 - [x] Note history: every change keeps the old text, with restore and
-      undelete on the server (#55) and `scribble history / diff / restore /
+      undelete on the server (#55) and `sn history / diff / restore /
       undelete` in the CLI (#56)
 - [ ] Web app at `/`: log in with a PIN, then browse, search, read,
       edit, rename and delete notes like in the desktop app (#46), on

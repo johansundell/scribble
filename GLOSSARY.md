@@ -4,7 +4,7 @@ The words used for scribble's ideas, in code, tickets and docs. The decisions be
 
 - **API level**: an integer the server sends in `X-Scribble-API` and `/healthz`. It goes up by one whenever endpoints or fields are added. (#57, [ADR 8](docs/adr/0008-api-level-and-minimum-client-level.md))
 - **Archive**: a gzipped snapshot of the SQLite database (`scribble_<timestamp>.db.gz`), created while the service keeps running by `scribble-server backup`. Old archives are deleted past the retention period, always keeping the newest. (#62)
-- **Auto-link**: turning plain mentions of other notes' titles into `[[links]]`. It is opt-in: `scribble autolink <title>` runs it on one note (`notes.AutoLink`). The title line, code, URLs and existing links are left alone.
+- **Auto-link**: turning plain mentions of other notes' titles into `[[links]]`. It is opt-in: `sn autolink <title>` runs it on one note (`notes.AutoLink`). The title line, code, URLs and existing links are left alone.
 - **Backlink**: a note that links to the note you are looking at. The desktop app lists them under "Linked from". The API's `GET /notes/:id/backlinks` returns them.
 - **`base_revision`**: the revision an edit started from, sent with `PUT /notes/:id`. If the note's revision is no longer the same, the server answers 412. 0, or leaving it out, overwrites. ([ADR 3](docs/adr/0003-edit-conflicts-with-revision.md))
 - **Export**: every live note as a ZIP archive of `<title>.md` files (`scribble-notes-YYYY-MM-DD.zip`, `notes.WriteZip`). Importing one creates the notes whose titles are free and skips the rest, or with overwrite replaces their text. Not the same as an archive, which is a database backup. (#117)
