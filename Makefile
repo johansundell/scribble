@@ -28,6 +28,10 @@ build-cli:
 build-gui:
 	go build -ldflags "-X 'main.Version=$(VERSION)'" -o scribble-gui ./cmd/scribble-gui
 
+# Fyne's Windows packager embeds only the largest image of an .ico, so
+# cmd/winicon then swaps the exe's icons for every size of icon.ico (#123).
+# fyne-cross gets Icon.png, so fyne.AppMetadata holds the 512px image rather
+# than the 256px one scaled up.
 compile:
 	@rm -rf build/ fyne-cross/
 	@gox -ldflags "-X 'main.Version=$(VERSION)'" \
@@ -60,10 +64,11 @@ compile:
 	-env=GOTOOLCHAIN=auto \
 	-app-id=com.johansundell.scribble \
 	-app-version=$(patsubst v%,%,$(VERSION)) \
-	-icon=cmd/scribble-gui/icon.ico \
+	-icon=cmd/scribble-gui/Icon.png \
 	-name=scribble-gui.exe \
 	-ldflags="-X=main.Version=$(VERSION)" \
 	./cmd/scribble-gui
+	@go run ./cmd/winicon -ico cmd/scribble-gui/icon.ico fyne-cross/bin/windows-amd64/scribble-gui.exe
 	@cp fyne-cross/bin/windows-amd64/scribble-gui.exe build/scribble_$(VERSION)_windows_amd64/scribble-gui.exe
 	@rm -rf fyne-cross/
 

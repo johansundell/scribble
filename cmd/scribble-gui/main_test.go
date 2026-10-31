@@ -2,10 +2,12 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"image/png"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -179,5 +181,49 @@ func TestIconICOIsTheAppIcon(t *testing.T) {
 	}
 	if !bytes.Equal(ico, want) {
 		t.Error("icon.ico differs from assets/img/icon.ico; run make icons")
+	}
+}
+
+// icoSizes reads the image sizes from an ICO directory: a 6-byte header
+// holding the image count, then a 16-byte entry per image that starts with
+// its width and height bytes. A width or height of 0 means 256.
+func icoSizes(t *testing.T, ico []byte) []int {
+	t.Helper()
+	if len(ico) < 6 {
+		t.Fatalf("ICO is %d bytes, too short for its header", len(ico))
+	}
+	n := int(binary.LittleEndian.Uint16(ico[4:6]))
+	if len(ico) < 6+16*n {
+		t.Fatalf("ICO says %d images but is only %d bytes", n, len(ico))
+	}
+	var sizes []int
+	for i := range n {
+		e := ico[6+16*i:]
+		w, h := int(e[0]), int(e[1])
+		if w == 0 {
+			w = 256
+		}
+		if h == 0 {
+			h = 256
+		}
+		if w != h {
+			t.Errorf("ICO image %d is %dx%d, want square", i, w, h)
+		}
+		sizes = append(sizes, w)
+	}
+	slices.Sort(sizes)
+	return sizes
+}
+
+// cmd/winicon puts every size of icon.ico into scribble-gui.exe, since Fyne's
+// packager keeps only the largest (#123).
+func TestIconICOHasEverySize(t *testing.T) {
+	ico, err := os.ReadFile("icon.ico")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []int{16, 24, 32, 48, 64, 128, 256} // as rendered by make icons
+	if got := icoSizes(t, ico); !slices.Equal(got, want) {
+		t.Errorf("icon.ico sizes = %v, want %v", got, want)
 	}
 }
