@@ -50,6 +50,7 @@ a note, the list otherwise. */}}
 			asks with confirm() and posts. Share, Rename and Delete are under ⋯
 			on phones, a <details> so it opens without JavaScript. */}}
 			<div class="note-actions">
+				<a class="button phone-only" href="/new{{.Filter}}" data-filtered="note-new">New</a>
 				<a class="button" href="{{editPath .Note.ID}}{{.Filter}}" data-filtered="edit" data-shortcut="edit">Edit</a>
 				<a class="button wide-only" href="{{historyPath .Note.ID}}{{.Filter}}" data-filtered="history">History (r{{.Note.Revision}})</a>
 				<a class="button wide-only" href="{{sharePath .Note.ID}}{{.Filter}}" data-filtered="share">Share</a>

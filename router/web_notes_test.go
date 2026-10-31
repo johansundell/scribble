@@ -99,6 +99,23 @@ func TestWebNotes_View(t *testing.T) {
 	wantNot(t, w.Body.String(), "Select a note", "Linked from")
 }
 
+// On a phone the list is hidden behind a note, so the note bar has its own
+// New, which keeps the filter (#125).
+func TestWebNotes_NoteBarNew(t *testing.T) {
+	e := newWebEnv(t)
+	c := e.login(t)
+	n := e.note(t, "# Alpha\n#work nginx")
+
+	w := e.do(get(fmt.Sprintf("/note/%d", n.ID), c))
+	wantBody(t, w, http.StatusOK, `<a class="button phone-only" href="/new" data-filtered="note-new">New</a>`)
+
+	w = e.do(get(fmt.Sprintf("/note/%d?project=work&q=nginx", n.ID), c))
+	wantBody(t, w, http.StatusOK, `<a class="button phone-only" href="/new?project=work&amp;q=nginx" data-filtered="note-new">New</a>`)
+
+	// Not on the list page, where no note is open.
+	wantNot(t, e.do(get("/", c)).Body.String(), `data-filtered="note-new"`)
+}
+
 func TestWebNotes_EscapesHTML(t *testing.T) {
 	e := newWebEnv(t)
 	c := e.login(t)

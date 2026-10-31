@@ -76,7 +76,7 @@ func TestWebPhoneBrowser(t *testing.T) {
 				t.Errorf("%s is hidden at 1024 px", sel)
 			}
 		}
-		for _, sel := range []string{".back-link", ".more-menu"} {
+		for _, sel := range []string{".back-link", ".more-menu", `[data-filtered="note-new"]`} {
 			if d.visible(sel) {
 				t.Errorf("%s shows at 1024 px", sel)
 			}
@@ -107,6 +107,10 @@ func checkPhone(t *testing.T, d *webDriver, srv string, n *notes.Note) {
 	}
 	if d.visible(".more-items") {
 		t.Error("note: the ⋯ menu is open")
+	}
+	// New is one tap away, without going back to the list (#125).
+	if !d.visible(`[data-filtered="note-new"]`) {
+		t.Error("note: no New in the note bar")
 	}
 	d.click(".more-menu summary")
 	if !d.visible(`[data-filtered="rename-more"]`) || !d.visible(`[data-filtered="delete-more"]`) {
