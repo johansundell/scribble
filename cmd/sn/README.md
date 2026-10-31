@@ -3,6 +3,23 @@
 `sn` is the command-line client for a scribble server. It creates,
 reads, edits and links notes over the server's HTTP API.
 
+## Install
+
+On Linux and macOS (amd64 or arm64), install or upgrade to the latest
+release without Go or a checkout:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/johansundell/scribble/master/scripts/install-sn.sh | sh
+```
+
+It downloads the release archive for your system, checks its SHA-512
+checksum and installs `sn` to `/usr/local/bin`, with `sudo` if you can't
+write there. Settings go on the `sh` side of the pipe: a version as
+`... | sh -s v1.0.1` (or `... | VERSION=v1.0.1 sh`), another directory as
+`... | INSTALL_DIR=~/.local/bin sh`. On Windows, download
+`scribble_<version>_windows_amd64.tar.gz` from
+https://github.com/johansundell/scribble/releases/latest.
+
 ## Build
 
 From the repo root:
@@ -351,7 +368,8 @@ sudo sn completion > /etc/bash_completion.d/sn
 
 Prints the CLI's version and API level, then the server's, with the
 server's database schema version when it has one (SQLite only), and says
-`update available` when the server runs a newer release. `dev` builds
+`update available` when the server runs a newer release, with the
+command that installs it on Linux and macOS. `dev` builds
 never say so. It asks `/healthz`, so it does not need `SCRIBBLE_TOKEN`.
 It is the only command that checks for a newer release, so scripts using
 the others see no extra output.
@@ -361,13 +379,14 @@ $ sn version
 client v0.0.11 (API level 1)
 server v0.0.12 (API level 2, schema 3)
 update available: https://github.com/johansundell/scribble/releases/latest
+run: curl -fsSL https://raw.githubusercontent.com/johansundell/scribble/master/scripts/install-sn.sh | sh
 ```
 
 If the server answers 426 because this CLI is too old for it, every
-command fails with:
+command fails with (the `or run:` part on Linux and macOS only):
 
 ```
-sn: this version (v0.0.11) is too old for the server; download the latest from https://github.com/johansundell/scribble/releases/latest
+sn: this version (v0.0.11) is too old for the server; download the latest from https://github.com/johansundell/scribble/releases/latest or run: curl -fsSL https://raw.githubusercontent.com/johansundell/scribble/master/scripts/install-sn.sh | sh
 ```
 
 ## Saving shell commands to a note
