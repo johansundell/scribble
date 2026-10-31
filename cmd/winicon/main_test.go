@@ -27,16 +27,13 @@ func fyneResources(t *testing.T) *winres.ResourceSet {
 			t.Fatal(err)
 		}
 	}
-	must(t, rs.Set(winres.RT_VERSION, winres.ID(1), 0x0409, []byte("version")))
-	must(t, rs.Set(winres.RT_MANIFEST, winres.ID(1), 0x0409, []byte("<assembly/>")))
-	return rs
-}
-
-func must(t *testing.T, err error) {
-	t.Helper()
-	if err != nil {
+	if err := rs.Set(winres.RT_VERSION, winres.ID(1), 0x0409, []byte("version")); err != nil {
 		t.Fatal(err)
 	}
+	if err := rs.Set(winres.RT_MANIFEST, winres.ID(1), 0x0409, []byte("<assembly/>")); err != nil {
+		t.Fatal(err)
+	}
+	return rs
 }
 
 func appIcon(t *testing.T) *winres.Icon {
@@ -51,11 +48,6 @@ func appIcon(t *testing.T) *winres.Icon {
 		t.Fatal(err)
 	}
 	return icon
-}
-
-type groupKey struct {
-	id   winres.Identifier
-	lang uint16
 }
 
 // groupFrames reads an RT_GROUP_ICON: a 6-byte header holding the image
@@ -92,20 +84,20 @@ func TestReplaceIconsLeavesOneSetOfFramesSharedByBothGroups(t *testing.T) {
 		frames[uint16(id.(winres.ID))] = true
 		return true
 	})
-	groups := map[groupKey][]byte{}
+	groups := map[resKey][]byte{}
 	rs.WalkType(winres.RT_GROUP_ICON, func(id winres.Identifier, lang uint16, data []byte) bool {
-		groups[groupKey{id, lang}] = data
+		groups[resKey{id, lang}] = data
 		return true
 	})
 
 	if len(groups) != 2 {
 		t.Fatalf("icon groups = %v, want #2 and #32512 in 0409", groups)
 	}
-	first := groups[groupKey{winres.ID(2), 0x0409}]
+	first := groups[resKey{winres.ID(2), 0x0409}]
 	if first == nil {
 		t.Fatal("no icon group #2 in 0409")
 	}
-	if !bytes.Equal(groups[groupKey{winres.ID(32512), 0x0409}], first) {
+	if !bytes.Equal(groups[resKey{winres.ID(32512), 0x0409}], first) {
 		t.Error("icon group #32512 in 0409 differs from #2")
 	}
 	sizes, ids := groupFrames(t, first)
@@ -139,7 +131,9 @@ func TestReplaceIconsKeepsVersionAndManifest(t *testing.T) {
 
 func TestReplaceIconsWithoutIconGroupsFails(t *testing.T) {
 	rs := &winres.ResourceSet{}
-	must(t, rs.Set(winres.RT_VERSION, winres.ID(1), 0x0409, []byte("version")))
+	if err := rs.Set(winres.RT_VERSION, winres.ID(1), 0x0409, []byte("version")); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := replaceIcons(rs, appIcon(t)); err == nil {
 		t.Error("an exe without icon groups: got no error")

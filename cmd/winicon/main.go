@@ -15,15 +15,20 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/tc-hib/winres"
 )
 
 func main() {
 	ico := flag.String("ico", "", "the .ico to embed")
+	flag.Usage = func() {
+		fmt.Fprintln(flag.CommandLine.Output(), "usage: winicon -ico icon.ico app.exe")
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 	if *ico == "" || flag.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: winicon -ico icon.ico app.exe")
+		flag.Usage()
 		os.Exit(2)
 	}
 	if err := patch(flag.Arg(0), *ico); err != nil {
@@ -53,42 +58,53 @@ func patch(exePath, icoPath string) error {
 	if err != nil {
 		return err
 	}
-	rs, err := winres.LoadFromEXE(in)
-	if err != nil {
+	if err := rewrite(in, info.Mode().Perm(), exePath, icon); err != nil {
 		return fmt.Errorf("%s: %w", exePath, err)
 	}
-	if err := replaceIcons(rs, icon); err != nil {
-		return fmt.Errorf("%s: %w", exePath, err)
-	}
+	return nil
+}
 
-	tmp := exePath + ".tmp"
-	out, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode().Perm())
+// rewrite writes in, with its icons replaced, over exePath with mode perm.
+func rewrite(in *os.File, perm os.FileMode, exePath string, icon *winres.Icon) error {
+	rs, err := winres.LoadFromEXE(in)
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmp) // a no-op once renamed
+	if err := replaceIcons(rs, icon); err != nil {
+		return err
+	}
+
+	out, err := os.CreateTemp(filepath.Dir(exePath), filepath.Base(exePath)+".*.tmp")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(out.Name()) // a no-op once renamed
 	if err := rs.WriteToEXE(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	if err := out.Chmod(perm); err != nil {
 		out.Close()
 		return err
 	}
 	if err := out.Close(); err != nil {
 		return err
 	}
-	in.Close()
-	return os.Rename(tmp, exePath)
+	in.Close() // Windows cannot rename over an open file
+	return os.Rename(out.Name(), exePath)
 }
 
-// res names one resource of a type: an ID in one language.
-type res struct {
+// resKey names one resource of a type: an ID in one language.
+type resKey struct {
 	id   winres.Identifier
 	lang uint16
 }
 
-// all lists the resources of a type.
-func all(rs *winres.ResourceSet, typeID winres.Identifier) []res {
-	var out []res
+// resourcesOf lists the resources of a type.
+func resourcesOf(rs *winres.ResourceSet, typeID winres.Identifier) []resKey {
+	var out []resKey
 	rs.WalkType(typeID, func(id winres.Identifier, lang uint16, _ []byte) bool {
-		out = append(out, res{id, lang})
+		out = append(out, resKey{id, lang})
 		return true
 	})
 	return out
@@ -97,12 +113,12 @@ func all(rs *winres.ResourceSet, typeID winres.Identifier) []res {
 // replaceIcons swaps every icon group in rs for icon, keeping each group's ID
 // and language. The old frames are deleted, and the new ones are stored once.
 func replaceIcons(rs *winres.ResourceSet, icon *winres.Icon) error {
-	groups := all(rs, winres.RT_GROUP_ICON)
+	groups := resourcesOf(rs, winres.RT_GROUP_ICON)
 	if len(groups) == 0 {
 		return errors.New("no icon groups to replace")
 	}
 	// Setting nil deletes.
-	for _, r := range all(rs, winres.RT_ICON) {
+	for _, r := range resourcesOf(rs, winres.RT_ICON) {
 		if err := rs.Set(winres.RT_ICON, r.id, r.lang, nil); err != nil {
 			return err
 		}
