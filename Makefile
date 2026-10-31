@@ -60,7 +60,7 @@ compile:
 	-env=GOTOOLCHAIN=auto \
 	-app-id=com.johansundell.scribble \
 	-app-version=$(patsubst v%,%,$(VERSION)) \
-	-icon=cmd/scribble-gui/Icon.png \
+	-icon=cmd/scribble-gui/icon.ico \
 	-name=scribble-gui.exe \
 	-ldflags="-X=main.Version=$(VERSION)" \
 	./cmd/scribble-gui
@@ -126,6 +126,7 @@ icons:
 	sed 's/ rx="115"//' $(ICON_SRC) | rsvg-convert -w 180 -h 180 | magick png:- -alpha off -strip assets/img/apple-touch-icon.png
 	d=$$(mktemp -d) && for s in 16 24 32 48 64 128 256; do rsvg-convert -w $$s -h $$s $(ICON_SRC) -o $$d/$$s.png; done && magick $$d/*.png assets/img/icon.ico && rm -r $$d
 	cp assets/img/icon-512.png cmd/scribble-gui/Icon.png
+	cp assets/img/icon.ico cmd/scribble-gui/icon.ico
 
 # Bumps version, runs tests, commits and pushes to master, and runs make release.
 # Usage: make bump-release [BUMP=patch|minor|major|vX.Y.Z] [DRY_RUN=1]

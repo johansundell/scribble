@@ -83,7 +83,7 @@ func main() {
 		ui := gui.New(w, c, cache)
 		ui.StartSync(syncInterval)
 		if desk, ok := a.(desktop.App); ok {
-			ui.SetupTray(desk)
+			ui.SetupTray(desk, trayIcon())
 		}
 		if unregister, err := ui.RegisterHotkey(os.Getenv("SCRIBBLE_HOTKEY")); err == nil && unregister != nil {
 			defer unregister()

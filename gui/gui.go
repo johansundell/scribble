@@ -156,8 +156,9 @@ func New(w fyne.Window, c *client.Client, store *offline.Store) *UI {
 
 // SetupTray registers the system tray icon and menu ("New Note", "Open
 // Scribble", "Quit") on desk and makes closing the main window hide it to
-// the tray instead of exiting.
-func (ui *UI) SetupTray(desk desktop.App) {
+// the tray instead of exiting. icon is the tray icon; nil uses the app icon.
+// Windows needs it in ICO format (#120), which the app icon is not.
+func (ui *UI) SetupTray(desk desktop.App, icon fyne.Resource) {
 	if desk == nil {
 		return
 	}
@@ -170,7 +171,10 @@ func (ui *UI) SetupTray(desk desktop.App) {
 		fyne.NewMenuItemSeparator(),
 		quit,
 	)
-	desk.SetSystemTrayIcon(trayIcon())
+	if icon == nil {
+		icon = appIcon()
+	}
+	desk.SetSystemTrayIcon(icon)
 	desk.SetSystemTrayMenu(menu)
 	desk.SetSystemTrayWindow(ui.w)
 	// SetSystemTrayWindow replaces the window's close intercept with w.Hide;
@@ -178,8 +182,8 @@ func (ui *UI) SetupTray(desk desktop.App) {
 	ui.w.SetCloseIntercept(ui.Close)
 }
 
-// trayIcon is the app icon, or the document icon when the app has none.
-func trayIcon() fyne.Resource {
+// appIcon is the app icon, or the document icon when the app has none.
+func appIcon() fyne.Resource {
 	if icon := fyne.CurrentApp().Icon(); icon != nil {
 		return icon
 	}

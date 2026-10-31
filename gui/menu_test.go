@@ -287,7 +287,7 @@ func TestMenuQuitAsksBeforeDiscardingEdits(t *testing.T) {
 func TestMenuQuitQuitsEvenWithATray(t *testing.T) {
 	c := newServer(t)
 	ui, w := openWithSpy(t, c)
-	ui.SetupTray(&fakeTray{})
+	ui.SetupTray(&fakeTray{}, nil)
 
 	menuItem(t, w, "File", "Quit").Action()
 	if !w.closed {
