@@ -528,13 +528,19 @@ type appWithIcon struct {
 
 func (a *appWithIcon) Icon() fyne.Resource { return a.icon }
 
+// withAppIcon makes the current app have icon for the rest of the test.
+func withAppIcon(t *testing.T, icon fyne.Resource) {
+	t.Helper()
+	orig := fyne.CurrentApp()
+	fyne.SetCurrentApp(&appWithIcon{App: orig, icon: icon})
+	t.Cleanup(func() { fyne.SetCurrentApp(orig) })
+}
+
 func TestAboutDialogShowsTheAppIcon(t *testing.T) {
 	c := newServer(t)
 	_, w := open(t, c)
 	icon := fyne.NewStaticResource("Icon.png", []byte("icon"))
-	orig := fyne.CurrentApp()
-	fyne.SetCurrentApp(&appWithIcon{App: orig, icon: icon})
-	t.Cleanup(func() { fyne.SetCurrentApp(orig) })
+	withAppIcon(t, icon)
 
 	menuItem(t, w, "Help", "About Scribble").Action()
 	var shown *canvas.Image

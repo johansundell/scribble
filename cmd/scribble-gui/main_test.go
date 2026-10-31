@@ -129,3 +129,35 @@ func TestNewAppSetsTheAppIcon(t *testing.T) {
 		t.Errorf("the app icon is %dx%d, want 512x512", cfg.Width, cfg.Height)
 	}
 }
+
+// appMakingIconWindows hands out windows that keep their icon, which test
+// windows drop.
+type appMakingIconWindows struct {
+	appWithIcon
+}
+
+type windowWithIcon struct {
+	fyne.Window
+	icon fyne.Resource
+}
+
+func (w *windowWithIcon) Icon() fyne.Resource     { return w.icon }
+func (w *windowWithIcon) SetIcon(r fyne.Resource) { w.icon = r }
+
+func (a *appMakingIconWindows) NewWindow(title string) fyne.Window {
+	return &windowWithIcon{Window: a.App.NewWindow(title)}
+}
+
+func TestNewWindowSetsTheAppIconOnTheWindow(t *testing.T) {
+	icon := fyne.NewStaticResource("Icon.png", iconPNG)
+	a := &appMakingIconWindows{appWithIcon: appWithIcon{App: test.NewTempApp(t), icon: icon}}
+
+	w := newWindow(a, "Scribble test")
+
+	if w.Title() != "Scribble test" {
+		t.Errorf("window title = %q, want %q", w.Title(), "Scribble test")
+	}
+	if got := w.Icon(); got != icon {
+		t.Errorf("window icon = %v, want the app icon", got)
+	}
+}
