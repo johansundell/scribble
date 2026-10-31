@@ -270,9 +270,9 @@ The server refuses to start if the PIN isn't 6–12 digits, or if
   | `Esc` | | Close the shortcuts, or leave the search box |
 - **On a phone** (below 700 px wide) the app shows one screen at a time: the
   list, or the open note with "← Notes" to go back (the search and project
-  filter stay). New and Edit are at the top; History, Share, Rename and Delete are under **⋯**. In
-  the editor, Save, Done and Cancel sit in a bar at the bottom, above the
-  on-screen keyboard. The keyboard shortcuts are simply not used on touch
+  filter stay). New and Edit are at the top; History, Share, Rename and
+  Delete are under **⋯**. In the editor, Save, Done and Cancel sit in a bar
+  at the bottom, above the on-screen keyboard. The keyboard shortcuts are simply not used on touch
   screens.
 - **Share links:** Share on a note creates a public, read-only link
   (`/s/<token>`, 128 random bits) and shows it with a Copy link button and a

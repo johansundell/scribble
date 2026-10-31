@@ -41,14 +41,15 @@ a note, the list otherwise. */}}
 		{{- if .NotePane}}
 		{{/* The note pane's top bar. On phones it holds the way back to the
 		list, the title and the note's actions; from 700 px up only the
-		actions show, as before. */}}
+		actions show, as before, less New (the list has its own then). */}}
 		<div class="note-bar">
 			<a class="button back-link" href="/{{.Filter}}" data-filtered="back">← Notes</a>
 			<span class="note-bar-title">{{.Title}}</span>
 			{{- if and .Note (not .Message)}}
 			{{/* Without JavaScript, Delete opens a page that asks first; note.js
 			asks with confirm() and posts. Share, Rename and Delete are under ⋯
-			on phones, a <details> so it opens without JavaScript. */}}
+			on phones, a <details> so it opens without JavaScript. New is for
+			phones only, where the list and its New are hidden (#125). */}}
 			<div class="note-actions">
 				<a class="button phone-only" href="/new{{.Filter}}" data-filtered="note-new">New</a>
 				<a class="button" href="{{editPath .Note.ID}}{{.Filter}}" data-filtered="edit" data-shortcut="edit">Edit</a>
