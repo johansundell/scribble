@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"strings"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/widget"
 	"github.com/johansundell/scribble/offline"
 )
@@ -37,4 +38,12 @@ func AboutTextForTest(ui *UI) string {
 		}
 	}
 	return strings.Join(out, "\n")
+}
+
+// SetFilePickersForTest swaps the native save and open file dialogs.
+func SetFilePickersForTest(save func(name string, cb func(fyne.URIWriteCloser, error)), open func(cb func(fyne.URIReadCloser, error))) func() {
+	oldSave, oldOpen := pickSaveFile, pickOpenFile
+	pickSaveFile = func(_ fyne.Window, name string, cb func(fyne.URIWriteCloser, error)) { save(name, cb) }
+	pickOpenFile = func(_ fyne.Window, cb func(fyne.URIReadCloser, error)) { open(cb) }
+	return func() { pickSaveFile, pickOpenFile = oldSave, oldOpen }
 }

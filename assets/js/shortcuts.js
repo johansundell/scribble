@@ -85,9 +85,8 @@ function run(e) {
 
 document.addEventListener("keydown", function (e) {
 	if (e.defaultPrevented || e.isComposing) return;
-	// The open overlay keeps the keys; Esc closes it.
-	var d = overlay();
-	if (d && d.open) return;
+	// An open overlay or import dialog keeps the keys; Esc closes it.
+	if (document.querySelector("dialog[open]")) return;
 	if (run(e)) e.preventDefault();
 });
 
@@ -96,9 +95,13 @@ document.addEventListener("click", function (e) {
 		openOverlay();
 		return;
 	}
-	// A tap outside the overlay closes it.
-	var d = overlay();
-	if (d && e.target === d) d.close();
+	var imp = document.getElementById("import");
+	if (imp && e.target.closest("[data-import-open]")) {
+		imp.showModal();
+		return;
+	}
+	// A tap outside the overlay or the import dialog closes it.
+	if (e.target === overlay() || e.target === imp) e.target.close();
 });
 
 function setup() {
@@ -110,7 +113,7 @@ function setup() {
 			k.textContent = "⌥";
 		});
 	}
-	document.querySelectorAll("[data-shortcuts-open]").forEach(function (b) {
+	document.querySelectorAll("[data-shortcuts-open], [data-import-open]").forEach(function (b) {
 		b.hidden = false;
 	});
 }
