@@ -48,8 +48,9 @@ create and update notes over an HTTP API.
 AUTH_TOKEN=change-me PORT=:8080 SQLITE_PATH=./scribble.db go run .
 #   (or: make build && ./scribble-server, or: make docker-run)
 
-# CLI
-make build-cli
+# CLI: install the latest sn on Linux or macOS (needs no Go; sudo if
+# /usr/local/bin isn't writable), or build it here with make build-cli
+curl -fsSL https://raw.githubusercontent.com/johansundell/scribble/master/scripts/install-sn.sh | sh
 export SCRIBBLE_URL=http://localhost:8080 SCRIBBLE_TOKEN=change-me
 ./sn new "Ideas" "first thought"
 git log --oneline -5 | ./sn append "Work log"

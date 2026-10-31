@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -44,6 +45,14 @@ func serveVersion(t *testing.T, version string, minClient int) {
 	t.Setenv("SCRIBBLE_TOKEN", "tok")
 }
 
+// installLine is what version prints under "update available" on goos.
+func installLine(goos string) string {
+	if h := installHint(goos, "run: "); h != "" {
+		return h + "\n"
+	}
+	return ""
+}
+
 func setVersion(t *testing.T, v string) {
 	old := Version
 	Version = v
@@ -55,9 +64,20 @@ func TestTooOldCLIPrintsTheUpgradeMessage(t *testing.T) {
 	setVersion(t, "v0.0.9")
 
 	err := runWith(&bytes.Buffer{}, []string{"ls"})
-	want := "sn: this version (v0.0.9) is too old for the server; download the latest from https://github.com/johansundell/scribble/releases/latest"
+	want := "sn: this version (v0.0.9) is too old for the server; download the latest from https://github.com/johansundell/scribble/releases/latest" +
+		installHint(runtime.GOOS, " or run: ")
 	if got := errorLine(err); got != want {
 		t.Errorf("printed %q, want %q", got, want)
+	}
+}
+
+// The one-line update command is only offered where the installer runs.
+func TestInstallHint(t *testing.T) {
+	cmd := "curl -fsSL https://raw.githubusercontent.com/johansundell/scribble/master/scripts/install-sn.sh | sh"
+	for goos, want := range map[string]string{"linux": "run: " + cmd, "darwin": "run: " + cmd, "windows": "", "freebsd": ""} {
+		if got := installHint(goos, "run: "); got != want {
+			t.Errorf("%s: got %q, want %q", goos, got, want)
+		}
 	}
 }
 
@@ -67,7 +87,8 @@ func TestCmdVersion(t *testing.T) {
 		want                 string
 	}{
 		{"update available", "v0.0.9", "v0.0.12",
-			"client v0.0.9 (API level 1)\nserver v0.0.12 (API level 2, schema 4)\nupdate available: https://github.com/johansundell/scribble/releases/latest\n"},
+			"client v0.0.9 (API level 1)\nserver v0.0.12 (API level 2, schema 4)\nupdate available: https://github.com/johansundell/scribble/releases/latest\n" +
+				installLine(runtime.GOOS)},
 		{"up to date", "v0.0.12", "v0.0.12",
 			"client v0.0.12 (API level 1)\nserver v0.0.12 (API level 2, schema 4)\n"},
 		{"dev build never compares", "dev", "v0.0.12",

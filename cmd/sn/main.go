@@ -23,6 +23,18 @@ import (
 
 var Version = "dev"
 
+// installCmd installs or upgrades sn from the latest release (#130).
+const installCmd = "curl -fsSL https://raw.githubusercontent.com/johansundell/scribble/master/scripts/install-sn.sh | sh"
+
+// installHint is prefix and installCmd on the systems the installer runs on
+// (Linux and macOS), and nothing elsewhere.
+func installHint(goos, prefix string) string {
+	if goos == "linux" || goos == "darwin" {
+		return prefix + installCmd
+	}
+	return ""
+}
+
 const usage = `sn - notes from the command line (version %s)
 
 Usage:
@@ -80,7 +92,8 @@ func errorLine(err error) string {
 	case client.IsUnauthorized(err):
 		err = fmt.Errorf("the server rejected SCRIBBLE_TOKEN")
 	case client.IsUpgradeRequired(err):
-		err = fmt.Errorf("this version (%s) is too old for the server; download the latest from %s", Version, client.ReleasesURL)
+		err = fmt.Errorf("this version (%s) is too old for the server; download the latest from %s%s",
+			Version, client.ReleasesURL, installHint(runtime.GOOS, " or run: "))
 	}
 	return "sn: " + err.Error()
 }
@@ -211,6 +224,9 @@ func cmdVersion(ctx context.Context, c *client.Client, w io.Writer) error {
 	fmt.Fprintf(w, "server %s (API level %d%s)\n", h.Version, h.API, schema)
 	if client.NewerRelease(Version, h.Version) {
 		fmt.Fprintf(w, "update available: %s\n", client.ReleasesURL)
+		if h := installHint(runtime.GOOS, "run: "); h != "" {
+			fmt.Fprintln(w, h)
+		}
 	}
 	return nil
 }
