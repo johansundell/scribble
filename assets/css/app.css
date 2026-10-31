@@ -254,6 +254,11 @@ a.button {
 	text-align: left;
 }
 
+.import-form input {
+	font: inherit;
+	font-size: 1rem;
+}
+
 .import-form input[type="file"] {
 	max-width: 100%;
 }
