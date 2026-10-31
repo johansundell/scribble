@@ -165,15 +165,7 @@ func TestHelpAndHintsNameTheSnCommand(t *testing.T) {
 	}
 }
 
-func TestServerURLDefaultsToNotesSuddeNet(t *testing.T) {
-	t.Setenv("SCRIBBLE_URL", "")
-	if got, want := serverURL(), "https://notes.sudde.net"; got != want {
-		t.Errorf("unset: got %q, want %q", got, want)
-	}
-	t.Setenv("SCRIBBLE_URL", "http://notes:8080")
-	if got, want := serverURL(), "http://notes:8080"; got != want {
-		t.Errorf("set: got %q, want %q", got, want)
-	}
+func TestHelpNamesTheDefaultServer(t *testing.T) {
 	var out bytes.Buffer
 	if err := runWith(&out, []string{"help"}); err != nil {
 		t.Fatal(err)

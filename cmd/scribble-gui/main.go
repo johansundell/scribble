@@ -59,7 +59,7 @@ func main() {
 	w.Resize(fyne.NewSize(1000, 700))
 
 	token := os.Getenv("SCRIBBLE_TOKEN")
-	baseURL := serverURL()
+	baseURL := client.ServerURL()
 	if envErr != nil {
 		w.SetContent(widget.NewLabel("Cannot read the .env file next to scribble-gui: " + envErr.Error()))
 	} else if token == "" {
@@ -144,12 +144,4 @@ func openCache(baseURL string) (*offline.Store, error) {
 		return nil, err
 	}
 	return offline.Open(path)
-}
-
-// serverURL is SCRIBBLE_URL, or the public server when it is unset.
-func serverURL() string {
-	if u := os.Getenv("SCRIBBLE_URL"); u != "" {
-		return u
-	}
-	return "https://notes.sudde.net"
 }

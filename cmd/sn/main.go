@@ -110,7 +110,7 @@ func runWith(stdout io.Writer, args []string) error {
 	if args[0] == "completion" {
 		return cmdCompletion(stdout, args[1:])
 	}
-	baseURL := serverURL()
+	baseURL := client.ServerURL()
 	token := os.Getenv("SCRIBBLE_TOKEN")
 	c := client.New(baseURL, token)
 	c.Name, c.Version = "cli", Version
@@ -636,12 +636,4 @@ func cmdEdit(ctx context.Context, c *client.Client, args []string) error {
 		fmt.Printf("saved %q\n", notes.TitleOf(string(edited)))
 		return nil
 	})
-}
-
-// serverURL is SCRIBBLE_URL, or the public server when it is unset.
-func serverURL() string {
-	if u := os.Getenv("SCRIBBLE_URL"); u != "" {
-		return u
-	}
-	return "https://notes.sudde.net"
 }
