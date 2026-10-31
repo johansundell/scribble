@@ -2,10 +2,13 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"image/png"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -179,5 +182,72 @@ func TestIconICOIsTheAppIcon(t *testing.T) {
 	}
 	if !bytes.Equal(ico, want) {
 		t.Error("icon.ico differs from assets/img/icon.ico; run make icons")
+	}
+}
+
+// icoSizes reads the image sizes from an ICO directory. A width or height
+// byte of 0 means 256.
+func icoSizes(t *testing.T, ico []byte) []int {
+	t.Helper()
+	if len(ico) < 6 {
+		t.Fatalf("ICO is %d bytes, too short for its header", len(ico))
+	}
+	n := int(binary.LittleEndian.Uint16(ico[4:6]))
+	if len(ico) < 6+16*n {
+		t.Fatalf("ICO says %d images but is only %d bytes", n, len(ico))
+	}
+	var sizes []int
+	for i := range n {
+		e := ico[6+16*i:]
+		w, h := int(e[0]), int(e[1])
+		if w == 0 {
+			w = 256
+		}
+		if h == 0 {
+			h = 256
+		}
+		if w != h {
+			t.Errorf("ICO image %d is %dx%d, want square", i, w, h)
+		}
+		sizes = append(sizes, w)
+	}
+	slices.Sort(sizes)
+	return sizes
+}
+
+// go-winres puts every size of icon.ico into scribble-gui.exe, since Fyne's
+// packager keeps only the largest (#123).
+func TestIconICOHasEverySize(t *testing.T) {
+	ico, err := os.ReadFile("icon.ico")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []int{16, 24, 32, 48, 64, 128, 256}
+	if got := icoSizes(t, ico); !slices.Equal(got, want) {
+		t.Errorf("icon.ico sizes = %v, want %v", got, want)
+	}
+}
+
+// winres.json replaces the single-size icon groups that fyne-cross writes
+// (#2 and IDI_APPLICATION, #32512) with icon.ico, and leaves its RT_VERSION
+// and RT_MANIFEST alone (#123).
+func TestWinresReplacesBothIconGroupsWithIconICO(t *testing.T) {
+	raw, err := os.ReadFile("winres.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var res map[string]map[string]map[string]string
+	if err := json.Unmarshal(raw, &res); err != nil {
+		t.Fatalf("winres.json: %v", err)
+	}
+	for _, id := range []string{"#2", "#32512"} {
+		if got := res["RT_GROUP_ICON"][id]["0409"]; got != "icon.ico" {
+			t.Errorf("RT_GROUP_ICON %s 0409 = %q, want %q", id, got, "icon.ico")
+		}
+	}
+	for typ := range res {
+		if typ != "RT_GROUP_ICON" {
+			t.Errorf("winres.json sets %s; only RT_GROUP_ICON should change", typ)
+		}
 	}
 }

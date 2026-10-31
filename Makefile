@@ -55,15 +55,20 @@ compile:
 	-ldflags="-X=main.Version=$(VERSION)" \
 	./cmd/scribble-gui
 	@cp fyne-cross/bin/linux-amd64/scribble-gui build/scribble_$(VERSION)_linux_amd64/scribble-gui
+# Fyne's Windows packager embeds only the largest image of an .ico, so the
+# exe's icon groups are swapped for every size of icon.ico afterwards (#123).
+# Icon.png stays the -icon so fyne.AppMetadata gets the 512px image, not the
+# 256px one scaled up.
 	@fyne-cross windows \
 	-arch=amd64 \
 	-env=GOTOOLCHAIN=auto \
 	-app-id=com.johansundell.scribble \
 	-app-version=$(patsubst v%,%,$(VERSION)) \
-	-icon=cmd/scribble-gui/icon.ico \
+	-icon=cmd/scribble-gui/Icon.png \
 	-name=scribble-gui.exe \
 	-ldflags="-X=main.Version=$(VERSION)" \
 	./cmd/scribble-gui
+	@go-winres patch --in cmd/scribble-gui/winres.json fyne-cross/bin/windows-amd64/scribble-gui.exe
 	@cp fyne-cross/bin/windows-amd64/scribble-gui.exe build/scribble_$(VERSION)_windows_amd64/scribble-gui.exe
 	@rm -rf fyne-cross/
 
@@ -85,6 +90,7 @@ deps:
 	go install github.com/c4milo/github-release@latest
 	go install github.com/mitchellh/gox@latest
 	go install github.com/fyne-io/fyne-cross@latest
+	go install github.com/tc-hib/go-winres@latest
 
 dist: compile
 	$(eval FILES := $(shell ls build))
