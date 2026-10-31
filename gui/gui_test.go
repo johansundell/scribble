@@ -1421,21 +1421,11 @@ func TestHotkeyEventOpensFocusedNewNoteEditor(t *testing.T) {
 	}
 }
 
-// iconApp is the current app with an icon, which the test app drops.
-type iconApp struct {
-	fyne.App
-	icon fyne.Resource
-}
-
-func (a *iconApp) Icon() fyne.Resource { return a.icon }
-
 func TestSystemTrayShowsTheAppIcon(t *testing.T) {
 	c := newServer(t)
 	ui, _ := openWithSpy(t, c)
 	icon := fyne.NewStaticResource("Icon.png", []byte("png"))
-	prev := fyne.CurrentApp()
-	fyne.SetCurrentApp(&iconApp{App: prev, icon: icon})
-	t.Cleanup(func() { fyne.SetCurrentApp(prev) })
+	withAppIcon(t, icon)
 
 	tray := &fakeTray{}
 	ui.SetupTray(tray)
