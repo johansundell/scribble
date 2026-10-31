@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -54,7 +55,7 @@ func TestTooOldCLIPrintsTheUpgradeMessage(t *testing.T) {
 	setVersion(t, "v0.0.9")
 
 	err := runWith(&bytes.Buffer{}, []string{"ls"})
-	want := "scribble: this version (v0.0.9) is too old for the server; download the latest from https://github.com/johansundell/scribble/releases/latest"
+	want := "sn: this version (v0.0.9) is too old for the server; download the latest from https://github.com/johansundell/scribble/releases/latest"
 	if got := errorLine(err); got != want {
 		t.Errorf("printed %q, want %q", got, want)
 	}
@@ -119,5 +120,22 @@ func TestCmdVersionWithoutServer(t *testing.T) {
 	}
 	if want := "client v0.0.9 (API level 1)\n"; out.String() != want {
 		t.Errorf("printed %q, want %q", out.String(), want)
+	}
+}
+
+func TestHelpAndHintsNameTheSnCommand(t *testing.T) {
+	var out bytes.Buffer
+	if err := runWith(&out, []string{"help"}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(out.String(), "sn - notes from the command line") {
+		t.Errorf("help starts %q", strings.SplitN(out.String(), "\n", 2)[0])
+	}
+	if strings.Contains(out.String(), "scribble ") {
+		t.Errorf("help still mentions the old command name:\n%s", out.String())
+	}
+	err := runWith(&out, []string{"frobnicate"})
+	if want := `unknown command "frobnicate" (try: sn help)`; err == nil || err.Error() != want {
+		t.Errorf("got %v, want %q", err, want)
 	}
 }

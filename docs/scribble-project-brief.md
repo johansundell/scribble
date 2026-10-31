@@ -81,7 +81,7 @@ main.go, service.go, config.go   service lifecycle (template)
 router/, handlers/, store/       routes, handlers, storage (notes: handlers/notes.go, store/notes.go)
 notes/                           Note type and [[link]] helpers
 client/                          Go API client
-cmd/scribble/                    CLI
+cmd/sn/                          CLI (was cmd/scribble/)
 cmd/scribble-gui/                (not written yet)
 docs/service-template.md
 ```

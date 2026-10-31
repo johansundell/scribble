@@ -82,7 +82,7 @@ func TestCmdShowRevision(t *testing.T) {
 	}
 
 	err := cmdShow(ctx, c, &bytes.Buffer{}, []string{"Plans", "-r", "12"})
-	if want := `no revision r12 of "Plans" (see: scribble history Plans)`; err == nil || err.Error() != want {
+	if want := `no revision r12 of "Plans" (see: sn history Plans)`; err == nil || err.Error() != want {
 		t.Errorf("unknown revision err = %v, want %q", err, want)
 	}
 	if err := cmdShow(ctx, c, &bytes.Buffer{}, []string{"Plans", "-r", "x"}); err == nil {
@@ -137,7 +137,7 @@ func TestCmdDiff(t *testing.T) {
 	}
 
 	err := cmdDiff(ctx, c, &bytes.Buffer{}, false, []string{"Plans", "9"})
-	if want := `no revision r9 of "Plans" (see: scribble history Plans)`; err == nil || err.Error() != want {
+	if want := `no revision r9 of "Plans" (see: sn history Plans)`; err == nil || err.Error() != want {
 		t.Errorf("unknown revision err = %v, want %q", err, want)
 	}
 	if err := cmdDiff(ctx, c, &bytes.Buffer{}, false, nil); err == nil {
@@ -262,7 +262,7 @@ func TestCmdRestore(t *testing.T) {
 		run := func(in io.Reader, args ...string) error {
 			return cmdRestore(ctx, c, &bytes.Buffer{}, in, true, args)
 		}
-		if err := run(nil, "-y", "Plans", "12"); err == nil || err.Error() != `no revision r12 of "Plans" (see: scribble history Plans)` {
+		if err := run(nil, "-y", "Plans", "12"); err == nil || err.Error() != `no revision r12 of "Plans" (see: sn history Plans)` {
 			t.Errorf("unknown revision err = %v", err)
 		}
 		if _, err := c.Create(ctx, "# Draft\nanother"); err != nil {
@@ -367,7 +367,7 @@ func TestHistoryCommandsAreWired(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, cmd := range []string{"history", "show <title> [-r <rev>]", "diff", "restore", "deleted", "undelete"} {
-		if !strings.Contains(out.String(), "scribble "+cmd) {
+		if !strings.Contains(out.String(), "sn "+cmd) {
 			t.Errorf("help does not mention %q", cmd)
 		}
 	}

@@ -5,20 +5,20 @@ import (
 	"io"
 )
 
-const bashCompletionScript = `# bash completion for scribble                               -*- shell-script -*-
+const bashCompletionScript = `# bash completion for sn                                     -*- shell-script -*-
 #
 # To load completions in your current shell session:
-#   source <(scribble completion)
+#   source <(sn completion)
 #
 # To install completions permanently:
 #   # For current user:
 #   mkdir -p ~/.local/share/bash-completion/completions
-#   scribble completion > ~/.local/share/bash-completion/completions/scribble
+#   sn completion > ~/.local/share/bash-completion/completions/sn
 #
 #   # Or system-wide (requires root):
-#   sudo scribble completion > /etc/bash_completion.d/scribble
+#   sudo sn completion > /etc/bash_completion.d/sn
 
-_scribble() {
+_sn() {
     local cur prev words cword
     if type _init_completion >/dev/null 2>&1; then
         _init_completion -n : || return
@@ -40,24 +40,24 @@ _scribble() {
     local cmd="${words[1]}"
     case "$cmd" in
         show|restore)
-            if _scribble_at_first_arg; then
-                _scribble_complete_titles "$cur" "$(scribble ls 2>/dev/null)"
+            if _sn_at_first_arg; then
+                _sn_complete_titles "$cur" "$(sn ls 2>/dev/null)"
             fi
             ;;
         edit|append|links|backlinks|autolink|rm|history|diff|rename)
             if [[ $cword -eq 2 ]]; then
-                _scribble_complete_titles "$cur" "$(scribble ls 2>/dev/null)"
+                _sn_complete_titles "$cur" "$(sn ls 2>/dev/null)"
             fi
             ;;
         undelete)
             if [[ $cword -eq 2 ]]; then
                 # Drop the date and time each line of deleted starts with.
-                _scribble_complete_titles "$cur" "$(scribble deleted 2>/dev/null | sed 's/^[^ ]* [^ ]*  //' | sort -u)"
+                _sn_complete_titles "$cur" "$(sn deleted 2>/dev/null | sed 's/^[^ ]* [^ ]*  //' | sort -u)"
             fi
             ;;
         projects)
             if [[ $cword -eq 2 ]]; then
-                _scribble_complete_projects "$cur"
+                _sn_complete_projects "$cur"
             fi
             ;;
         import|export)
@@ -79,11 +79,11 @@ _scribble() {
     esac
 }
 
-# _scribble_at_first_arg succeeds when the word being completed is the first
+# _sn_at_first_arg succeeds when the word being completed is the first
 # argument of show or restore, the commands that take flags. Flags before it
 # are skipped, with the value of -r; after --, a word that starts with - is an
 # argument too.
-_scribble_at_first_arg() {
+_sn_at_first_arg() {
     local i args=0 dashdash=0
     for (( i=2; i<cword; i++ )); do
         if [[ $dashdash -eq 0 ]]; then
@@ -101,8 +101,8 @@ _scribble_at_first_arg() {
     [[ $dashdash -eq 1 || "$cur" != -* ]]
 }
 
-# _scribble_complete_titles completes cur from titles, one per line.
-_scribble_complete_titles() {
+# _sn_complete_titles completes cur from titles, one per line.
+_sn_complete_titles() {
     local cur="$1"
     local titles="$2"
     [[ -z "$titles" ]] && return 0
@@ -129,10 +129,10 @@ _scribble_complete_titles() {
     COMPREPLY=("${matches[@]}")
 }
 
-_scribble_complete_projects() {
+_sn_complete_projects() {
     local cur="$1"
     local projects
-    projects="$(scribble projects 2>/dev/null)" || return 0
+    projects="$(sn projects 2>/dev/null)" || return 0
     [[ -z "$projects" ]] && return 0
 
     local prefix="$cur"
@@ -156,7 +156,7 @@ _scribble_complete_projects() {
     COMPREPLY=("${matches[@]}")
 }
 
-complete -F _scribble scribble
+complete -F _sn sn
 `
 
 func cmdCompletion(w io.Writer, args []string) error {

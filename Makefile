@@ -21,7 +21,7 @@ backup: build
 
 # The command-line client (build/ holds both for `make compile`).
 build-cli:
-	go build -ldflags "-X 'main.Version=$(VERSION)'" -o scribble ./cmd/scribble
+	go build -ldflags "-X 'main.Version=$(VERSION)'" -o sn ./cmd/sn
 
 # The Fyne desktop client. Needs CGO and a C compiler; on Linux also the
 # GL, X11, Wayland and xkbcommon development headers (see README).
@@ -47,8 +47,8 @@ compile:
 	-osarch="linux/amd64" \
 	-osarch="linux/arm64" \
 	-osarch="windows/amd64" \
-	-output "build/scribble_$(VERSION)_{{.OS}}_{{.Arch}}/scribble" \
-	./cmd/scribble
+	-output "build/scribble_$(VERSION)_{{.OS}}_{{.Arch}}/sn" \
+	./cmd/sn
 	@fyne-cross linux \
 	-arch=amd64 \
 	-env=GOTOOLCHAIN=auto \
