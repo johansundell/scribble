@@ -80,7 +80,7 @@ func GetRoutes(handler *handlers.Handler) Routes {
 		Route{Name: "AppShare", Method: "POST", Pattern: handlers.NotePrefix + ":id/share", HandlerFunc: handler.AppShare, Web: true, UseSession: true},
 		Route{Name: "AppHistory", Method: "GET", Pattern: handlers.NotePrefix + ":id/history", HandlerFunc: handler.AppHistory, Web: true, UseSession: true},
 		Route{Name: "AppRestore", Method: "POST", Pattern: handlers.NotePrefix + ":id/history", HandlerFunc: handler.AppRestore, Web: true, UseSession: true},
-		Route{Name: "AppExport", Method: "GET", Pattern: handlers.ExportPath, HandlerFunc: handler.AppExport, Web: true, UseSession: true},
+		Route{Name: "AppExport", Method: "GET", Pattern: handlers.ExportPath, HandlerFunc: handler.ExportNotes, Web: true, UseSession: true},
 		Route{Name: "AppImport", Method: "POST", Pattern: handlers.ImportPath, HandlerFunc: handler.AppImport, Web: true, UseSession: true},
 		// A shared note's public page (#83): no session, the token is the key.
 		Route{Name: "Shared", Method: "GET", Pattern: handlers.SharedPath(":token"), HandlerFunc: handler.Shared, Web: true},

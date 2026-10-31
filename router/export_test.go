@@ -116,18 +116,22 @@ func TestExportImportAPI(t *testing.T) {
 		"Alpha.md": "# Alpha\nchanged",
 		"Gamma.md": "# Gamma\nnew",
 		"todo.txt": "milk",
+		"none.md":  "#\n",
 	})
 	var res struct{ Imported, Skipped int }
 	w = api(uploadRequest(t, "/import", archive, nil))
 	if w.Code != http.StatusOK {
 		t.Fatalf("import = %d: %s", w.Code, w.Body.String())
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil || res.Imported != 2 || res.Skipped != 1 {
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil || res.Imported != 3 || res.Skipped != 1 {
 		t.Errorf("import result %s (%v)", w.Body.String(), err)
 	}
 	ctx := context.Background()
 	if n, _ := e.store.GetNoteByTitle(ctx, "Alpha"); n.Body != "# Alpha\nfirst" {
 		t.Errorf("skip mode changed Alpha: %q", n.Body)
+	}
+	if n, err := e.store.GetNoteByTitle(ctx, "none"); err != nil || n.Body != "# none\n" {
+		t.Errorf("none = %+v, %v", n, err)
 	}
 	if n, err := e.store.GetNoteByTitle(ctx, "todo"); err != nil || n.Body != "# todo\n\nmilk" {
 		t.Errorf("todo = %+v, %v", n, err)
@@ -135,7 +139,7 @@ func TestExportImportAPI(t *testing.T) {
 
 	// Overwrite replaces existing notes; an unchanged one is skipped.
 	w = api(uploadRequest(t, "/import", archive, map[string]string{"overwrite": "true"}))
-	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil || res.Imported != 1 || res.Skipped != 2 {
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil || res.Imported != 1 || res.Skipped != 3 {
 		t.Errorf("overwrite result %d %s (%v)", w.Code, w.Body.String(), err)
 	}
 	if n, _ := e.store.GetNoteByTitle(ctx, "Alpha"); n.Body != "# Alpha\nchanged" {

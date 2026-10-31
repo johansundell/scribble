@@ -32,22 +32,15 @@ const (
 const maxImportBytes = 64 << 20
 
 // ImportResult is what an import did: Imported notes were created or
-// overwritten, Skipped ones already existed (or were unchanged).
+// overwritten, Skipped ones already existed, were unchanged or had no
+// title. client.ImportResult is its JSON twin.
 type ImportResult struct {
 	Imported int `json:"imported"`
 	Skipped  int `json:"skipped"`
 }
 
-// Summary is the result as a sentence, for people.
-func (r ImportResult) Summary() string {
-	noun := "notes"
-	if r.Imported == 1 {
-		noun = "note"
-	}
-	return fmt.Sprintf("Imported %d %s, skipped %d.", r.Imported, noun, r.Skipped)
-}
-
-// ExportNotes handles GET /export: every live note as a ZIP download.
+// ExportNotes handles GET /export, and the web app's ExportPath: every
+// live note as a ZIP download.
 func (h *Handler) ExportNotes(c *gin.Context) error {
 	ns, err := h.noteStore()
 	if err != nil {
@@ -78,11 +71,6 @@ func (h *Handler) ImportNotes(c *gin.Context) error {
 	return nil
 }
 
-// AppExport is the web app's export download.
-func (h *Handler) AppExport(c *gin.Context) error {
-	return h.ExportNotes(c)
-}
-
 // AppImport imports the web app's upload and shows the list with what it
 // did, or why it failed, where the note would be.
 func (h *Handler) AppImport(c *gin.Context) error {
@@ -98,9 +86,13 @@ func (h *Handler) AppImport(c *gin.Context) error {
 		return perr
 	}
 	if err != nil {
-		p.Message = "Import failed: " + errors.Unwrap(err).Error()
+		cause := err
+		if inner := errors.Unwrap(err); inner != nil {
+			cause = inner
+		}
+		p.Message = "Import failed: " + cause.Error()
 	} else {
-		p.Message = res.Summary()
+		p.Message = notes.ImportSummary(res.Imported, res.Skipped)
 	}
 	return h.renderNotes(c, status, p)
 }
@@ -141,13 +133,18 @@ func readUpload(fh *multipart.FileHeader) ([]notes.Note, error) {
 }
 
 // importNotes creates each note. One whose title is taken is skipped, or
-// with overwrite gets the imported text, unless it has it already.
+// with overwrite gets the imported text, unless it has it already. One the
+// store refuses for having no title is skipped; other errors stop it.
 func importNotes(ctx context.Context, ns store.NoteStore, list []notes.Note, overwrite bool) (ImportResult, error) {
 	var res ImportResult
 	for _, n := range list {
 		_, err := ns.CreateNote(ctx, n.Body)
 		if err == nil {
 			res.Imported++
+			continue
+		}
+		if errors.Is(err, store.ErrNoTitle) {
+			res.Skipped++
 			continue
 		}
 		if !errors.Is(err, store.ErrTitleTaken) {

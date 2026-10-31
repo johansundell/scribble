@@ -103,6 +103,17 @@ func TestFileMenuImportsNotes(t *testing.T) {
 		t.Errorf("overwrite left %q", n.Body)
 	}
 
+	// An archive without notes says so, and offers no Import.
+	var empty bytes.Buffer
+	notes.WriteZip(&empty, nil)
+	os.WriteFile(path, empty.Bytes(), 0o644)
+	menuItem(t, w, "File", "Import notes…").Action()
+	if got := dialogText(w); !strings.Contains(got, "holds no .md, .txt or .note files") {
+		t.Errorf("empty archive dialog says %q", got)
+	}
+	tapDialogButton(t, w, "OK")
+	os.WriteFile(path, buf.Bytes(), 0o644)
+
 	// Cancel imports nothing; a file that isn't a ZIP is refused.
 	menuItem(t, w, "File", "Import notes…").Action()
 	tapDialogButton(t, w, "Cancel")

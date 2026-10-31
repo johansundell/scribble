@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 func zipNames(t *testing.T, b []byte) map[string]string {
@@ -193,4 +194,34 @@ func mustDate(t *testing.T, s string) time.Time {
 		t.Fatal(err)
 	}
 	return d
+}
+
+func TestReadZipHandlesBOMAndWindowsPaths(t *testing.T) {
+	got := readBodies(t, buildZip(t, map[string]string{
+		"Bom.md":               "\ufeff# Bom title\nbody\n",
+		`dir\Windows path.txt`: "text\n",
+	}))
+	if got["Bom title"] != "# Bom title\nbody\n" {
+		t.Errorf("BOM file: %v", got)
+	}
+	if got["Windows path"] != "# Windows path\n\ntext\n" {
+		t.Errorf("backslash path: %v", got)
+	}
+}
+
+func TestFileNameForCapsLength(t *testing.T) {
+	long := strings.Repeat("ä", 300)
+	name := fileNameFor(long)
+	if len(name) > maxFileNameBytes || !utf8.ValidString(name) {
+		t.Errorf("fileNameFor gave %d bytes, valid UTF-8 %v", len(name), utf8.ValidString(name))
+	}
+	// Round trip still works: the long title is in the heading.
+	got := readBodies(t, func() []byte {
+		var buf bytes.Buffer
+		WriteZip(&buf, []Note{{Title: long, Body: "# " + long + "\n"}, {Title: long + "x", Body: long + "x\n"}})
+		return buf.Bytes()
+	}())
+	if got[long] != "# "+long+"\n" {
+		t.Errorf("long title lost: %d notes", len(got))
+	}
 }

@@ -3,7 +3,6 @@ package gui
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"time"
 
@@ -12,7 +11,6 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
-	"github.com/johansundell/scribble/client"
 	"github.com/johansundell/scribble/notes"
 )
 
@@ -56,7 +54,7 @@ func (ui *UI) export(f fyne.URIWriteCloser) {
 		err = cerr
 	}
 	if err != nil {
-		storage.Delete(f.URI()) // never leave half an archive behind
+		storage.Delete(f.URI()) // never leave half a ZIP behind
 		ui.reportOnline(err)
 		return
 	}
@@ -81,15 +79,16 @@ func (ui *UI) askImport() {
 		if ui.report(err) {
 			return
 		}
+		if len(list) == 0 {
+			dialog.ShowInformation("Import notes", f.URI().Name()+" holds no .md, .txt or .note files.", ui.w)
+			return
+		}
 		overwrite := widget.NewCheck("Overwrite notes that already exist", nil)
 		msg := widget.NewLabel("Import the notes in " + f.URI().Name() + "? Notes whose title exists are skipped unless you overwrite them.")
 		msg.Wrapping = fyne.TextWrapWord
-		if len(list) == 0 {
-			msg.SetText(f.URI().Name() + " holds no .md, .txt or .note files.")
-		}
 		d := dialog.NewCustomConfirm("Import notes", "Import", "Cancel", container.NewVBox(msg, overwrite), func(ok bool) {
 			if ok {
-				ui.importArchive(data, overwrite.Checked)
+				ui.importZip(data, overwrite.Checked)
 			}
 		}, ui.w)
 		d.Resize(fyne.NewSize(420, d.MinSize().Height))
@@ -97,7 +96,7 @@ func (ui *UI) askImport() {
 	})
 }
 
-func (ui *UI) importArchive(data []byte, overwrite bool) {
+func (ui *UI) importZip(data []byte, overwrite bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), zipTimeout)
 	defer cancel()
 	res, err := ui.c.Import(ctx, bytes.NewReader(data), overwrite)
@@ -106,14 +105,5 @@ func (ui *UI) importArchive(data []byte, overwrite bool) {
 	}
 	ui.Status.SetText("")
 	ui.Sync()
-	dialog.ShowInformation("Import notes", importSummary(res), ui.w)
-}
-
-// importSummary is what an import did, as a sentence.
-func importSummary(r client.ImportResult) string {
-	noun := "notes"
-	if r.Imported == 1 {
-		noun = "note"
-	}
-	return fmt.Sprintf("Imported %d %s, skipped %d.", r.Imported, noun, r.Skipped)
+	dialog.ShowInformation("Import notes", notes.ImportSummary(res.Imported, res.Skipped), ui.w)
 }

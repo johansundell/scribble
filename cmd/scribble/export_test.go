@@ -49,7 +49,7 @@ func TestCmdExport(t *testing.T) {
 	if err := cmdExport(ctx, c, &out, []string{"a.zip", "b.zip"}, day); err == nil {
 		t.Error("two paths should be refused")
 	}
-	// A failed export leaves no file behind.
+	// A failed export leaves no file behind, and an existing one as it was.
 	bad := filepath.Join(dir, "bad.zip")
 	c.BaseURL += "/nope"
 	if err := cmdExport(ctx, c, &out, []string{bad}, day); err == nil {
@@ -57,6 +57,15 @@ func TestCmdExport(t *testing.T) {
 	}
 	if _, err := os.Stat(bad); !os.IsNotExist(err) {
 		t.Errorf("failed export left %s: %v", bad, err)
+	}
+	if err := cmdExport(ctx, c, &out, []string{named}, day); err == nil {
+		t.Error("want an error from a bad server")
+	}
+	if b, err := os.ReadFile(named); err != nil || len(b) == 0 {
+		t.Errorf("failed export spoiled %s: %d bytes, %v", named, len(b), err)
+	}
+	if left, _ := filepath.Glob(filepath.Join(dir, ".scribble-export-*")); len(left) != 0 {
+		t.Errorf("temp files left: %v", left)
 	}
 }
 
@@ -113,6 +122,13 @@ tomboy</note-content></text></note>`), 0o644)
 	}
 	if n, _ := c.ByTitle(ctx, "Plans"); !strings.Contains(n.Body, "tomboy") {
 		t.Errorf("Plans = %q", n.Body)
+	}
+	out.Reset()
+	if err := cmdImport(ctx, c, &out, []string{"--overwrite", tomboy}); err != nil {
+		t.Fatal(err)
+	}
+	if want := "skipped \"Plans\" (unchanged)\nimported 0 note(s), skipped 1\n"; out.String() != want {
+		t.Errorf("unchanged overwrite printed %q, want %q", out.String(), want)
 	}
 
 	bad := filepath.Join(dir, "bad.zip")

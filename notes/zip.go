@@ -16,6 +16,15 @@ import (
 // on one note.
 const MaxZipEntryBytes = 4 << 20
 
+// ImportSummary is what an import did, as a sentence for people.
+func ImportSummary(imported, skipped int) string {
+	noun := "notes"
+	if imported == 1 {
+		noun = "note"
+	}
+	return fmt.Sprintf("Imported %d %s, skipped %d.", imported, noun, skipped)
+}
+
 // ZipFileName is the default name of an export made on day t:
 // scribble-notes-YYYY-MM-DD.zip.
 func ZipFileName(t time.Time) string {
@@ -28,11 +37,19 @@ var unsafeFileChars = strings.NewReplacer(
 	`"`, "_", "<", "_", ">", "_", "|", "_",
 )
 
+// maxFileNameBytes caps a file name made from a title, leaving room for a
+// "-N" suffix and ".md" under the usual 255-byte limit.
+const maxFileNameBytes = 200
+
 // fileNameFor is title as a file name, without extension: the characters
-// file systems refuse become '_', and leading or trailing dots and spaces
-// are dropped. An empty result is "untitled".
+// file systems refuse become '_', it is cut to maxFileNameBytes, and leading
+// or trailing dots and spaces are dropped. An empty result is "untitled".
 func fileNameFor(title string) string {
-	name := strings.Trim(unsafeFileChars.Replace(title), ". ")
+	name := unsafeFileChars.Replace(title)
+	if len(name) > maxFileNameBytes {
+		name = strings.ToValidUTF8(name[:maxFileNameBytes], "")
+	}
+	name = strings.Trim(name, ". ")
 	if name == "" {
 		return "untitled"
 	}
@@ -79,7 +96,7 @@ func ReadZip(r io.ReaderAt, size int64) ([]Note, error) {
 		if f.FileInfo().IsDir() || strings.HasPrefix(f.Name, "__MACOSX/") {
 			continue
 		}
-		file := path.Base(f.Name)
+		file := path.Base(strings.ReplaceAll(f.Name, `\`, "/")) // some Windows tools write \
 		ext := strings.ToLower(path.Ext(file))
 		if strings.HasPrefix(file, ".") || (ext != ".md" && ext != ".txt" && ext != ".note") {
 			continue
@@ -119,7 +136,7 @@ func readZipFile(f *zip.File) ([]byte, error) {
 
 // textBody is the note body for a text file named name (without extension).
 func textBody(name, text string) string {
-	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = strings.ReplaceAll(strings.TrimPrefix(text, "\ufeff"), "\r\n", "\n")
 	title := TitleOf(text)
 	if strings.HasPrefix(strings.TrimSpace(TitleLine(text)), "#") || exportedAs(name, title) {
 		return text

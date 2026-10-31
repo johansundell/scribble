@@ -328,7 +328,9 @@ func cmdExport(ctx context.Context, c *client.Client, w io.Writer, args []string
 	if len(args) == 1 {
 		path = args[0]
 	}
-	f, err := os.Create(path)
+	// Written beside path and renamed, so a failed export leaves a file
+	// already at path as it was.
+	f, err := os.CreateTemp(filepath.Dir(path), ".scribble-export-*.zip")
 	if err != nil {
 		return err
 	}
@@ -336,8 +338,11 @@ func cmdExport(ctx context.Context, c *client.Client, w io.Writer, args []string
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
+	if err == nil {
+		err = os.Rename(f.Name(), path)
+	}
 	if err != nil {
-		os.Remove(path)
+		os.Remove(f.Name())
 		return err
 	}
 	fmt.Fprintf(w, "exported to %s\n", path)
@@ -374,7 +379,7 @@ func cmdImport(ctx context.Context, c *client.Client, w io.Writer, args []string
 	}
 	var total client.ImportResult
 	for _, path := range archives {
-		res, err := importArchive(ctx, c, path, *overwrite)
+		res, err := importZip(ctx, c, path, *overwrite)
 		if err != nil {
 			return fmt.Errorf("%s: %w", path, err)
 		}
@@ -389,9 +394,15 @@ func cmdImport(ctx context.Context, c *client.Client, w io.Writer, args []string
 		title := notes.TitleOf(body)
 		n, err := c.Create(ctx, body)
 		if client.IsTitleTaken(err) && *overwrite {
-			if n, err = overwriteNote(ctx, c, title, body); err == nil {
-				fmt.Fprintf(w, "overwrote %q\n", n.Title)
-				total.Imported++
+			var changed bool
+			if n, changed, err = overwriteNote(ctx, c, title, body); err == nil {
+				if changed {
+					fmt.Fprintf(w, "overwrote %q\n", n.Title)
+					total.Imported++
+				} else {
+					fmt.Fprintf(w, "skipped %q (unchanged)\n", n.Title)
+					total.Skipped++
+				}
 				continue
 			}
 		}
@@ -410,9 +421,9 @@ func cmdImport(ctx context.Context, c *client.Client, w io.Writer, args []string
 	return nil
 }
 
-// importArchive checks that path is a ZIP archive of notes, so a bad one
-// gets a clear message, and uploads it.
-func importArchive(ctx context.Context, c *client.Client, path string, overwrite bool) (client.ImportResult, error) {
+// importZip checks that path is a ZIP of notes, so a bad one gets a clear
+// message, and uploads it.
+func importZip(ctx context.Context, c *client.Client, path string, overwrite bool) (client.ImportResult, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return client.ImportResult{}, err
@@ -428,13 +439,16 @@ func importArchive(ctx context.Context, c *client.Client, path string, overwrite
 	return c.Import(ctx, io.NewSectionReader(f, 0, info.Size()), overwrite)
 }
 
-// overwriteNote replaces the text of the note titled title with body.
-func overwriteNote(ctx context.Context, c *client.Client, title, body string) (*notes.Note, error) {
+// overwriteNote replaces the text of the note titled title with body, as
+// the server's import does: a note that has it already is left alone, and
+// changed is false.
+func overwriteNote(ctx context.Context, c *client.Client, title, body string) (n *notes.Note, changed bool, err error) {
 	cur, err := c.ByTitle(ctx, title)
-	if err != nil {
-		return nil, err
+	if err != nil || cur.Body == body {
+		return cur, false, err
 	}
-	return c.Update(ctx, cur.ID, body, cur.Revision)
+	n, err = c.Update(ctx, cur.ID, body, cur.Revision)
+	return n, err == nil, err
 }
 
 func collectNoteFiles(paths []string) ([]string, error) {
