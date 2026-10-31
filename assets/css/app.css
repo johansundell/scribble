@@ -329,13 +329,15 @@ body.web:has(.app-main) {
 }
 
 /* The note pane's top bar. From 700 px up only its actions show, as a row
-   above the note; the back link, the title and the ⋯ menu are for phones. */
+   above the note; the back link, the title, New and the ⋯ menu are for
+   phones (wide screens have New above the list). */
 .note-bar {
 	display: contents;
 }
 
 .note-bar .back-link,
 .note-bar-title,
+.note-actions .phone-only,
 .more-menu {
 	display: none;
 }
@@ -850,6 +852,10 @@ body.web:has(.app-main) {
 
 	.note-actions .wide-only {
 		display: none;
+	}
+
+	.note-actions .phone-only {
+		display: inline-flex;
 	}
 
 	.more-menu {
