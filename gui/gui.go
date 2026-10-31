@@ -919,7 +919,7 @@ func (ui *UI) reportOnline(err error) bool {
 	if client.IsUnreachable(err) {
 		ui.offline = true
 		ui.setOffline()
-		ui.Status.SetText("The server is unreachable. Renaming, deleting and overwriting a note need it; try again when it is back.")
+		ui.Status.SetText("The server is unreachable. Renaming, deleting and overwriting a note, and exporting and importing notes, need it; try again when it is back.")
 		return true
 	}
 	return ui.report(err)

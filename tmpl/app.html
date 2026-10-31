@@ -60,6 +60,8 @@
 		Scribble {{.Version}}
 		{{- if .LoggedIn}}
 		<button type="button" class="link-button" data-shortcuts-open hidden>Keyboard shortcuts</button>
+		<a class="link-button" href="/export-notes">Export notes</a>
+		<button type="button" class="link-button" data-import-open hidden>Import notes</button>
 		{{- end}}
 	</footer>
 	{{- if .LoggedIn}}
@@ -92,6 +94,19 @@
 				<button type="submit" class="button">Close</button>
 			</form>
 		</div>
+	</dialog>
+	{{/* Import notes (#117): shortcuts.js opens it from the footer. */}}
+	<dialog id="import" class="shortcuts" aria-labelledby="import-heading">
+		<form class="shortcuts-body import-form" method="post" action="/import-notes" enctype="multipart/form-data">
+			<h2 id="import-heading">Import notes</h2>
+			<p class="muted">A ZIP archive of Markdown (.md, .txt) or Tomboy (.note) files, such as an export.</p>
+			<p><input type="file" name="file" accept=".zip,application/zip" required></p>
+			<p><label><input type="checkbox" name="overwrite"> Overwrite notes that already exist</label></p>
+			<p class="dialog-buttons">
+				<button type="submit" class="button" formmethod="dialog" formnovalidate>Cancel</button>
+				<button type="submit" class="button primary">Import</button>
+			</p>
+		</form>
 	</dialog>
 	{{- end}}
 </body>

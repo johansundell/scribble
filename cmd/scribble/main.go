@@ -37,7 +37,12 @@ Usage:
   scribble projects [<name>]         list #projects, or the notes in one
   scribble rename <title> <new>      retitle a note and fix [[links]] to it
   scribble autolink <title>          turn mentions of other note titles into [[links]]
-  scribble import <path...>          import Tomboy .note XML files or directories
+  scribble export [file.zip]         save every note as <title>.md in a ZIP archive
+                                     (default scribble-notes-YYYY-MM-DD.zip)
+  scribble import [--overwrite] <path...>
+                                     import ZIP archives of .md/.txt/.note files, and
+                                     Tomboy .note files or directories; existing
+                                     titles are skipped unless --overwrite
   scribble rm <title>                delete a note
   scribble history <title>           list a note's versions, newest first
   scribble diff <title> [<rev> [<rev2>]]
@@ -164,8 +169,10 @@ func runWith(stdout io.Writer, args []string) error {
 		return cmdProjects(ctx, c, os.Stdout, rest)
 	case "autolink":
 		return cmdAutoLink(ctx, c, os.Stdout, rest)
+	case "export":
+		return cmdExport(ctx, c, stdout, rest, time.Now())
 	case "import":
-		return cmdImport(ctx, c, os.Stdout, rest)
+		return cmdImport(ctx, c, stdout, rest)
 	case "rm":
 		return withNote(ctx, c, rest, 1, func(n *notes.Note, _ []string) error {
 			if err := c.Delete(ctx, n.ID); err != nil {
@@ -311,20 +318,74 @@ func cmdAutoLink(ctx context.Context, c *client.Client, w io.Writer, args []stri
 	})
 }
 
-// cmdImport parses Tomboy .note XML files (or directories of .note files) and
-// creates each note on the server, skipping titles that already exist.
-func cmdImport(ctx context.Context, c *client.Client, w io.Writer, args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: scribble import <path...>")
+// cmdExport saves every note to a ZIP archive: args[0], or
+// scribble-notes-YYYY-MM-DD.zip for day now in the current directory.
+func cmdExport(ctx context.Context, c *client.Client, w io.Writer, args []string, now time.Time) error {
+	if len(args) > 1 {
+		return fmt.Errorf("usage: scribble export [file.zip]")
 	}
-	files, err := collectNoteFiles(args)
+	path := notes.ZipFileName(now)
+	if len(args) == 1 {
+		path = args[0]
+	}
+	// Written beside path and renamed, so a failed export leaves a file
+	// already at path as it was.
+	f, err := os.CreateTemp(filepath.Dir(path), ".scribble-export-*.zip")
 	if err != nil {
 		return err
 	}
-	if len(files) == 0 {
-		return fmt.Errorf("no .note files found")
+	err = c.Export(ctx, f)
+	if cerr := f.Close(); err == nil {
+		err = cerr
 	}
-	var created, skipped int
+	if err == nil {
+		err = os.Rename(f.Name(), path)
+	}
+	if err != nil {
+		os.Remove(f.Name())
+		return err
+	}
+	fmt.Fprintf(w, "exported to %s\n", path)
+	return nil
+}
+
+// cmdImport imports ZIP archives through the server, and parses Tomboy
+// .note XML files (or directories of .note files) and creates each note.
+// Titles that already exist are skipped, or with --overwrite replaced.
+func cmdImport(ctx context.Context, c *client.Client, w io.Writer, args []string) error {
+	fs := flag.NewFlagSet("import", flag.ContinueOnError)
+	overwrite := fs.Bool("overwrite", false, "replace notes that already exist")
+	args, err := parseFlags(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(args) == 0 {
+		return fmt.Errorf("usage: scribble import [--overwrite] <path...>")
+	}
+	var archives, others []string
+	for _, p := range args {
+		if strings.EqualFold(filepath.Ext(p), ".zip") {
+			archives = append(archives, p)
+		} else {
+			others = append(others, p)
+		}
+	}
+	files, err := collectNoteFiles(others)
+	if err != nil {
+		return err
+	}
+	if len(files) == 0 && len(archives) == 0 {
+		return fmt.Errorf("no .note or .zip files found")
+	}
+	var total client.ImportResult
+	for _, path := range archives {
+		res, err := importZip(ctx, c, path, *overwrite)
+		if err != nil {
+			return fmt.Errorf("%s: %w", path, err)
+		}
+		total.Imported += res.Imported
+		total.Skipped += res.Skipped
+	}
 	for _, path := range files {
 		body, err := readTomboyFile(path)
 		if err != nil {
@@ -332,19 +393,62 @@ func cmdImport(ctx context.Context, c *client.Client, w io.Writer, args []string
 		}
 		title := notes.TitleOf(body)
 		n, err := c.Create(ctx, body)
+		if client.IsTitleTaken(err) && *overwrite {
+			var changed bool
+			if n, changed, err = overwriteNote(ctx, c, title, body); err == nil {
+				if changed {
+					fmt.Fprintf(w, "overwrote %q\n", n.Title)
+					total.Imported++
+				} else {
+					fmt.Fprintf(w, "skipped %q (unchanged)\n", n.Title)
+					total.Skipped++
+				}
+				continue
+			}
+		}
 		if client.IsTitleTaken(err) {
 			fmt.Fprintf(w, "skipped %q (already exists)\n", title)
-			skipped++
+			total.Skipped++
 			continue
 		}
 		if err != nil {
 			return explain(err, title)
 		}
 		fmt.Fprintf(w, "created %q\n", n.Title)
-		created++
+		total.Imported++
 	}
-	fmt.Fprintf(w, "imported %d note(s), skipped %d\n", created, skipped)
+	fmt.Fprintf(w, "imported %d note(s), skipped %d\n", total.Imported, total.Skipped)
 	return nil
+}
+
+// importZip checks that path is a ZIP of notes, so a bad one gets a clear
+// message, and uploads it.
+func importZip(ctx context.Context, c *client.Client, path string, overwrite bool) (client.ImportResult, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return client.ImportResult{}, err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return client.ImportResult{}, err
+	}
+	if _, err := notes.ReadZip(f, info.Size()); err != nil {
+		return client.ImportResult{}, err
+	}
+	return c.Import(ctx, io.NewSectionReader(f, 0, info.Size()), overwrite)
+}
+
+// overwriteNote replaces the text of the note titled title with body, as
+// the server's import does: a note that has it already is left alone, and
+// changed is false.
+func overwriteNote(ctx context.Context, c *client.Client, title, body string) (n *notes.Note, changed bool, err error) {
+	cur, err := c.ByTitle(ctx, title)
+	if err != nil || cur.Body == body {
+		return cur, false, err
+	}
+	n, err = c.Update(ctx, cur.ID, body, cur.Revision)
+	return n, err == nil, err
 }
 
 func collectNoteFiles(paths []string) ([]string, error) {

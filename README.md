@@ -55,6 +55,8 @@ export SCRIBBLE_URL=http://localhost:8080 SCRIBBLE_TOKEN=change-me
 git log --oneline -5 | ./scribble append "Work log"
 ./scribble edit Ideas
 ./scribble projects            # every #project; `projects <name>` lists its notes
+./scribble export              # every note as <title>.md in scribble-notes-YYYY-MM-DD.zip
+./scribble import notes.zip    # skips titles that exist; --overwrite replaces them
 
 # GUI (same SCRIBBLE_URL / SCRIBBLE_TOKEN; optional SCRIBBLE_HOTKEY, default Ctrl+Alt+N).
 # Also read from a .env next to the scribble-gui binary; the environment wins.
@@ -76,6 +78,7 @@ The window has a menu bar (on macOS, the system menu bar; there Ctrl is Cmd):
 | File | Save | `Ctrl+S` (saves and stays in the editor; the Save button returns to view mode) |
 | File | Rename… | `F2` (when the note list or nothing has focus) |
 | File | Delete… | none |
+| File | Export notes… / Import notes… | none (a ZIP archive of Markdown files, see [Export and import](#export-and-import)) |
 | File | Quit | `Ctrl+Q` (quits fully, even with a tray, after asking about unsaved changes) |
 | Edit | Undo / Redo | `Ctrl+Z` / `Ctrl+Y` (`Cmd+Shift+Z` on macOS) |
 | Edit | Cut / Copy / Paste / Select all | `Ctrl+X` / `Ctrl+C` / `Ctrl+V` / `Ctrl+A` |
@@ -140,7 +143,7 @@ FileMaker the `"schema"` key is left out.
 ### API level and old clients
 
 Every response carries `X-Version` (the release, such as `v0.0.12`) and
-`X-Scribble-API` (the API level, an integer; 2 since note history). The policy
+`X-Scribble-API` (the API level, an integer; 3 since export and import). The policy
 ([ADR 8](docs/adr/0008-api-level-and-minimum-client-level.md)):
 
 - **The API only grows.** Adding endpoints or fields raises the API level by
@@ -187,6 +190,8 @@ available".
 | POST | `/notes/:id/versions/:rev/restore` | optional `{"base_revision": 3}` (**412** as for `PUT`); sets the note's text to that version as a new revision and returns the note. **409** if the old title now belongs to another note, or if the note is deleted (undelete it first) |
 | GET | `/notes/deleted` | deleted notes, most recently deleted first: `id, title, deleted_at` |
 | POST | `/notes/:id/undelete` | brings a deleted note back with its last text and returns it. **409** if a live note has its title, **404** if the id isn't a deleted note |
+| GET | `/export` | every live note as a ZIP archive (`application/zip`, `scribble-notes-YYYY-MM-DD.zip`); see [Export and import](#export-and-import) |
+| POST | `/import` | `multipart/form-data` with the archive as `file` and optional `overwrite=true`; returns `{"imported": 2, "skipped": 1}`. **400** if it isn't a ZIP archive or a file in it is over 4 MB, **413** over 64 MB |
 
 Notes need `STORAGE=sqlite` (the default). With `mysql` or `filemaker`, request
 logs still work but the notes endpoints answer **501**, and the service logs a
@@ -299,6 +304,32 @@ The server refuses to start if the PIN isn't 6–12 digits, or if
 
 Why it works this way: [ADR 4](docs/adr/0004-web-app-is-server-rendered.md)
 and [ADR 5](docs/adr/0005-web-pin-login-and-shared-api-token.md).
+
+## Export and import
+
+Every note can be exported to a ZIP archive and imported from one (#117),
+with `scribble export [file.zip]` and `scribble import [--overwrite]
+<path...>`, File → Export notes… / Import notes… in the desktop app, or
+Export notes / Import notes at the bottom of the web app (the import opens a
+dialog with a file picker and the overwrite box). All of them go through
+the server's `GET /export` and `POST /import`; the web app uses
+`/export-notes` and `/import-notes` with its session.
+
+- **The archive** is flat: one `<title>.md` per note holding its Markdown
+  as it is. In file names, `/ \ : * ? " < > |` become `_`, and titles that
+  make the same name (ignoring case) get `-2`, `-3`, ...; the oldest note
+  keeps the plain name. The default name is `scribble-notes-YYYY-MM-DD.zip`.
+- **Importing** reads every `.md` and `.txt` file as Markdown and every
+  `.note` file as Tomboy XML, in any folder of the archive; other files are
+  ignored. A text file that doesn't start with a heading gets its file name
+  as a `# Title` line, unless it is an export of a note whose title line has
+  no `#`.
+- **Notes that exist** (same title, ignoring case) are skipped, and counted
+  ("imported 3 notes, skipped 1"). With overwrite they get the archive's
+  text as a new revision, so the old text stays in their history; one that
+  already has that text counts as skipped.
+- `scribble import` also takes Tomboy `.note` files and directories, as
+  before; `--overwrite` works for them too.
 
 ## Backups
 
@@ -447,6 +478,8 @@ librsvg imagemagick`). Older distributions ship ImageMagick 6, which has
 - [ ] GUI: conflict resolution
 - [x] Global hotkey / tray icon for "instant new note"
 - [x] Import from Tomboy `.note` XML (`scribble import <path...>`)
+- [x] Export and import every note as a ZIP archive of Markdown files, in
+      the CLI, the web app and the desktop app (#117)
 - [x] Automatic deploys: each published release is installed on the VPS,
       with a rollback if `/healthz` doesn't answer (#44)
 - [x] Backups: `scribble-server backup` snapshots the database while it

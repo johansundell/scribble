@@ -64,6 +64,8 @@ func TestMainMenuHasItemsWithShortcuts(t *testing.T) {
 		{"File", "Save", ctrl(fyne.KeyS)},
 		{"File", "Rename…", &desktop.CustomShortcut{KeyName: fyne.KeyF2}},
 		{"File", "Delete…", nil},
+		{"File", "Export notes…", nil},
+		{"File", "Import notes…", nil},
 		{"File", "Quit", ctrl(fyne.KeyQ)},
 		{"Edit", "Undo", &fyne.ShortcutUndo{}},
 		{"Edit", "Redo", redo},
@@ -246,7 +248,7 @@ func TestMenuActionsDoNothingWhileADialogIsOpen(t *testing.T) {
 	test.Tap(ui.Delete) // the dialog stays open
 	dialog := w.Canvas().Overlays().Top()
 	for _, item := range []struct{ menu, label string }{
-		{"File", "New note"}, {"File", "Rename…"}, {"File", "Delete…"}, {"File", "Quit"},
+		{"File", "New note"}, {"File", "Rename…"}, {"File", "Delete…"}, {"File", "Export notes…"}, {"File", "Import notes…"}, {"File", "Quit"},
 		{"Edit", "Find"}, {"View", "Edit note"}, {"Help", "About Scribble"},
 	} {
 		menuItem(t, w, item.menu, item.label).Action()

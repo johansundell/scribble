@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -101,19 +102,14 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.Token)
 	if in != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := c.send(req)
+	resp, err := c.sendAuthed(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return &Error{Status: resp.StatusCode, Message: strings.TrimSpace(string(msg))}
-	}
 	if out == nil || resp.StatusCode == http.StatusNoContent {
 		return nil
 	}
@@ -270,6 +266,79 @@ func (c *Client) Undelete(ctx context.Context, id int64) (*notes.Note, error) {
 		return nil, err
 	}
 	return &n, nil
+}
+
+// Export writes every note to w as the server's ZIP archive of Markdown
+// files. It needs server API level 3.
+func (c *Client) Export(ctx context.Context, w io.Writer) error {
+	req, err := http.NewRequestWithContext(ctx, "GET", c.BaseURL+"/export", nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.sendAuthed(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	_, err = io.Copy(w, resp.Body)
+	return err
+}
+
+// ImportResult is what an import did: Imported notes were created or
+// overwritten, Skipped ones already existed (or had the same text).
+type ImportResult struct {
+	Imported int `json:"imported"`
+	Skipped  int `json:"skipped"`
+}
+
+// Import uploads a ZIP archive of notes (as Export writes, or of .md, .txt
+// and Tomboy .note files). Notes whose title exists are skipped, or with
+// overwrite replaced. It needs server API level 3.
+func (c *Client) Import(ctx context.Context, archive io.Reader, overwrite bool) (ImportResult, error) {
+	var res ImportResult
+	pr, pw := io.Pipe()
+	mw := multipart.NewWriter(pw)
+	go func() {
+		err := mw.WriteField("overwrite", strconv.FormatBool(overwrite))
+		if err == nil {
+			var fw io.Writer
+			if fw, err = mw.CreateFormFile("file", "notes.zip"); err == nil {
+				if _, err = io.Copy(fw, archive); err == nil {
+					err = mw.Close()
+				}
+			}
+		}
+		pw.CloseWithError(err)
+	}()
+	req, err := http.NewRequestWithContext(ctx, "POST", c.BaseURL+"/import", pr)
+	if err != nil {
+		pr.Close()
+		return res, err
+	}
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	resp, err := c.sendAuthed(req)
+	pr.Close() // ends the writer if the server answered before reading it all
+	if err != nil {
+		return res, err
+	}
+	defer resp.Body.Close()
+	return res, json.NewDecoder(resp.Body).Decode(&res)
+}
+
+// sendAuthed sends req with the token and turns a non-2xx answer into an
+// *Error. The caller closes the body of a 2xx answer.
+func (c *Client) sendAuthed(req *http.Request) (*http.Response, error) {
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	resp, err := c.send(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		defer resp.Body.Close()
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return nil, &Error{Status: resp.StatusCode, Message: strings.TrimSpace(string(msg))}
+	}
+	return resp, nil
 }
 
 // send adds X-Scribble-Client to req, sends it and notes the server's

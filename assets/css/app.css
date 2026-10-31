@@ -248,6 +248,22 @@ a.button {
 	text-align: right;
 }
 
+/* The import dialog (#117) uses the overlay's look; its form is the body. */
+.shortcuts .import-form {
+	margin: 0;
+	text-align: left;
+}
+
+.import-form input[type="file"] {
+	max-width: 100%;
+}
+
+.dialog-buttons {
+	display: flex;
+	justify-content: flex-end;
+	gap: 0.5rem;
+}
+
 .muted {
 	color: var(--muted);
 }

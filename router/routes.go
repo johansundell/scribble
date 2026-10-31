@@ -57,6 +57,9 @@ func GetRoutes(handler *handlers.Handler) Routes {
 		Route{Name: "RestoreVersion", Method: "POST", Pattern: "/notes/:id/versions/:rev/restore", HandlerFunc: handler.RestoreVersion, UseAuth: true, CheckClient: true},
 		Route{Name: "DeletedNotes", Method: "GET", Pattern: "/notes/deleted", HandlerFunc: handler.DeletedNotes, UseAuth: true, CheckClient: true},
 		Route{Name: "UndeleteNote", Method: "POST", Pattern: "/notes/:id/undelete", HandlerFunc: handler.UndeleteNote, UseAuth: true, CheckClient: true},
+		// Export and import as a ZIP of Markdown files (#117).
+		Route{Name: "ExportNotes", Method: "GET", Pattern: "/export", HandlerFunc: handler.ExportNotes, UseAuth: true, CheckClient: true},
+		Route{Name: "ImportNotes", Method: "POST", Pattern: "/import", HandlerFunc: handler.ImportNotes, UseAuth: true, CheckClient: true},
 		// The web app (Web: registered only when WEB_PIN is set). It logs in
 		// with the PIN, not AUTH_TOKEN, and is never request-logged: the log
 		// would copy PINs and note bodies.
@@ -77,6 +80,8 @@ func GetRoutes(handler *handlers.Handler) Routes {
 		Route{Name: "AppShare", Method: "POST", Pattern: handlers.NotePrefix + ":id/share", HandlerFunc: handler.AppShare, Web: true, UseSession: true},
 		Route{Name: "AppHistory", Method: "GET", Pattern: handlers.NotePrefix + ":id/history", HandlerFunc: handler.AppHistory, Web: true, UseSession: true},
 		Route{Name: "AppRestore", Method: "POST", Pattern: handlers.NotePrefix + ":id/history", HandlerFunc: handler.AppRestore, Web: true, UseSession: true},
+		Route{Name: "AppExport", Method: "GET", Pattern: handlers.ExportPath, HandlerFunc: handler.ExportNotes, Web: true, UseSession: true},
+		Route{Name: "AppImport", Method: "POST", Pattern: handlers.ImportPath, HandlerFunc: handler.AppImport, Web: true, UseSession: true},
 		// A shared note's public page (#83): no session, the token is the key.
 		Route{Name: "Shared", Method: "GET", Pattern: handlers.SharedPath(":token"), HandlerFunc: handler.Shared, Web: true},
 		Route{Name: "AppNew", Method: "GET", Pattern: handlers.NewPath, HandlerFunc: handler.AppNew, Web: true, UseSession: true},

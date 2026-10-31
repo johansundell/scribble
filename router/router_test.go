@@ -197,6 +197,8 @@ func TestGetRoutes(t *testing.T) {
 		"AppShare":      {method: "POST", pattern: "/note/:id/share", web: true, useSession: true},
 		"AppHistory":    {method: "GET", pattern: "/note/:id/history", web: true, useSession: true},
 		"AppRestore":    {method: "POST", pattern: "/note/:id/history", web: true, useSession: true},
+		"AppExport":     {method: "GET", pattern: "/export-notes", web: true, useSession: true},
+		"AppImport":     {method: "POST", pattern: "/import-notes", web: true, useSession: true},
 		// A share link's public page: web, but no session.
 		"Shared": {method: "GET", pattern: "/s/:token", web: true},
 		// With the web app off, the root goes to the health check.
@@ -222,6 +224,9 @@ func TestGetRoutes(t *testing.T) {
 		"RestoreVersion": {method: "POST", pattern: "/notes/:id/versions/:rev/restore", useAuth: true, checkClient: true},
 		"DeletedNotes":   {method: "GET", pattern: "/notes/deleted", useAuth: true, checkClient: true},
 		"UndeleteNote":   {method: "POST", pattern: "/notes/:id/undelete", useAuth: true, checkClient: true},
+		// Export and import (#117): the same rules.
+		"ExportNotes": {method: "GET", pattern: "/export", useAuth: true, checkClient: true},
+		"ImportNotes": {method: "POST", pattern: "/import", useAuth: true, checkClient: true},
 	}
 
 	if len(routes) != len(expectedRoutes) {
