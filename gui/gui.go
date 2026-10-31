@@ -68,6 +68,10 @@ type UI struct {
 	// NewRelease links to a newer release the server runs, hidden if none.
 	NewRelease *widget.Hyperlink
 
+	// SaveSettings saves the settings entered in File > Settings…, for the
+	// next start. Nil leaves the menu item doing nothing.
+	SaveSettings func(Settings) error
+
 	backlinkButtons *fyne.Container // inside Backlinks
 
 	menu                                         *fyne.MainMenu

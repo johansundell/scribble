@@ -61,6 +61,7 @@ sn import notes.zip    # skips titles that exist; --overwrite replaces them
 
 # GUI (same SCRIBBLE_URL / SCRIBBLE_TOKEN; optional SCRIBBLE_HOTKEY, default Ctrl+Alt+N).
 # Also read from a .env next to the scribble-gui binary; the environment wins.
+# File > Settings… (Ctrl+, / Cmd+,) writes the URL and token to that .env.
 make build-gui
 ./scribble-gui
 ```

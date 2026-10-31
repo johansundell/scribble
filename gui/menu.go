@@ -46,6 +46,9 @@ func (ui *UI) setupMenu() {
 			menuItem("Export notes…", nil, ui.unlessDialog(ui.askExport)),
 			menuItem("Import notes…", nil, ui.unlessDialog(ui.askImport)),
 			fyne.NewMenuItemSeparator(),
+			// On macOS, Fyne moves an item labelled Settings… to the app menu.
+			menuItem("Settings…", ctrl(fyne.KeyComma), ui.unlessDialog(ui.showSettings)),
+			fyne.NewMenuItemSeparator(),
 			quit,
 		),
 		fyne.NewMenu("Edit",
