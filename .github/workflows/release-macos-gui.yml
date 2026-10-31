@@ -1,0 +1,72 @@
+# Builds the macOS desktop app (scribble-gui) for each published release and
+# uploads it to that release (#133). Fyne needs CGO and Apple's toolchain, so
+# it is built natively on macOS runners rather than by `make compile`, which
+# builds the server, sn and the Windows GUI. Run it by hand from the Actions
+# tab to rebuild the app for any tag.
+#
+# Each architecture gets scribble-gui_<tag>_darwin_<arch>.tar.gz, holding
+# scribble-gui.app, and a .sha512 file in the same format as `make dist`.
+
+name: Release macOS GUI
+
+on:
+  release:
+    types: [ published ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build the macOS app for (e.g. v1.0.2)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+
+  macos-gui:
+    strategy:
+      matrix:
+        include:
+        - runner: macos-latest
+          arch: arm64
+        - runner: macos-15-intel
+          arch: amd64
+    runs-on: ${{ matrix.runner }}
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ env.TAG }}
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: 'go.mod'
+
+    - name: Install the Fyne packager
+      run: go install fyne.io/tools/cmd/fyne@v1.7.4
+
+    # fyne package takes the -ldflags out of GOFLAGS and passes them to
+    # go build, so the app reports the release's version.
+    - name: Build scribble-gui.app
+      working-directory: cmd/scribble-gui
+      env:
+        GOFLAGS: -ldflags=-X=main.Version=${{ env.TAG }}
+      run: |
+        "$(go env GOPATH)/bin/fyne" package \
+          --target darwin \
+          --release \
+          --name scribble-gui \
+          --app-id com.johansundell.scribble \
+          --app-version "${TAG#v}" \
+          --icon Icon.png
+
+    - name: Package and upload
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        name="scribble-gui_${TAG}_darwin_${{ matrix.arch }}"
+        tar -czf "$name.tar.gz" -C cmd/scribble-gui scribble-gui.app
+        shasum -a 512 "$name.tar.gz" > "$name.sha512"
+        gh release upload "$TAG" "$name.tar.gz" "$name.sha512" --clobber

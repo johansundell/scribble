@@ -28,6 +28,10 @@ build-cli:
 build-gui:
 	go build -ldflags "-X 'main.Version=$(VERSION)'" -o scribble-gui ./cmd/scribble-gui
 
+# The desktop GUI is released for Windows and macOS only (#133): compile
+# builds the Windows one here, and the "Release macOS GUI" workflow builds the
+# macOS one on a Mac and uploads it to the release. On Linux, build it from
+# source with make build-gui.
 # Fyne's Windows packager embeds only the largest image of an .ico, so
 # cmd/winicon then swaps the exe's icons for every size of icon.ico (#123).
 # fyne-cross gets Icon.png, so fyne.AppMetadata holds the 512px image rather
@@ -49,16 +53,6 @@ compile:
 	-osarch="windows/amd64" \
 	-output "build/scribble_$(VERSION)_{{.OS}}_{{.Arch}}/sn" \
 	./cmd/sn
-	@fyne-cross linux \
-	-arch=amd64 \
-	-env=GOTOOLCHAIN=auto \
-	-app-id=com.johansundell.scribble \
-	-app-version=$(patsubst v%,%,$(VERSION)) \
-	-icon=cmd/scribble-gui/Icon.png \
-	-name=scribble-gui \
-	-ldflags="-X=main.Version=$(VERSION)" \
-	./cmd/scribble-gui
-	@cp fyne-cross/bin/linux-amd64/scribble-gui build/scribble_$(VERSION)_linux_amd64/scribble-gui
 	@fyne-cross windows \
 	-arch=amd64 \
 	-env=GOTOOLCHAIN=auto \

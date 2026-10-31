@@ -14,7 +14,7 @@ The guide assumes this setup, which [`install-vps.md`](install-vps.md) creates o
 
 - A Linux VPS, with `scribble-server` installed in `/opt/scribble` as the systemd service `scribble-server` (`./scribble-server -service install`).
 - nginx in front of scribble, which listens on `127.0.0.1:8082` (as in [`docs/nginx`](nginx/notes.sudde.net.conf)).
-- Releases made with `make release`, which uploads `scribble_<tag>_linux_<arch>.tar.gz` and a `.sha512` file to the GitHub release. The archive holds `scribble-server`, the `scribble` CLI and, on amd64, `scribble-gui`. Only `scribble-server` is installed.
+- Releases made with `make release`, which uploads `scribble_<tag>_linux_<arch>.tar.gz` and a `.sha512` file to the GitHub release. The archive holds `scribble-server` and the `sn` CLI. Only `scribble-server` is installed.
 
 Do the steps in order. Each one ends with a check.
 

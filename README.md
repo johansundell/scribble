@@ -109,10 +109,25 @@ clicking it retries the connection immediately.
 The GUI is built with [Fyne](https://fyne.io), so it needs CGO and a C
 compiler. On Linux it also needs the GL, X11, Wayland and xkbcommon
 development headers (Debian/Ubuntu: `libgl1-mesa-dev xorg-dev libwayland-dev
-libxkbcommon-dev`). `make compile` / `make dist` cross-compiles `scribble-gui`
-for `linux/amd64` and `windows/amd64` in Docker via
-[fyne-cross](https://github.com/fyne-io/fyne-cross) (`make deps` installs it),
-then gives the Windows exe every icon size with `cmd/winicon`.
+libxkbcommon-dev`).
+
+[Releases](https://github.com/johansundell/scribble/releases) have prebuilt
+desktop apps for **Windows** and **macOS** only. Linux releases hold the
+server and the `sn` CLI; on Linux, build the GUI from source with
+`make build-gui`.
+
+- **Windows:** `scribble-gui.exe` is in `scribble_<tag>_windows_amd64.tar.gz`.
+  `make compile` / `make dist` cross-compiles it in Docker via
+  [fyne-cross](https://github.com/fyne-io/fyne-cross) (`make deps` installs
+  it), then gives the exe every icon size with `cmd/winicon`.
+- **macOS:** `scribble-gui.app` is in
+  `scribble-gui_<tag>_darwin_<arm64|amd64>.tar.gz`. The "Release macOS GUI"
+  workflow (`.github/workflows/release-macos-gui.yml`) builds it on GitHub's
+  Mac runners when a release is published and uploads it to the release. The
+  app is not signed, so the first time, open it with right-click → **Open**
+  (or run `xattr -dr com.apple.quarantine scribble-gui.app`). A `.env` for
+  it goes in `scribble-gui.app/Contents/MacOS/`, next to the binary.
+
 You can also cross-compile for Windows directly from Linux with MinGW:
 
 ```sh
