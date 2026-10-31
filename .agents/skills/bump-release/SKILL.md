@@ -13,7 +13,7 @@ Workflow for bumping the application version, committing directly to `master`, a
 2. Working tree must be clean (no uncommitted or untracked changes).
 3. Local `master` must be up to date with `origin/master`.
 4. Release tools installed (`make deps` if `github-release`, `gox` or `fyne-cross` are missing).
-5. Docker running: `make release` cross-compiles `scribble-gui` with `fyne-cross` in Docker and pushes the `johansundell/scribble-server` image (`docker login` first).
+5. Docker running: `make release` cross-compiles the Windows `scribble-gui.exe` with `fyne-cross` in Docker (the macOS app is built and uploaded afterwards by the "Release macOS GUI" workflow) and pushes the `johansundell/scribble-server` image (`docker login` first).
 6. GitHub credentials available for `github-release` (e.g., `GITHUB_TOKEN` environment variable).
 
 ## Quick Execution
