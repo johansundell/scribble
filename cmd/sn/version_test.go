@@ -124,6 +124,10 @@ func TestCmdVersionWithoutServer(t *testing.T) {
 }
 
 func TestHelpAndHintsNameTheSnCommand(t *testing.T) {
+	// An unknown command is only reported once the settings load, so the
+	// test can't depend on the caller's environment.
+	t.Setenv("SCRIBBLE_URL", "http://127.0.0.1:1")
+	t.Setenv("SCRIBBLE_TOKEN", "tok")
 	var out bytes.Buffer
 	if err := runWith(&out, []string{"help"}); err != nil {
 		t.Fatal(err)
