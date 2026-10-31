@@ -23,6 +23,7 @@ const fakeSn = "#!/bin/sh\necho sn v1.2.3\n"
 
 type fakeRelease struct {
 	srv     *httptest.Server
+	script  string // absolute, so tests can change directory
 	badHash bool
 }
 
@@ -38,7 +39,11 @@ func newFakeRelease(t *testing.T) *fakeRelease {
 	archive := tarGz(t, map[string]string{"sn": fakeSn, "scribble-server": "server"})
 	sum := sha512.Sum512(archive)
 
-	f := &fakeRelease{}
+	script, err := filepath.Abs("../../scripts/install-sn.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &fakeRelease{script: script}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/johansundell/scribble/releases/latest", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/johansundell/scribble/releases/tag/v1.2.3", http.StatusFound)
@@ -80,7 +85,7 @@ func tarGz(t *testing.T, files map[string]string) []byte {
 // install runs the script with env on top of a clean environment.
 func (f *fakeRelease) install(t *testing.T, dir string, env []string, args ...string) (string, error) {
 	t.Helper()
-	cmd := exec.Command("sh", append([]string{"../../scripts/install-sn.sh"}, args...)...)
+	cmd := exec.Command("sh", append([]string{f.script}, args...)...)
 	for _, kv := range os.Environ() {
 		if !strings.HasPrefix(kv, "VERSION=") && !strings.HasPrefix(kv, "INSTALL_DIR=") && !strings.HasPrefix(kv, "GITHUB_URL=") {
 			cmd.Env = append(cmd.Env, kv)
@@ -102,8 +107,9 @@ func wantSn(t *testing.T, dir, body string) {
 		t.Errorf("%s holds %q, want %q", p, b, body)
 	}
 	if body == fakeSn {
-		st, _ := os.Stat(p)
-		if st.Mode().Perm() != 0o755 {
+		if st, err := os.Stat(p); err != nil {
+			t.Error(err)
+		} else if st.Mode().Perm() != 0o755 {
 			t.Errorf("%s has mode %v, want 0755", p, st.Mode().Perm())
 		}
 	}
@@ -127,6 +133,19 @@ func TestInstallLatest(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "scribble-server")); err == nil {
 		t.Error("installed more than sn")
 	}
+}
+
+// A relative INSTALL_DIR is relative to where the script was started, not
+// to its temporary directory.
+func TestInstallRelativeDir(t *testing.T) {
+	f := newFakeRelease(t)
+	cwd := t.TempDir()
+	t.Chdir(cwd)
+	out, err := f.install(t, "bin", nil)
+	if err != nil {
+		t.Fatalf("%v:\n%s", err, out)
+	}
+	wantSn(t, filepath.Join(cwd, "bin"), fakeSn)
 }
 
 func TestInstallVersionReplacesSn(t *testing.T) {
@@ -159,7 +178,7 @@ func TestInstallFailsAndKeepsSn(t *testing.T) {
 		args    []string
 		want    string
 	}{
-		{"checksum mismatch", true, nil, ""},
+		{"checksum mismatch", true, nil, "SHA-512"},
 		{"invalid tag", false, []string{"1.2"}, "1.2"},
 		{"invalid tag with suffix", false, []string{"v1.2.3-rc1"}, "v1.2.3-rc1"},
 	} {

@@ -52,12 +52,12 @@ AUTH_TOKEN=change-me PORT=:8080 SQLITE_PATH=./scribble.db go run .
 # /usr/local/bin isn't writable), or build it here with make build-cli
 curl -fsSL https://raw.githubusercontent.com/johansundell/scribble/master/scripts/install-sn.sh | sh
 export SCRIBBLE_URL=http://localhost:8080 SCRIBBLE_TOKEN=change-me
-./sn new "Ideas" "first thought"
-git log --oneline -5 | ./sn append "Work log"
-./sn edit Ideas
-./sn projects            # every #project; `projects <name>` lists its notes
-./sn export              # every note as <title>.md in scribble-notes-YYYY-MM-DD.zip
-./sn import notes.zip    # skips titles that exist; --overwrite replaces them
+sn new "Ideas" "first thought"
+git log --oneline -5 | sn append "Work log"
+sn edit Ideas
+sn projects            # every #project; `projects <name>` lists its notes
+sn export              # every note as <title>.md in scribble-notes-YYYY-MM-DD.zip
+sn import notes.zip    # skips titles that exist; --overwrite replaces them
 
 # GUI (same SCRIBBLE_URL / SCRIBBLE_TOKEN; optional SCRIBBLE_HOTKEY, default Ctrl+Alt+N).
 # Also read from a .env next to the scribble-gui binary; the environment wins.
