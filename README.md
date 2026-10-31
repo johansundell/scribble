@@ -110,7 +110,9 @@ compiler. On Linux it also needs the GL, X11, Wayland and xkbcommon
 development headers (Debian/Ubuntu: `libgl1-mesa-dev xorg-dev libwayland-dev
 libxkbcommon-dev`). `make compile` / `make dist` cross-compiles `scribble-gui`
 for `linux/amd64` and `windows/amd64` in Docker via
-[fyne-cross](https://github.com/fyne-io/fyne-cross) (`make deps` installs it).
+[fyne-cross](https://github.com/fyne-io/fyne-cross), then gives the Windows
+exe every icon size with [go-winres](https://github.com/tc-hib/go-winres)
+(`make deps` installs both).
 You can also cross-compile for Windows directly from Linux with MinGW:
 
 ```sh

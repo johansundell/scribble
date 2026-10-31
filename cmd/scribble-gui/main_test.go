@@ -185,8 +185,9 @@ func TestIconICOIsTheAppIcon(t *testing.T) {
 	}
 }
 
-// icoSizes reads the image sizes from an ICO directory. A width or height
-// byte of 0 means 256.
+// icoSizes reads the image sizes from an ICO directory: a 6-byte header
+// holding the image count, then a 16-byte entry per image that starts with
+// its width and height bytes. A width or height of 0 means 256.
 func icoSizes(t *testing.T, ico []byte) []int {
 	t.Helper()
 	if len(ico) < 6 {
@@ -222,7 +223,7 @@ func TestIconICOHasEverySize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []int{16, 24, 32, 48, 64, 128, 256}
+	want := []int{16, 24, 32, 48, 64, 128, 256} // as rendered by make icons
 	if got := icoSizes(t, ico); !slices.Equal(got, want) {
 		t.Errorf("icon.ico sizes = %v, want %v", got, want)
 	}
