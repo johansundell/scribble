@@ -50,7 +50,7 @@ func main() {
 		ver = "v" + a.Metadata().Version
 	}
 	gui.Version = ver
-	w := a.NewWindow("Scribble " + ver)
+	w := newWindow(a, "Scribble "+ver)
 	w.Resize(fyne.NewSize(1000, 700))
 
 	token := os.Getenv("SCRIBBLE_TOKEN")
@@ -105,6 +105,14 @@ func newApp(readEnv func() error, create func() fyne.App) (fyne.App, error) {
 	a := create()
 	a.SetIcon(fyne.NewStaticResource("Icon.png", iconPNG))
 	return a, err
+}
+
+// newWindow creates the main window with the app icon set on it directly,
+// so taskbars, docks and task switchers show it on every platform.
+func newWindow(a fyne.App, title string) fyne.Window {
+	w := a.NewWindow(title)
+	w.SetIcon(a.Icon())
+	return w
 }
 
 // loadEnvNextToExecutable is loadEnv for the directory scribble-gui runs

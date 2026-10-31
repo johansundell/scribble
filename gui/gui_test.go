@@ -11,6 +11,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/gin-gonic/gin"
 	"github.com/johansundell/scribble/client"
@@ -1417,5 +1418,44 @@ func TestHotkeyEventOpensFocusedNewNoteEditor(t *testing.T) {
 	}
 	if !ui.Editor.Visible() || w.Canvas().Focused() != ui.Editor {
 		t.Fatal("hotkey should open and focus the new-note editor")
+	}
+}
+
+// iconApp is the current app with an icon, which the test app drops.
+type iconApp struct {
+	fyne.App
+	icon fyne.Resource
+}
+
+func (a *iconApp) Icon() fyne.Resource { return a.icon }
+
+func TestSystemTrayShowsTheAppIcon(t *testing.T) {
+	c := newServer(t)
+	ui, _ := openWithSpy(t, c)
+	icon := fyne.NewStaticResource("Icon.png", []byte("png"))
+	prev := fyne.CurrentApp()
+	fyne.SetCurrentApp(&iconApp{App: prev, icon: icon})
+	t.Cleanup(func() { fyne.SetCurrentApp(prev) })
+
+	tray := &fakeTray{}
+	ui.SetupTray(tray)
+
+	if tray.icon != icon {
+		t.Errorf("tray icon = %v, want the app icon", tray.icon)
+	}
+}
+
+func TestSystemTrayFallsBackToDocumentIconWithoutAppIcon(t *testing.T) {
+	c := newServer(t)
+	ui, _ := openWithSpy(t, c)
+	if fyne.CurrentApp().Icon() != nil {
+		t.Fatal("test app unexpectedly has an icon")
+	}
+
+	tray := &fakeTray{}
+	ui.SetupTray(tray)
+
+	if tray.icon != theme.DocumentIcon() {
+		t.Errorf("tray icon = %v, want the document icon", tray.icon)
 	}
 }

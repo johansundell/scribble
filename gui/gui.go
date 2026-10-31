@@ -170,12 +170,20 @@ func (ui *UI) SetupTray(desk desktop.App) {
 		fyne.NewMenuItemSeparator(),
 		quit,
 	)
-	desk.SetSystemTrayIcon(theme.DocumentIcon())
+	desk.SetSystemTrayIcon(trayIcon())
 	desk.SetSystemTrayMenu(menu)
 	desk.SetSystemTrayWindow(ui.w)
 	// SetSystemTrayWindow replaces the window's close intercept with w.Hide;
 	// restore ui.Close so ui.Close() and the window's close button share one path.
 	ui.w.SetCloseIntercept(ui.Close)
+}
+
+// trayIcon is the app icon, or the document icon when the app has none.
+func trayIcon() fyne.Resource {
+	if icon := fyne.CurrentApp().Icon(); icon != nil {
+		return icon
+	}
+	return theme.DocumentIcon()
 }
 
 func (ui *UI) showWindow() {
