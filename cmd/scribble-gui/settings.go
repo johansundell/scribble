@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"maps"
 	"os"
@@ -26,15 +27,24 @@ func saveSettings(path string, s gui.Settings) error {
 	return nil
 }
 
+// envOverrides marks the settings set in this process's environment. Call
+// it before loading the .env file, which sets the rest.
+func envOverrides() gui.Overridden {
+	_, url := os.LookupEnv("SCRIBBLE_URL")
+	_, token := os.LookupEnv("SCRIBBLE_TOKEN")
+	return gui.Overridden{URL: url, Token: token}
+}
+
 // setupScreen is the window's content while scribble-gui cannot reach a
 // server yet: msg, and a Settings… button that opens the Settings dialog
-// filled in with current. Once save succeeds it calls saved.
-func setupScreen(w fyne.Window, msg string, current gui.Settings, save func(gui.Settings) error, saved func()) fyne.CanvasObject {
+// filled in with current, marked as overridden says. Once save succeeds it
+// calls saved.
+func setupScreen(w fyne.Window, msg string, current gui.Settings, overridden gui.Overridden, save func(gui.Settings) error, saved func()) fyne.CanvasObject {
 	label := widget.NewLabel(msg)
 	label.Wrapping = fyne.TextWrapWord
 	return container.NewVBox(label, container.NewHBox(
 		widget.NewButton("Settings…", func() {
-			gui.ShowSettings(w, current, func(s gui.Settings) error {
+			gui.ShowSettings(w, current, overridden, func(s gui.Settings) error {
 				if err := save(s); err != nil {
 					return err
 				}
@@ -48,10 +58,26 @@ func setupScreen(w fyne.Window, msg string, current gui.Settings, save func(gui.
 // writeEnv sets the variables in set in the .env file at path, creating it
 // if missing. A variable already there is changed where it is; one that is
 // not is added at the end. Every other line, comments included, is kept.
+// A file godotenv cannot read is first copied to path.bak, in case the
+// edit loses something in it. The new file replaces the old in one step,
+// so a crash midway leaves one or the other, never half of each.
 func writeEnv(path string, set map[string]string) error {
 	raw, err := os.ReadFile(path)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
+	}
+	// A new file holds the token, so only the user may read it; an
+	// existing one keeps its mode.
+	mode := fs.FileMode(0o600)
+	if err == nil {
+		if info, err := os.Stat(path); err == nil {
+			mode = info.Mode().Perm()
+		}
+		if _, err := godotenv.UnmarshalBytes(raw); err != nil {
+			if err := os.WriteFile(path+".bak", raw, 0o600); err != nil {
+				return fmt.Errorf("cannot back up the .env file it cannot read: %w", err)
+			}
+		}
 	}
 
 	var lines []string
@@ -76,9 +102,33 @@ func writeEnv(path string, set map[string]string) error {
 			out = append(out, envLine(key, set[key]))
 		}
 	}
-	// A new file holds the token, so only the user may read it; an
-	// existing one keeps its mode.
-	return os.WriteFile(path, []byte(strings.Join(out, "\n")+"\n"), 0o600)
+	return replaceFile(path, []byte(strings.Join(out, "\n")+"\n"), mode)
+}
+
+// replaceFile writes data to a file next to path, then renames it to path.
+func replaceFile(path string, data []byte, mode fs.FileMode) error {
+	tmp := fmt.Sprintf("%s.tmp.%d", path, os.Getpid())
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(data)
+	if err == nil {
+		err = f.Chmod(mode) // OpenFile's mode is cut by the umask
+	}
+	if err == nil {
+		err = f.Sync()
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Rename(tmp, path)
+	}
+	if err != nil {
+		os.Remove(tmp)
+	}
+	return err
 }
 
 // envKey is the variable a .env line sets, if it sets one.

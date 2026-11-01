@@ -17,9 +17,15 @@ type Settings struct {
 	Token string // the server's AUTH_TOKEN
 }
 
+// Overridden marks the settings scribble-gui's environment set when it
+// started. Those win over the .env file Settings saves to (#137).
+type Overridden struct{ URL, Token bool }
+
 // ShowSettings opens the Settings dialog over w, filled in with current.
-// Save calls save with what was entered and shows any error it returns.
-func ShowSettings(w fyne.Window, current Settings, save func(Settings) error) {
+// A field set in the environment says so, as overridden marks, but can still
+// be changed for the .env file. Save calls save with what was entered and
+// shows any error it returns.
+func ShowSettings(w fyne.Window, current Settings, overridden Overridden, save func(Settings) error) {
 	addr := widget.NewEntry()
 	addr.SetText(current.URL)
 	addr.Validator = validateServerURL
@@ -31,11 +37,16 @@ func ShowSettings(w fyne.Window, current Settings, save func(Settings) error) {
 		}
 		return nil
 	}
+	addrItem := widget.NewFormItem("Server URL", addr)
+	if overridden.URL {
+		addrItem.HintText = overrideHint("SCRIBBLE_URL")
+	}
+	tokenItem := widget.NewFormItem("Auth token", token)
+	if overridden.Token {
+		tokenItem.HintText = overrideHint("SCRIBBLE_TOKEN")
+	}
 	d := dialog.NewForm("Settings", "Save", "Cancel",
-		[]*widget.FormItem{
-			widget.NewFormItem("Server URL", addr),
-			widget.NewFormItem("Auth token", token),
-		},
+		[]*widget.FormItem{addrItem, tokenItem},
 		func(ok bool) {
 			s := Settings{URL: strings.TrimSpace(addr.Text), Token: strings.TrimSpace(token.Text)}
 			if !ok {
@@ -48,6 +59,12 @@ func ShowSettings(w fyne.Window, current Settings, save func(Settings) error) {
 	d.Resize(fyne.NewSize(450, d.MinSize().Height))
 	d.Show()
 	w.Canvas().Focus(addr)
+}
+
+// overrideHint is the note under a field whose variable name is set in the
+// environment.
+func overrideHint(name string) string {
+	return name + " is set in the environment, which wins over what is saved here"
 }
 
 // validateServerURL accepts an http or https address with a host.
@@ -66,7 +83,7 @@ func (ui *UI) showSettings() {
 		return
 	}
 	current := Settings{URL: ui.c.BaseURL, Token: ui.c.Token}
-	ShowSettings(ui.w, current, func(s Settings) error {
+	ShowSettings(ui.w, current, ui.Overridden, func(s Settings) error {
 		if s == current {
 			return nil
 		}

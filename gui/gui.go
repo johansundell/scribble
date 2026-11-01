@@ -72,6 +72,9 @@ type UI struct {
 	// SaveSettings saves the settings entered in File > Settings…, for the
 	// next start. Nil leaves the menu item doing nothing.
 	SaveSettings func(Settings) error
+	// Overridden marks the settings the environment set, for File >
+	// Settings… to say so.
+	Overridden Overridden
 
 	backlinkButtons *fyne.Container // inside Backlinks
 

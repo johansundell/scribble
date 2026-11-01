@@ -128,7 +128,7 @@ func TestSetupScreenOffersSettings(t *testing.T) {
 	w := test.NewTempWindow(t, nil)
 	var saved gui.Settings
 	started := false
-	w.SetContent(setupScreen(w, "SCRIBBLE_TOKEN is not set.", gui.Settings{URL: "https://notes.sudde.net"},
+	w.SetContent(setupScreen(w, "SCRIBBLE_TOKEN is not set.", gui.Settings{URL: "https://notes.sudde.net"}, gui.Overridden{},
 		func(s gui.Settings) error { saved = s; return nil },
 		func() { started = true }))
 	w.Resize(fyne.NewSize(600, 400))
@@ -162,5 +162,89 @@ func TestSetupScreenOffersSettings(t *testing.T) {
 
 	if saved != (gui.Settings{URL: "https://notes.sudde.net", Token: "tok"}) || !started {
 		t.Errorf("saved %v, started %v; want the settings saved and the app started", saved, started)
+	}
+}
+
+func TestWriteEnvReplacesTheFileInOneStep(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".env")
+	if err := os.WriteFile(path, []byte("SCRIBBLE_TOKEN=old\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	// A hard link keeps the old file: written in place, it would change too.
+	if err := os.Link(path, filepath.Join(dir, "old")); err != nil {
+		t.Skip("no hard links here:", err)
+	}
+
+	if err := writeEnv(path, map[string]string{"SCRIBBLE_TOKEN": "new"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if old, _ := os.ReadFile(filepath.Join(dir, "old")); string(old) != "SCRIBBLE_TOKEN=old\n" {
+		t.Errorf("the .env was written in place, not replaced: the old file now holds %q", old)
+	}
+	if got := readEnvFile(t, path)["SCRIBBLE_TOKEN"]; got != "new" {
+		t.Errorf("SCRIBBLE_TOKEN = %q, want new", got)
+	}
+	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o640 {
+		t.Errorf("the replaced .env has mode %v, want the old file's 0640", info.Mode().Perm())
+	}
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 2 {
+		var names []string
+		for _, e := range entries {
+			names = append(names, e.Name())
+		}
+		t.Errorf("the folder holds %v, want only .env and old", names)
+	}
+}
+
+func TestWriteEnvBacksUpAFileItCannotRead(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".env")
+	broken := "FYNE_THEME=dark\nSCRIBBLE_TOKEN=\"unterminated\n"
+	if err := os.WriteFile(path, []byte(broken), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := writeEnv(path, map[string]string{"SCRIBBLE_URL": "https://notes.example"}); err != nil {
+		t.Fatal(err)
+	}
+
+	bak, err := os.ReadFile(path + ".bak")
+	if err != nil || string(bak) != broken {
+		t.Errorf(".env.bak holds %q (%v), want the broken file as it was", bak, err)
+	}
+	if info, err := os.Stat(path + ".bak"); err == nil && info.Mode().Perm()&0o077 != 0 {
+		t.Errorf(".env.bak has mode %v, want it private to the user", info.Mode().Perm())
+	}
+}
+
+func TestWriteEnvMakesNoBackupOfAGoodFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(path, []byte("FYNE_THEME=dark\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := writeEnv(path, map[string]string{"SCRIBBLE_TOKEN": "t"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(path + ".bak"); err == nil {
+		t.Error("a .env.bak was made of a file that reads fine")
+	}
+}
+
+func TestEnvOverridesSeesVariablesSetInTheEnvironment(t *testing.T) {
+	t.Setenv("SCRIBBLE_URL", "https://notes.example")
+	t.Setenv("SCRIBBLE_TOKEN", "")
+	os.Unsetenv("SCRIBBLE_TOKEN")
+
+	if got := envOverrides(); got != (gui.Overridden{URL: true}) {
+		t.Errorf("envOverrides() = %+v, want only the URL", got)
+	}
+
+	t.Setenv("SCRIBBLE_TOKEN", "") // set, even if empty: .env cannot change it
+	if got := envOverrides(); got != (gui.Overridden{URL: true, Token: true}) {
+		t.Errorf("envOverrides() = %+v, want both", got)
 	}
 }
