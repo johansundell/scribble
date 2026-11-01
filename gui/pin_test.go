@@ -10,28 +10,28 @@ import (
 	"github.com/johansundell/scribble/gui"
 )
 
-// row is a note list row: it takes left clicks and has a context menu.
-type row interface {
+// clickableRow is a note list row: it takes left clicks and has a context
+// menu. See noteRow for why it must take both.
+type clickableRow interface {
 	fyne.CanvasObject
 	fyne.Tappable
 	fyne.SecondaryTappable
 }
 
 // listRow is the note list's row showing text: the widget around its label,
-// which has the row's context menu. Fyne hands a click to the innermost
-// widget that takes clicks of either kind, so the row must take both.
-func listRow(t *testing.T, ui *gui.UI, text string) row {
+// which has the row's context menu.
+func listRow(t *testing.T, ui *gui.UI, text string) clickableRow {
 	t.Helper()
-	var r fyne.SecondaryTappable
+	var row fyne.SecondaryTappable
 	for _, o := range test.LaidOutObjects(ui.List) {
-		if s, ok := o.(fyne.SecondaryTappable); ok {
-			r = s
+		if r, ok := o.(fyne.SecondaryTappable); ok {
+			row = r
 		}
 		if l, ok := o.(*widget.Label); ok && l.Visible() && l.Text == text {
-			if r == nil {
+			if row == nil {
 				t.Fatalf("the row %q has no context menu", text)
 			}
-			both, ok := r.(row)
+			both, ok := row.(clickableRow)
 			if !ok {
 				t.Fatalf("the row %q takes no left click", text)
 			}
@@ -42,9 +42,9 @@ func listRow(t *testing.T, ui *gui.UI, text string) row {
 	return nil
 }
 
-// #155: the row's context menu made Fyne hand it left clicks too, which it
-// dropped. Fyne's test driver picks only left-click widgets, so it can't
-// show that; listRow checks the row takes both instead.
+// Fyne's test driver, unlike the real one, never hands left clicks to a
+// row with a context menu, so it can't show #155; listRow checks the row
+// takes them instead.
 func TestClickingAListRowOpensTheNoteAndFocusesTheList(t *testing.T) {
 	c := newServer(t)
 	create(t, c, "# Groceries\nmilk")
