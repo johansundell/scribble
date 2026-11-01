@@ -237,3 +237,18 @@ func TestEditOpsRunBackwards(t *testing.T) {
 		}
 	}
 }
+
+func TestInsertNoteLink(t *testing.T) {
+	for _, c := range []struct{ name, in, want string }{
+		{"no selection", "see ‸ now", "see [[Recipes]]‸ now"},
+		{"selection", "see «recipes» now", "see [[Recipes]]‸ now"},
+		{"multibyte", "å«ä»ö", "å[[Recipes]]‸ö"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			text, start, end := parseState(t, c.in)
+			if got := after(text, insertNoteLink(start, end, "Recipes")); got != c.want {
+				t.Fatalf("got %q, want %q", got, c.want)
+			}
+		})
+	}
+}
