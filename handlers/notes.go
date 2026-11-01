@@ -233,6 +233,44 @@ func (h *Handler) RenameNote(c *gin.Context) error {
 	return nil
 }
 
+// pinRequest is the POST /notes/:id/pin body, which may be left out:
+// without Pinned the pin is toggled.
+type pinRequest struct {
+	Pinned *bool `json:"pinned"`
+}
+
+// PinNote handles POST /notes/:id/pin (#140): it pins or unpins the note,
+// or toggles it without a body, and answers with the note.
+func (h *Handler) PinNote(c *gin.Context) error {
+	ns, err := h.noteStore()
+	if err != nil {
+		return err
+	}
+	id, err := noteID(c)
+	if err != nil {
+		return err
+	}
+	var req pinRequest
+	if err := bindJSON(c, &req); err != nil && !errors.Is(err, io.EOF) {
+		return err
+	}
+	ctx := c.Request.Context()
+	if req.Pinned == nil {
+		cur, err := ns.GetNote(ctx, id)
+		if err != nil {
+			return noteError(err)
+		}
+		toggled := !cur.Pinned
+		req.Pinned = &toggled
+	}
+	n, err := ns.PinNote(ctx, id, *req.Pinned)
+	if err != nil {
+		return noteError(err)
+	}
+	c.JSON(http.StatusOK, n)
+	return nil
+}
+
 // NoteChanges handles GET /changes?since=N for sync: every note (deleted
 // ones flagged) that changed after sequence N.
 func (h *Handler) NoteChanges(c *gin.Context) error {

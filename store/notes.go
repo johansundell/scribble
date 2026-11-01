@@ -47,6 +47,11 @@ type NoteStore interface {
 	// it. An expired token is replaced. Sharing is not an edit: revision
 	// and seq stay.
 	ShareNote(ctx context.Context, id int64, expires *time.Time) (string, error)
+	// PinNote pins or unpins a live note and returns it. A change takes the
+	// next seq, so synced clients learn of it, but is not an edit: revision,
+	// updated_at and history stay. Setting the state it already has changes
+	// nothing.
+	PinNote(ctx context.Context, id int64, pinned bool) (*notes.Note, error)
 	// UnshareNote clears the token, so its link stops working.
 	UnshareNote(ctx context.Context, id int64) error
 	// NoteShare returns the note's live share link, or the zero Share when
@@ -70,7 +75,10 @@ type NoteStore interface {
 	UndeleteNote(ctx context.Context, id int64) (*notes.Note, error)
 }
 
-const noteCols = `id, title, body, revision, seq, deleted, created_at, updated_at`
+const noteCols = `id, title, body, revision, seq, deleted, created_at, updated_at, pinned`
+
+// liveOrder is how live notes are listed: pinned first, then newest first.
+const liveOrder = ` ORDER BY pinned DESC, updated_at DESC, id DESC`
 
 // nextSeq is the global change counter: every write takes the next number.
 const nextSeq = `(SELECT COALESCE(MAX(seq), 0) + 1 FROM notes)`
@@ -93,15 +101,15 @@ func (f scanFunc) Scan(dest ...any) error { return f(dest...) }
 
 func scanNote(r rowScanner) (*notes.Note, error) {
 	var n notes.Note
-	var del int
+	var del, pinned int
 	var created, updated string
-	if err := r.Scan(&n.ID, &n.Title, &n.Body, &n.Revision, &n.Seq, &del, &created, &updated); err != nil {
+	if err := r.Scan(&n.ID, &n.Title, &n.Body, &n.Revision, &n.Seq, &del, &created, &updated, &pinned); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNoteNotFound
 		}
 		return nil, err
 	}
-	n.Deleted = del == 1
+	n.Deleted, n.Pinned = del == 1, pinned == 1
 	n.CreatedAt, _ = time.Parse(sqliteTimeLayout, created)
 	n.UpdatedAt, _ = time.Parse(sqliteTimeLayout, updated)
 	return &n, nil
@@ -213,7 +221,7 @@ func (s *SQLStore) ListNotes(ctx context.Context, q, project string) ([]notes.No
 		query += ` AND body LIKE ? ESCAPE '\'`
 		args = append(args, "%#"+escapeLike(project)+"%")
 	}
-	query += ` ORDER BY updated_at DESC, id DESC`
+	query += liveOrder
 	list, err := queryNotes(ctx, s.db, query, args...)
 	if err != nil || project == "" {
 		return list, err
@@ -392,6 +400,26 @@ func (s *SQLStore) RenameNote(ctx context.Context, id int64, newTitle string) (*
 		return nil, err
 	}
 	return renamed, tx.Commit()
+}
+
+func (s *SQLStore) PinNote(ctx context.Context, id int64, pinned bool) (*notes.Note, error) {
+	if err := s.checkNotes(); err != nil {
+		return nil, err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `UPDATE notes SET pinned = ?, seq = `+nextSeq+`
+		WHERE id = ? AND deleted = 0 AND pinned <> ?`, pinned, id, pinned); err != nil {
+		return nil, err
+	}
+	n, err := getNote(ctx, tx, id)
+	if err != nil {
+		return nil, err
+	}
+	return n, tx.Commit()
 }
 
 // newShareToken returns 128 random bits as hex.

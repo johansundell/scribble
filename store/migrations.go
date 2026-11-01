@@ -101,6 +101,14 @@ CREATE TABLE replica_pending_results (
 		name: "share_expires_at",
 		sql:  `ALTER TABLE notes ADD COLUMN share_expires_at TEXT;`,
 	},
+	{
+		// Pinned notes are listed first (#140).
+		name: "pinned",
+		sql: `
+ALTER TABLE notes ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX notes_pinned ON notes(pinned, updated_at DESC);
+`,
+	},
 }
 
 // migrate applies the migrations the database's user_version has not yet

@@ -260,3 +260,50 @@ Fresh note</note-content></text></note>`
 	}
 }
 
+
+func TestCmdPin(t *testing.T) {
+	ctx := context.Background()
+	c := newClient(t)
+	for _, body := range []string{"# Plans\nx", "# Bugs\ny"} {
+		if _, err := c.Create(ctx, body); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run := func(args ...string) string {
+		t.Helper()
+		var out bytes.Buffer
+		if err := cmdPin(ctx, c, &out, args[0] == "pin", args[1:]); err != nil {
+			t.Fatalf("%v: %v", args, err)
+		}
+		return out.String()
+	}
+	ls := func() string {
+		t.Helper()
+		list, err := c.List(ctx, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		printList(&out, list)
+		return out.String()
+	}
+
+	if got := run("pin", "plans"); got != "pinned \"Plans\"\n" {
+		t.Errorf("pin printed %q", got)
+	}
+	if got, want := ls(), "📌 Plans\nBugs\n"; got != want {
+		t.Errorf("ls after pin = %q, want %q", got, want)
+	}
+	if got := run("unpin", "Plans"); got != "unpinned \"Plans\"\n" {
+		t.Errorf("unpin printed %q", got)
+	}
+	if got, want := ls(), "Bugs\nPlans\n"; got != want {
+		t.Errorf("ls after unpin = %q, want %q", got, want)
+	}
+	if err := cmdPin(ctx, c, &bytes.Buffer{}, true, []string{"nope"}); err == nil {
+		t.Error("pinning a missing note should fail")
+	}
+	if err := cmdPin(ctx, c, &bytes.Buffer{}, true, nil); err == nil {
+		t.Error("pin without a title should be refused")
+	}
+}

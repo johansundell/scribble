@@ -588,3 +588,33 @@ func TestTooOldClientKeepsTheEditQueued(t *testing.T) {
 		t.Fatalf("pending %+v, %v; want it still queued on disk", e, ok)
 	}
 }
+
+func TestPinnedNotesAreListedFirst(t *testing.T) {
+	ctx := context.Background()
+	c, _ := newServer(t)
+	g := create(t, c, "# Groceries\nmilk")
+	create(t, c, "# Ideas\nfly")
+	s := open(t, "")
+	syncNow(t, s, c)
+	assertTitles(t, s.List("", ""), "Ideas", "Groceries")
+
+	if _, err := c.Pin(ctx, g.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	syncNow(t, s, c)
+	assertTitles(t, s.List("", ""), "Groceries", "Ideas")
+
+	// A queued edit of another note doesn't jump the pin.
+	ideas, _ := s.ByTitle("Ideas")
+	if _, err := s.Queue(ideas.ID, "# Ideas\nfly higher", ideas.Revision); err != nil {
+		t.Fatal(err)
+	}
+	assertTitles(t, s.List("", ""), "Groceries", "Ideas")
+	// A queued edit of the pinned note keeps its pin.
+	if _, err := s.Queue(g.ID, "# Groceries\neggs", 0); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := s.Get(g.ID); !n.Pinned {
+		t.Errorf("queued edit lost the pin: %+v", n)
+	}
+}

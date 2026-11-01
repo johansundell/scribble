@@ -360,8 +360,8 @@ func (s *Store) get(id int64) (notes.Note, bool) {
 	return n, ok
 }
 
-// all returns every note as it reads locally, newest first like the server
-// lists them. Callers hold s.mu.
+// all returns every note as it reads locally, pinned first and then newest
+// first, like the server lists them. Callers hold s.mu.
 func (s *Store) all() []notes.Note {
 	out := make([]notes.Note, 0, len(s.notes)+len(s.edits))
 	for id := range s.notes {
@@ -375,6 +375,12 @@ func (s *Store) all() []notes.Note {
 		}
 	}
 	slices.SortFunc(out, func(a, b notes.Note) int {
+		if a.Pinned != b.Pinned {
+			if a.Pinned {
+				return -1
+			}
+			return 1
+		}
 		if c := b.UpdatedAt.Compare(a.UpdatedAt); c != 0 {
 			return c
 		}
@@ -383,7 +389,7 @@ func (s *Store) all() []notes.Note {
 	return out
 }
 
-// List returns the notes, newest first, narrowed like the server's
+// List returns the notes, pinned first and then newest first, narrowed like the server's
 // GET /notes: q matches titles and bodies case-insensitively and project
 // keeps the notes tagged #project.
 func (s *Store) List(project, q string) []notes.Note {

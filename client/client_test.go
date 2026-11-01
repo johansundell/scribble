@@ -270,3 +270,25 @@ func TestClientShareRefusedWithTheWebAppOff(t *testing.T) {
 		t.Fatalf("want sharing-off, got %v", err)
 	}
 }
+
+func TestClientPin(t *testing.T) {
+	ctx := context.Background()
+	c := newClient(t)
+	a, _ := c.Create(ctx, "# Alpha")
+	c.Create(ctx, "# Beta")
+
+	n, err := c.Pin(ctx, a.ID, true)
+	if err != nil || !n.Pinned {
+		t.Fatalf("Pin: %v %+v", err, n)
+	}
+	list, _ := c.List(ctx, "")
+	if len(list) != 2 || list[0].ID != a.ID || !list[0].Pinned {
+		t.Errorf("pinned note not first: %+v", list)
+	}
+	if n, err = c.Pin(ctx, a.ID, false); err != nil || n.Pinned {
+		t.Errorf("unpin: %v %+v", err, n)
+	}
+	if _, err := c.Pin(ctx, 999, true); !client.IsNotFound(err) {
+		t.Errorf("pin missing note: want not found, got %v", err)
+	}
+}

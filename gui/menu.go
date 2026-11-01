@@ -26,6 +26,7 @@ func (ui *UI) setupMenu() {
 	ui.renameItem = menuItem("Rename…", &desktop.CustomShortcut{KeyName: fyne.KeyF2}, ui.whenEnabled(ui.Rename, ui.askRename))
 	ui.deleteItem = menuItem("Delete…", nil, ui.whenEnabled(ui.Delete, ui.confirmDelete))
 	ui.shareItem = menuItem("Share note…", nil, ui.whenEnabled(ui.Share, ui.showShare))
+	ui.pinItem = menuItem("Pin note", nil, ui.unlessDialog(ui.togglePinCurrent))
 	ui.toggleItem = menuItem("Edit note", ctrl(fyne.KeyE), ui.whenEnabled(ui.EditToggle, ui.toggleMode))
 	// Our own Quit asks about unsaved changes; with it last, Fyne adds none.
 	quit := menuItem("Quit", ctrl(fyne.KeyQ), ui.quit)
@@ -42,6 +43,7 @@ func (ui *UI) setupMenu() {
 			ui.saveItem,
 			fyne.NewMenuItemSeparator(),
 			ui.shareItem,
+			ui.pinItem,
 			ui.renameItem,
 			ui.deleteItem,
 			fyne.NewMenuItemSeparator(),
@@ -199,6 +201,14 @@ func (ui *UI) updateMenu() {
 	}
 	if label := ui.EditToggle.Text + " note"; ui.toggleItem.Label != label {
 		ui.toggleItem.Label = label
+		changed = true
+	}
+	pinLabel, pinOff := "Pin note", true
+	if ui.isSaved() {
+		pinLabel, pinOff = pinLabelOf(*ui.current), !ui.canPin(ui.current.ID)
+	}
+	if ui.pinItem.Label != pinLabel || ui.pinItem.Disabled != pinOff {
+		ui.pinItem.Label, ui.pinItem.Disabled = pinLabel, pinOff
 		changed = true
 	}
 	if changed {

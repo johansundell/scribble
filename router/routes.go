@@ -47,6 +47,7 @@ func GetRoutes(handler *handlers.Handler) Routes {
 		Route{Name: "UpdateNote", Method: "PUT", Pattern: "/notes/:id", HandlerFunc: handler.UpdateNote, UseAuth: true, CheckClient: true},
 		Route{Name: "DeleteNote", Method: "DELETE", Pattern: "/notes/:id", HandlerFunc: handler.DeleteNote, UseAuth: true, CheckClient: true},
 		Route{Name: "NoteBacklinks", Method: "GET", Pattern: "/notes/:id/backlinks", HandlerFunc: handler.NoteBacklinks, UseAuth: true, CheckClient: true},
+		Route{Name: "PinNote", Method: "POST", Pattern: "/notes/:id/pin", HandlerFunc: handler.PinNote, UseAuth: true, CheckClient: true},
 		Route{Name: "RenameNote", Method: "POST", Pattern: "/notes/:id/rename", HandlerFunc: handler.RenameNote, UseAuth: true, CheckClient: true},
 		// Share links (#142, ADR 11); POST answers 501 while the web app,
 		// which serves the links, is off.
@@ -83,6 +84,7 @@ func GetRoutes(handler *handlers.Handler) Routes {
 		Route{Name: "AppDelete", Method: "POST", Pattern: handlers.NotePrefix + ":id/delete", HandlerFunc: handler.AppDelete, Web: true, UseSession: true},
 		Route{Name: "AppShareForm", Method: "GET", Pattern: handlers.NotePrefix + ":id/share", HandlerFunc: handler.AppShareForm, Web: true, UseSession: true},
 		Route{Name: "AppShare", Method: "POST", Pattern: handlers.NotePrefix + ":id/share", HandlerFunc: handler.AppShare, Web: true, UseSession: true},
+		Route{Name: "AppPin", Method: "POST", Pattern: handlers.NotePrefix + ":id/pin", HandlerFunc: handler.AppPin, Web: true, UseSession: true},
 		Route{Name: "AppHistory", Method: "GET", Pattern: handlers.NotePrefix + ":id/history", HandlerFunc: handler.AppHistory, Web: true, UseSession: true},
 		Route{Name: "AppRestore", Method: "POST", Pattern: handlers.NotePrefix + ":id/history", HandlerFunc: handler.AppRestore, Web: true, UseSession: true},
 		Route{Name: "AppExport", Method: "GET", Pattern: handlers.ExportPath, HandlerFunc: handler.ExportNotes, Web: true, UseSession: true},

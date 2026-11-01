@@ -23,12 +23,15 @@ import (
 // clients: it is the first non-empty line of Body, with leading '#' and
 // spaces removed.
 type Note struct {
-	ID        int64     `json:"id"`
-	Title     string    `json:"title"`
-	Body      string    `json:"body"`
-	Revision  int64     `json:"revision"` // per-note edit counter, for conflict detection
-	Seq       int64     `json:"seq"`      // global change counter, for sync
-	Deleted   bool      `json:"deleted,omitempty"`
+	ID       int64  `json:"id"`
+	Title    string `json:"title"`
+	Body     string `json:"body"`
+	Revision int64  `json:"revision"` // per-note edit counter, for conflict detection
+	Seq      int64  `json:"seq"`      // global change counter, for sync
+	Deleted  bool   `json:"deleted,omitempty"`
+	// Pinned notes are listed before the others (#140). Pinning changes
+	// Seq but not Revision or UpdatedAt.
+	Pinned    bool      `json:"pinned,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

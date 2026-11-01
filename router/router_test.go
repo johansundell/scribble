@@ -216,6 +216,8 @@ func TestGetRoutes(t *testing.T) {
 		"DeleteNote":    {method: "DELETE", pattern: "/notes/:id", useLogger: false, useAuth: true, checkClient: true},
 		"NoteBacklinks": {method: "GET", pattern: "/notes/:id/backlinks", useLogger: false, useAuth: true, checkClient: true},
 		"RenameNote":    {method: "POST", pattern: "/notes/:id/rename", useLogger: false, useAuth: true, checkClient: true},
+		"AppPin":        {method: "POST", pattern: "/note/:id/pin", web: true, useSession: true},
+		"PinNote":       {method: "POST", pattern: "/notes/:id/pin", useLogger: false, useAuth: true, checkClient: true},
 		"NoteChanges":   {method: "GET", pattern: "/changes", useLogger: false, useAuth: true, checkClient: true},
 		"ListProjects":  {method: "GET", pattern: "/projects", useLogger: false, useAuth: true, checkClient: true},
 		// Note history (#55): the same rules.

@@ -25,7 +25,8 @@ a note, the list otherwise. */}}
 			{{- if .Notes}}
 			<ul>
 				{{- range .Notes}}
-				<li><a href="{{notePath .ID}}{{$filter}}"{{if eq .ID $open}} aria-current="page"{{end}}>{{.Title}}</a></li>
+				<li><a href="{{notePath .ID}}{{$filter}}"{{if eq .ID $open}} aria-current="page"{{end}}>{{.Title}}
+					{{- if .Pinned}}<span class="pin-badge" role="img" aria-label="Pinned" title="Pinned">📌</span>{{end}}</a></li>
 				{{- end}}
 			</ul>
 			{{- else if .Filtered}}
@@ -47,13 +48,18 @@ a note, the list otherwise. */}}
 			<span class="note-bar-title">{{.Title}}</span>
 			{{- if and .Note (not .Message)}}
 			{{/* Without JavaScript, Delete opens a page that asks first; note.js
-			asks with confirm() and posts. Share, Rename and Delete are under ⋯
-			on phones, a <details> so it opens without JavaScript. New is for
-			phones only, where the list and its New are hidden (#125). */}}
+			asks with confirm() and posts. Pin, Share, Rename and Delete are under
+			⋯ on phones, a <details> so it opens without JavaScript. New is for
+			phones only, where the list and its New are hidden (#125). Pin note
+			is a form, since it changes the note (#140). */}}
 			<div class="note-actions">
 				<a class="button phone-only" href="/new{{.Filter}}" data-filtered="note-new">New</a>
 				<a class="button" href="{{editPath .Note.ID}}{{.Filter}}" data-filtered="edit" data-shortcut="edit">Edit</a>
 				<a class="button wide-only" href="{{historyPath .Note.ID}}{{.Filter}}" data-filtered="history">History (r{{.Note.Revision}})</a>
+				<form method="post" action="{{pinPath .Note.ID}}{{.Filter}}" class="pin-form wide-only" data-filtered="pin">
+					<input type="hidden" name="pinned" value="{{not .Note.Pinned}}" />
+					<button type="submit" class="button">{{if .Note.Pinned}}Unpin note{{else}}Pin note{{end}}</button>
+				</form>
 				<a class="button wide-only" href="{{sharePath .Note.ID}}{{.Filter}}" data-filtered="share">Share</a>
 				<a class="button wide-only" href="{{renamePath .Note.ID}}{{.Filter}}" data-filtered="rename" data-shortcut="rename">Rename</a>
 				<a class="button danger wide-only" href="{{deletePath .Note.ID}}{{.Filter}}" data-filtered="delete" data-confirm="{{deleteQuestion .Note.Title}}">Delete</a>
@@ -61,6 +67,10 @@ a note, the list otherwise. */}}
 					<summary class="button" aria-label="More actions">⋯</summary>
 					<div class="more-items">
 						<a class="button" href="{{historyPath .Note.ID}}{{.Filter}}" data-filtered="history-more">History (r{{.Note.Revision}})</a>
+						<form method="post" action="{{pinPath .Note.ID}}{{.Filter}}" class="pin-form" data-filtered="pin-more">
+							<input type="hidden" name="pinned" value="{{not .Note.Pinned}}" />
+							<button type="submit" class="button">{{if .Note.Pinned}}Unpin note{{else}}Pin note{{end}}</button>
+						</form>
 						<a class="button" href="{{sharePath .Note.ID}}{{.Filter}}" data-filtered="share-more">Share</a>
 						<a class="button" href="{{renamePath .Note.ID}}{{.Filter}}" data-filtered="rename-more">Rename</a>
 						<a class="button danger" href="{{deletePath .Note.ID}}{{.Filter}}" data-filtered="delete-more" data-confirm="{{deleteQuestion .Note.Title}}">Delete</a>
