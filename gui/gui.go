@@ -111,7 +111,7 @@ func New(w fyne.Window, c *client.Client, store *offline.Store) *UI {
 	ui.List = &NoteList{ui: ui, List: widget.List{
 		Length:     func() int { return len(ui.notes) },
 		CreateItem: func() fyne.CanvasObject { return newNoteRow(ui) },
-		UpdateItem: func(i widget.ListItemID, o fyne.CanvasObject) { o.(*noteRow).show(ui.notes[i]) },
+		UpdateItem: func(i widget.ListItemID, o fyne.CanvasObject) { o.(*noteRow).show(i, ui.notes[i]) },
 	}}
 	ui.List.ExtendBaseWidget(ui.List)
 	ui.List.OnSelected = func(i widget.ListItemID) {

@@ -10,24 +10,60 @@ import (
 	"github.com/johansundell/scribble/gui"
 )
 
+// row is a note list row: it takes left clicks and has a context menu.
+type row interface {
+	fyne.CanvasObject
+	fyne.Tappable
+	fyne.SecondaryTappable
+}
+
 // listRow is the note list's row showing text: the widget around its label,
-// which has the row's context menu.
-func listRow(t *testing.T, ui *gui.UI, text string) fyne.SecondaryTappable {
+// which has the row's context menu. Fyne hands a click to the innermost
+// widget that takes clicks of either kind, so the row must take both.
+func listRow(t *testing.T, ui *gui.UI, text string) row {
 	t.Helper()
-	var row fyne.SecondaryTappable
+	var r fyne.SecondaryTappable
 	for _, o := range test.LaidOutObjects(ui.List) {
-		if r, ok := o.(fyne.SecondaryTappable); ok {
-			row = r
+		if s, ok := o.(fyne.SecondaryTappable); ok {
+			r = s
 		}
 		if l, ok := o.(*widget.Label); ok && l.Visible() && l.Text == text {
-			if row == nil {
+			if r == nil {
 				t.Fatalf("the row %q has no context menu", text)
 			}
-			return row
+			both, ok := r.(row)
+			if !ok {
+				t.Fatalf("the row %q takes no left click", text)
+			}
+			return both
 		}
 	}
 	t.Fatalf("the list shows no row %q (shows %q)", text, listTitles(ui))
 	return nil
+}
+
+// #155: the row's context menu made Fyne hand it left clicks too, which it
+// dropped. Fyne's test driver picks only left-click widgets, so it can't
+// show that; listRow checks the row takes both instead.
+func TestClickingAListRowOpensTheNoteAndFocusesTheList(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Groceries\nmilk")
+	create(t, c, "# Ideas\nfly")
+	ui, w := open(t, c)
+
+	test.Tap(listRow(t, ui, "Groceries"))
+	if ui.Editor.Text != "# Groceries\nmilk" {
+		t.Fatalf("clicking Groceries opened %q", ui.Editor.Text)
+	}
+	// So F2 and the arrow keys reach the list.
+	if w.Canvas().Focused() != ui.List {
+		t.Fatalf("clicking a note focused %T, not the list", w.Canvas().Focused())
+	}
+
+	test.Tap(listRow(t, ui, "Ideas"))
+	if ui.Editor.Text != "# Ideas\nfly" {
+		t.Fatalf("clicking Ideas opened %q", ui.Editor.Text)
+	}
 }
 
 func TestPinFromTheFileMenu(t *testing.T) {
