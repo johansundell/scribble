@@ -7,8 +7,10 @@ import (
 	"slices"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/johansundell/scribble/auth"
 	"github.com/johansundell/scribble/client"
 	"github.com/johansundell/scribble/handlers"
 	"github.com/johansundell/scribble/router"
@@ -197,5 +199,82 @@ func TestServerURLDefaultsToNotesSuddeNet(t *testing.T) {
 	t.Setenv("SCRIBBLE_URL", "http://notes:8080")
 	if got, want := client.ServerURL(), "http://notes:8080"; got != want {
 		t.Errorf("set: got %q, want %q", got, want)
+	}
+}
+
+// newSharingClient is newClient with the web app on, which serves share
+// links.
+func newSharingClient(t *testing.T) *client.Client {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	s, err := store.NewSQLite(filepath.Join(t.TempDir(), "c.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	a, err := auth.New(auth.Config{PIN: "246813", Secret: []byte("0123456789abcdef0123456789abcdef"), SessionTTL: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := handlers.NewHandler(s, false, fstest.MapFS{}, "test", "dev", handlers.WithAuth(a))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := router.NewRouter(router.Config{
+		Handler: h, Auth: a, LogSink: discardSink{}, Settings: types.AppSettings{AuthToken: "tok"},
+		Assets: fstest.MapFS{}, Version: "dev",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+	return client.New(srv.URL, "tok")
+}
+
+func TestClientShare(t *testing.T) {
+	ctx := context.Background()
+	c := newSharingClient(t)
+	n, err := c.Create(ctx, "# Ideas\nfirst")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if sh, err := c.GetShare(ctx, n.ID); err != nil || sh.Token != "" || sh.URL != "" {
+		t.Fatalf("private note: %+v %v", sh, err)
+	}
+	sh, err := c.ShareNote(ctx, n.ID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sh.Token) != 32 || sh.URL != c.BaseURL+"/s/"+sh.Token || sh.ExpiresAt != nil {
+		t.Fatalf("ShareNote: %+v", sh)
+	}
+	if got, err := c.GetShare(ctx, n.ID); err != nil || got.Token != sh.Token || got.URL != sh.URL {
+		t.Fatalf("GetShare: %+v %v", got, err)
+	}
+	if exp, err := c.ShareNote(ctx, n.ID, "7d"); err != nil || exp.Token != sh.Token || exp.ExpiresAt == nil {
+		t.Fatalf("ShareNote 7d: %+v %v", exp, err)
+	}
+	if err := c.UnshareNote(ctx, n.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := c.GetShare(ctx, n.ID); err != nil || got.Token != "" {
+		t.Fatalf("after UnshareNote: %+v %v", got, err)
+	}
+	if _, err := c.ShareNote(ctx, 999, ""); !client.IsNotFound(err) {
+		t.Fatalf("missing note: want not-found, got %v", err)
+	}
+}
+
+func TestClientShareRefusedWithTheWebAppOff(t *testing.T) {
+	ctx := context.Background()
+	c := newClient(t)
+	n, err := c.Create(ctx, "# Ideas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.ShareNote(ctx, n.ID, ""); !client.IsSharingOff(err) {
+		t.Fatalf("want sharing-off, got %v", err)
 	}
 }

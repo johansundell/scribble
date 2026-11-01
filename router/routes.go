@@ -48,6 +48,11 @@ func GetRoutes(handler *handlers.Handler) Routes {
 		Route{Name: "DeleteNote", Method: "DELETE", Pattern: "/notes/:id", HandlerFunc: handler.DeleteNote, UseAuth: true, CheckClient: true},
 		Route{Name: "NoteBacklinks", Method: "GET", Pattern: "/notes/:id/backlinks", HandlerFunc: handler.NoteBacklinks, UseAuth: true, CheckClient: true},
 		Route{Name: "RenameNote", Method: "POST", Pattern: "/notes/:id/rename", HandlerFunc: handler.RenameNote, UseAuth: true, CheckClient: true},
+		// Share links (#142, ADR 11); POST answers 501 while the web app,
+		// which serves the links, is off.
+		Route{Name: "GetShare", Method: "GET", Pattern: "/notes/:id/share", HandlerFunc: handler.GetShare, UseAuth: true, CheckClient: true},
+		Route{Name: "ShareNote", Method: "POST", Pattern: "/notes/:id/share", HandlerFunc: handler.ShareNote, UseAuth: true, CheckClient: true},
+		Route{Name: "UnshareNote", Method: "DELETE", Pattern: "/notes/:id/share", HandlerFunc: handler.UnshareNote, UseAuth: true, CheckClient: true},
 		Route{Name: "NoteChanges", Method: "GET", Pattern: "/changes", HandlerFunc: handler.NoteChanges, UseAuth: true, CheckClient: true},
 		Route{Name: "ListProjects", Method: "GET", Pattern: "/projects", HandlerFunc: handler.ListProjects, UseAuth: true, CheckClient: true},
 		// Note history (#55, ADR 7). gin matches the static /notes/deleted

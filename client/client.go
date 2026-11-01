@@ -24,7 +24,7 @@ import (
 // APILevel is the server API level this client is written for. The CLI and
 // the GUI share it. Raise it with the server's when the client starts using
 // what a new level adds (ADR 8).
-const APILevel = 1
+const APILevel = 4
 
 // ReleasesURL is where the latest release can be downloaded.
 const ReleasesURL = "https://github.com/johansundell/scribble/releases/latest"
@@ -85,6 +85,10 @@ func IsNotFound(err error) bool     { return hasStatus(err, http.StatusNotFound)
 func IsTitleTaken(err error) bool   { return hasStatus(err, http.StatusConflict) }
 func IsStale(err error) bool        { return hasStatus(err, http.StatusPreconditionFailed) }
 func IsUnauthorized(err error) bool { return hasStatus(err, http.StatusUnauthorized) }
+
+// IsSharingOff reports whether the server refused to share a note because
+// its web app, which serves the links, is off (501).
+func IsSharingOff(err error) bool { return hasStatus(err, http.StatusNotImplemented) }
 
 // IsUpgradeRequired reports whether the server refused this client as too
 // old for its API (426).
@@ -219,6 +223,33 @@ func (c *Client) Rename(ctx context.Context, id int64, title string) (*notes.Not
 		return nil, err
 	}
 	return &n, nil
+}
+
+// Share is a note's public share link (#142): the zero Share while the
+// note is private. ExpiresAt is nil for a link that never expires.
+type Share struct {
+	Token     string     `json:"token"`
+	URL       string     `json:"url"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+}
+
+// GetShare returns note id's live share link, or the zero Share.
+func (c *Client) GetShare(ctx context.Context, id int64) (Share, error) {
+	var sh Share
+	return sh, c.do(ctx, "GET", notePath(id, "/share"), nil, nil, &sh)
+}
+
+// ShareNote gives note id a public link, keeping its live one. ttl is how
+// long it works: "1h", "1d", "7d", "30d", or "" for never. The server
+// refuses while its web app is off (see IsSharingOff).
+func (c *Client) ShareNote(ctx context.Context, id int64, ttl string) (Share, error) {
+	var sh Share
+	return sh, c.do(ctx, "POST", notePath(id, "/share"), nil, map[string]string{"ttl": ttl}, &sh)
+}
+
+// UnshareNote revokes note id's public link.
+func (c *Client) UnshareNote(ctx context.Context, id int64) error {
+	return c.do(ctx, "DELETE", notePath(id, "/share"), nil, nil, nil)
 }
 
 // Changes returns everything modified after sequence number since (deleted

@@ -10,7 +10,7 @@ create and update notes over an HTTP API.
   Runs as a system service or in Docker.
 - **CLI** (`cmd/sn`): `sn new / show / edit / append / ls / search / ...`
 - **Desktop GUI** (`cmd/scribble-gui`): Fyne app to browse, search, view
-  (rendered Markdown), edit, create, rename and delete notes. `[[links]]` are
+  (rendered Markdown), edit, create, rename, delete and share notes. `[[links]]` are
   clickable, and each note shows the notes that link to it. It keeps a copy
   of the notes on disk, so it starts instantly and keeps working while the
   server is unreachable.
@@ -168,7 +168,7 @@ FileMaker the `"schema"` key is left out.
 ### API level and old clients
 
 Every response carries `X-Version` (the release, such as `v0.0.12`) and
-`X-Scribble-API` (the API level, an integer; 3 since export and import). The policy
+`X-Scribble-API` (the API level, an integer; 4 since share links over the API). The policy
 ([ADR 8](docs/adr/0008-api-level-and-minimum-client-level.md)):
 
 - **The API only grows.** Adding endpoints or fields raises the API level by
@@ -209,6 +209,9 @@ available".
 | DELETE | `/notes/:id` | 204; leaves a tombstone |
 | GET | `/notes/:id/backlinks` | notes containing `[[Title]]` for this note |
 | POST | `/notes/:id/rename` | `{"title": "New"}`; rewrites `[[links]]` in other notes in one transaction |
+| GET | `/notes/:id/share` | the note's live [share link](#web-app): `{"token": "…", "url": "https://…/s/<token>", "expires_at": "…"}` (`expires_at` left out for never); empty `token` and `url` while the note is private |
+| POST | `/notes/:id/share` | shares the note, keeping a live link's token, and returns the link as for `GET`. Optional `{"ttl": "1h"}` (`1h`, `1d`, `7d`, `30d`, `never`; default never). **501** while the web app is off (`WEB_PIN` unset), since it serves the links |
+| DELETE | `/notes/:id/share` | 204; revokes the link, which answers 404 at once |
 | GET | `/changes?since=N` | everything changed after seq N (deleted ones flagged) plus `latest_seq` to use next time |
 | GET | `/notes/:id/versions` | the note's kept versions, newest first, without bodies: `revision, title, reason, deleted, created_at, updated_at`. Works for deleted notes too |
 | GET | `/notes/:id/versions/:rev` | one version with its `body`. **404** if that revision wasn't kept |
@@ -310,7 +313,10 @@ The server refuses to start if the PIN isn't 6–12 digits, or if
   of the web app: with `WEB_PIN` unset they answer 404. Deleting a note
   revokes its link. (#83) A link can expire in 1 hour, 1 day, 7 days or 30
   days, or never (the default); the pane and the public page show when, and
-  an expired link answers 404 like a revoked one. (#145)
+  an expired link answers 404 like a revoked one. (#145) The desktop app
+  has the same in its **Share** button and File → Share note…: Create
+  public link, Copy link, a QR code and Revoke link. Its links never
+  expire. (#142)
 - **History:** a note shows its revision and how many changes its history
   keeps ("Revision 4 (3 edits)"), and **History (r4)** opens the note's
   kept versions ([ADR 7](docs/adr/0007-note-history.md)), newest first, each

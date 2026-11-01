@@ -55,12 +55,14 @@ func (ui *UI) setConnected() {
 	ui.ConnDot.FillColor = theme.SuccessColor()
 	ui.ConnDot.Refresh()
 	ui.ConnLabel.SetText("Connected")
+	ui.updateButtons() // Share needs the server
 }
 
 func (ui *UI) setOffline() {
 	ui.ConnDot.FillColor = theme.ErrorColor()
 	ui.ConnDot.Refresh()
 	ui.ConnLabel.SetText("Offline")
+	ui.updateButtons()
 }
 
 func (ui *UI) retrySync() {

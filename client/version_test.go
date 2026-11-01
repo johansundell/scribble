@@ -24,7 +24,7 @@ func TestClientSaysWhoItIs(t *testing.T) {
 	c.Name, c.Version, c.APILevel = "gui", "", 7
 	c.List(context.Background(), "")
 
-	want := []string{"cli/1 v0.0.9", "gui/7 dev"}
+	want := []string{"cli/4 v0.0.9", "gui/7 dev"}
 	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
 		t.Errorf("X-Scribble-Client = %q, want %q", got, want)
 	}

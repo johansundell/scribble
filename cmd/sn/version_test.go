@@ -12,6 +12,7 @@ import (
 	"testing/fstest"
 
 	"github.com/gin-gonic/gin"
+	"github.com/johansundell/scribble/client"
 	"github.com/johansundell/scribble/handlers"
 	"github.com/johansundell/scribble/router"
 	"github.com/johansundell/scribble/store"
@@ -60,7 +61,7 @@ func setVersion(t *testing.T, v string) {
 }
 
 func TestTooOldCLIPrintsTheUpgradeMessage(t *testing.T) {
-	serveVersion(t, "v0.1.0", 2)
+	serveVersion(t, "v0.1.0", client.APILevel+1)
 	setVersion(t, "v0.0.9")
 
 	err := runWith(&bytes.Buffer{}, []string{"ls"})
@@ -87,17 +88,17 @@ func TestCmdVersion(t *testing.T) {
 		want                 string
 	}{
 		{"update available", "v0.0.9", "v0.0.12",
-			"client v0.0.9 (API level 1)\nserver v0.0.12 (API level 2, schema 5)\nupdate available: https://github.com/johansundell/scribble/releases/latest\n" +
+			"client v0.0.9 (API level 4)\nserver v0.0.12 (API level 2, schema 5)\nupdate available: https://github.com/johansundell/scribble/releases/latest\n" +
 				installLine(runtime.GOOS)},
 		{"up to date", "v0.0.12", "v0.0.12",
-			"client v0.0.12 (API level 1)\nserver v0.0.12 (API level 2, schema 5)\n"},
+			"client v0.0.12 (API level 4)\nserver v0.0.12 (API level 2, schema 5)\n"},
 		{"dev build never compares", "dev", "v0.0.12",
-			"client dev (API level 1)\nserver v0.0.12 (API level 2, schema 5)\n"},
+			"client dev (API level 4)\nserver v0.0.12 (API level 2, schema 5)\n"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Too old as well: version still answers.
-			serveVersion(t, tc.server, 2)
+			serveVersion(t, tc.server, client.APILevel+1)
 			setVersion(t, tc.client)
 			var out bytes.Buffer
 			if err := runWith(&out, []string{"version"}); err != nil {
@@ -125,7 +126,7 @@ func TestCmdVersionWithoutSchema(t *testing.T) {
 	if err := runWith(&out, []string{"version"}); err != nil {
 		t.Fatal(err)
 	}
-	if want := "client v0.0.12 (API level 1)\nserver v0.0.12 (API level 2)\n"; out.String() != want {
+	if want := "client v0.0.12 (API level 4)\nserver v0.0.12 (API level 2)\n"; out.String() != want {
 		t.Errorf("printed %q, want %q", out.String(), want)
 	}
 }
@@ -139,7 +140,7 @@ func TestCmdVersionWithoutServer(t *testing.T) {
 	if err := runWith(&out, []string{"version"}); err == nil {
 		t.Error("want an error when the server cannot be reached")
 	}
-	if want := "client v0.0.9 (API level 1)\n"; out.String() != want {
+	if want := "client v0.0.9 (API level 4)\n"; out.String() != want {
 		t.Errorf("printed %q, want %q", out.String(), want)
 	}
 }

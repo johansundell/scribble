@@ -10,12 +10,14 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/gin-gonic/gin"
+	"github.com/johansundell/scribble/auth"
 	"github.com/johansundell/scribble/client"
 	"github.com/johansundell/scribble/gui"
 	"github.com/johansundell/scribble/handlers"
@@ -35,18 +37,39 @@ func (discardSink) Enqueue(types.UsageLog) {}
 // a client for it.
 func newServer(t *testing.T) *client.Client {
 	t.Helper()
+	return startServer(t, nil)
+}
+
+// newSharingServer is newServer with the web app on, which serves share
+// links.
+func newSharingServer(t *testing.T) *client.Client {
+	t.Helper()
+	a, err := auth.New(auth.Config{PIN: "246813", Secret: []byte("0123456789abcdef0123456789abcdef"), SessionTTL: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return startServer(t, a)
+}
+
+// startServer starts the server, with the web app on when a is not nil.
+func startServer(t *testing.T, a *auth.Authenticator) *client.Client {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
 	s, err := store.NewSQLite(filepath.Join(t.TempDir(), "gui.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	h, err := handlers.NewHandler(s, false, fstest.MapFS{}, "test", "dev")
+	var opts []handlers.Option
+	if a != nil {
+		opts = append(opts, handlers.WithAuth(a))
+	}
+	h, err := handlers.NewHandler(s, false, fstest.MapFS{}, "test", "dev", opts...)
 	if err != nil {
 		t.Fatal(err)
 	}
 	r, err := router.NewRouter(router.Config{
-		Handler: h, LogSink: discardSink{}, Settings: types.AppSettings{AuthToken: "tok"},
+		Handler: h, Auth: a, LogSink: discardSink{}, Settings: types.AppSettings{AuthToken: "tok"},
 		Assets: fstest.MapFS{}, Version: "dev",
 	})
 	if err != nil {
