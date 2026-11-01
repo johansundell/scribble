@@ -50,6 +50,7 @@ type UI struct {
 	NewNote    *widget.Button
 	Rename     *widget.Button // retitles the open note and the [[links]] to it
 	Delete     *widget.Button
+	Share      *widget.Button // opens the open note's Share dialog (#142)
 
 	// Backlinks is the "Linked from" panel: a button per note that links to
 	// the open one, hidden when there are none.
@@ -74,9 +75,9 @@ type UI struct {
 
 	backlinkButtons *fyne.Container // inside Backlinks
 
-	menu                                         *fyne.MainMenu
-	saveItem, renameItem, deleteItem, toggleItem *fyne.MenuItem // greyed out like their toolbar buttons
-	lastFocus                                    editable       // the text field or viewer that had focus last, nil if another widget did
+	menu                                                    *fyne.MainMenu
+	saveItem, renameItem, deleteItem, toggleItem, shareItem *fyne.MenuItem // greyed out like their toolbar buttons
+	lastFocus                                               editable       // the text field or viewer that had focus last, nil if another widget did
 
 	w       fyne.Window
 	c       *client.Client
@@ -132,6 +133,7 @@ func New(w fyne.Window, c *client.Client, store *offline.Store) *UI {
 	ui.NewNote = widget.NewButton("New", func() { ui.unlessUnsaved(ui.startNote) })
 	ui.Rename = widget.NewButton("Rename", ui.askRename)
 	ui.Delete = widget.NewButton("Delete", ui.confirmDelete)
+	ui.Share = widget.NewButton("Share", ui.showShare)
 	ui.Status = widget.NewLabel("")
 	ui.Status.Wrapping = fyne.TextWrapWord
 	ui.ConnStatus = newConnStatus(ui)
@@ -142,7 +144,7 @@ func New(w fyne.Window, c *client.Client, store *offline.Store) *UI {
 		container.NewHScroll(ui.backlinkButtons))
 	ui.Backlinks.Hide()
 
-	toolbar := container.NewHBox(ui.NewNote, ui.EditToggle, ui.Save, layout.NewSpacer(), ui.Rename, ui.Delete)
+	toolbar := container.NewHBox(ui.NewNote, ui.EditToggle, ui.Save, layout.NewSpacer(), ui.Share, ui.Rename, ui.Delete)
 	split := container.NewHSplit(
 		container.NewBorder(container.NewVBox(ui.Project, ui.Search), nil, nil, nil, ui.List),
 		container.NewBorder(toolbar, ui.Backlinks, nil, nil,
@@ -513,6 +515,7 @@ func (ui *UI) updateButtons() {
 	// or queued edits stale.
 	setEnabled(ui.Rename, writable && ui.onServer() && !ui.hasUnsavedChanges())
 	setEnabled(ui.Delete, writable && ui.isSaved())
+	setEnabled(ui.Share, ui.canShare())
 	ui.updateMenu()
 }
 
@@ -923,13 +926,26 @@ func (ui *UI) selectCurrent() {
 
 // reportOnline is report for an action only the server can do.
 func (ui *UI) reportOnline(err error) bool {
-	if client.IsUnreachable(err) {
+	if err == nil {
+		return false
+	}
+	ui.Status.SetText(ui.serverTrouble(err, "The server is unreachable. Renaming, deleting, sharing and overwriting a note, and exporting and importing notes, need it; try again when it is back."))
+	return true
+}
+
+// serverTrouble notes what err from an action only the server can do says
+// about the server, marking the app offline or too old for it, and says
+// what went wrong: ifUnreachable when the server could not be reached.
+func (ui *UI) serverTrouble(err error, ifUnreachable string) string {
+	switch {
+	case client.IsUnreachable(err):
 		ui.offline = true
 		ui.setOffline()
-		ui.Status.SetText("The server is unreachable. Renaming, deleting and overwriting a note, and exporting and importing notes, need it; try again when it is back.")
-		return true
+		return ifUnreachable
+	case client.IsUpgradeRequired(err):
+		ui.setOutdated()
 	}
-	return ui.report(err)
+	return explain(err)
 }
 
 // report shows err in the status line and reports whether there was one.

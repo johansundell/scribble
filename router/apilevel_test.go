@@ -40,20 +40,20 @@ func TestAPILevelHeaderOnEveryResponse(t *testing.T) {
 	for _, path := range []string{"/", "/healthz", "/notes", "/nope", "/assets/x"} {
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
-		if got := w.Header().Get("X-Scribble-API"); got != "3" {
-			t.Errorf("%s: X-Scribble-API = %q, want the default level 3", path, got)
+		if got := w.Header().Get("X-Scribble-API"); got != "4" {
+			t.Errorf("%s: X-Scribble-API = %q, want the default level 4", path, got)
 		}
 	}
 
-	r = newLevelRouter(t, 4, 0, &testLogger{})
+	r = newLevelRouter(t, 7, 0, &testLogger{})
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/healthz", nil)
 	req.Header.Set("Accept", "application/json")
 	r.ServeHTTP(w, req)
-	if got := w.Header().Get("X-Scribble-API"); got != "4" {
-		t.Errorf("X-Scribble-API = %q, want 4", got)
+	if got := w.Header().Get("X-Scribble-API"); got != "7" {
+		t.Errorf("X-Scribble-API = %q, want 7", got)
 	}
-	if !strings.Contains(w.Body.String(), `"api":4`) {
+	if !strings.Contains(w.Body.String(), `"api":7`) {
 		t.Errorf("/healthz JSON lacks the API level: %s", w.Body.String())
 	}
 }

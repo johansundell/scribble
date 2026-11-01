@@ -193,7 +193,7 @@ func TestWeb_OffWithoutPIN(t *testing.T) {
 		t.Errorf("/healthz = %d", w.Code)
 	}
 	// This store has no schema version, so the page leaves it out.
-	if body := w.Body.String(); !strings.Contains(body, "API level 3\n") || strings.Contains(body, "schema") {
+	if body := w.Body.String(); !strings.Contains(body, "API level 4\n") || strings.Contains(body, "schema") {
 		t.Errorf("/healthz wants the API level without a schema version:\n%s", body)
 	}
 }

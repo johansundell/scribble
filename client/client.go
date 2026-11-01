@@ -24,7 +24,7 @@ import (
 // APILevel is the server API level this client is written for. The CLI and
 // the GUI share it. Raise it with the server's when the client starts using
 // what a new level adds (ADR 8).
-const APILevel = 1
+const APILevel = 4
 
 // ReleasesURL is where the latest release can be downloaded.
 const ReleasesURL = "https://github.com/johansundell/scribble/releases/latest"
@@ -85,6 +85,10 @@ func IsNotFound(err error) bool     { return hasStatus(err, http.StatusNotFound)
 func IsTitleTaken(err error) bool   { return hasStatus(err, http.StatusConflict) }
 func IsStale(err error) bool        { return hasStatus(err, http.StatusPreconditionFailed) }
 func IsUnauthorized(err error) bool { return hasStatus(err, http.StatusUnauthorized) }
+
+// IsSharingOff reports whether the server refused to share a note because
+// its web app, which serves the links, is off (501).
+func IsSharingOff(err error) bool { return hasStatus(err, http.StatusNotImplemented) }
 
 // IsUpgradeRequired reports whether the server refused this client as too
 // old for its API (426).
@@ -219,6 +223,25 @@ func (c *Client) Rename(ctx context.Context, id int64, title string) (*notes.Not
 		return nil, err
 	}
 	return &n, nil
+}
+
+// GetShare returns note id's live share link (#142), or the zero Share
+// while it is private.
+func (c *Client) GetShare(ctx context.Context, id int64) (notes.Share, error) {
+	var sh notes.Share
+	return sh, c.do(ctx, "GET", notePath(id, "/share"), nil, nil, &sh)
+}
+
+// ShareNote gives note id a public link that never expires, keeping its
+// live one. The server refuses while its web app is off (see IsSharingOff).
+func (c *Client) ShareNote(ctx context.Context, id int64) (notes.Share, error) {
+	var sh notes.Share
+	return sh, c.do(ctx, "POST", notePath(id, "/share"), nil, nil, &sh)
+}
+
+// UnshareNote revokes note id's public link.
+func (c *Client) UnshareNote(ctx context.Context, id int64) error {
+	return c.do(ctx, "DELETE", notePath(id, "/share"), nil, nil, nil)
 }
 
 // Changes returns everything modified after sequence number since (deleted

@@ -25,6 +25,7 @@ func (ui *UI) setupMenu() {
 	ui.saveItem = menuItem("Save", ctrl(fyne.KeyS), ui.whenEnabled(ui.Save, ui.saveAndKeepEditing))
 	ui.renameItem = menuItem("Rename…", &desktop.CustomShortcut{KeyName: fyne.KeyF2}, ui.whenEnabled(ui.Rename, ui.askRename))
 	ui.deleteItem = menuItem("Delete…", nil, ui.whenEnabled(ui.Delete, ui.confirmDelete))
+	ui.shareItem = menuItem("Share note…", nil, ui.whenEnabled(ui.Share, ui.showShare))
 	ui.toggleItem = menuItem("Edit note", ctrl(fyne.KeyE), ui.whenEnabled(ui.EditToggle, ui.toggleMode))
 	// Our own Quit asks about unsaved changes; with it last, Fyne adds none.
 	quit := menuItem("Quit", ctrl(fyne.KeyQ), ui.quit)
@@ -40,6 +41,7 @@ func (ui *UI) setupMenu() {
 			menuItem("New note", ctrl(fyne.KeyN), ui.OpenNewNote),
 			ui.saveItem,
 			fyne.NewMenuItemSeparator(),
+			ui.shareItem,
 			ui.renameItem,
 			ui.deleteItem,
 			fyne.NewMenuItemSeparator(),
@@ -188,6 +190,7 @@ func (ui *UI) updateMenu() {
 	changed := false
 	for item, b := range map[*fyne.MenuItem]*widget.Button{
 		ui.saveItem: ui.Save, ui.renameItem: ui.Rename, ui.deleteItem: ui.Delete, ui.toggleItem: ui.EditToggle,
+		ui.shareItem: ui.Share,
 	} {
 		if item.Disabled != b.Disabled() {
 			item.Disabled = b.Disabled()

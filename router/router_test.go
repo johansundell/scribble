@@ -227,6 +227,10 @@ func TestGetRoutes(t *testing.T) {
 		// Export and import (#117): the same rules.
 		"ExportNotes": {method: "GET", pattern: "/export", useAuth: true, checkClient: true},
 		"ImportNotes": {method: "POST", pattern: "/import", useAuth: true, checkClient: true},
+		// Share links over the API (#142): the same rules.
+		"GetShare":    {method: "GET", pattern: "/notes/:id/share", useAuth: true, checkClient: true},
+		"ShareNote":   {method: "POST", pattern: "/notes/:id/share", useAuth: true, checkClient: true},
+		"UnshareNote": {method: "DELETE", pattern: "/notes/:id/share", useAuth: true, checkClient: true},
 	}
 
 	if len(routes) != len(expectedRoutes) {
