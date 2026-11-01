@@ -42,15 +42,19 @@ type NoteStore interface {
 	NoteBacklinks(ctx context.Context, id int64) ([]notes.Note, error)
 	// RenameNote changes the title and rewrites [[links]] in other notes.
 	RenameNote(ctx context.Context, id int64, newTitle string) (*notes.Note, error)
-	// ShareNote gives the note a public share link token, keeping the one
-	// it has, and returns it. Sharing is not an edit: revision and seq stay.
-	ShareNote(ctx context.Context, id int64) (string, error)
+	// ShareNote gives the note a public share link token, keeping a live
+	// one, sets when it stops working (expires, nil for never) and returns
+	// it. An expired token is replaced. Sharing is not an edit: revision
+	// and seq stay.
+	ShareNote(ctx context.Context, id int64, expires *time.Time) (string, error)
 	// UnshareNote clears the token, so its link stops working.
 	UnshareNote(ctx context.Context, id int64) error
-	// NoteShareToken returns the note's token, or "" when it isn't shared.
-	NoteShareToken(ctx context.Context, id int64) (string, error)
-	// GetSharedNote returns the live note with token, or ErrNoteNotFound.
-	GetSharedNote(ctx context.Context, token string) (*notes.Note, error)
+	// NoteShare returns the note's live share link, or the zero Share when
+	// it isn't shared or its link has expired.
+	NoteShare(ctx context.Context, id int64) (Share, error)
+	// GetSharedNote returns the live note with an unexpired token and when
+	// the link expires (nil for never), or ErrNoteNotFound.
+	GetSharedNote(ctx context.Context, token string) (*notes.Note, *time.Time, error)
 
 	// History (#55, ADR 7). Every write above records a version.
 	// NoteVersions lists note id's versions, newest first, without bodies.
@@ -80,6 +84,12 @@ type dbx interface {
 }
 
 type rowScanner interface{ Scan(...any) error }
+
+// scanFunc lets a function stand in for a row, e.g. to scan extra columns
+// after the ones scanNote reads.
+type scanFunc func(...any) error
+
+func (f scanFunc) Scan(dest ...any) error { return f(dest...) }
 
 func scanNote(r rowScanner) (*notes.Note, error) {
 	var n notes.Note
@@ -308,7 +318,7 @@ func (s *SQLStore) DeleteNote(ctx context.Context, id int64) error {
 
 func (s *SQLStore) deleteNote(ctx context.Context, x dbx, id int64) error {
 	now := time.Now()
-	res, err := x.ExecContext(ctx, `UPDATE notes SET deleted = 1, share_token = NULL, revision = revision + 1,
+	res, err := x.ExecContext(ctx, `UPDATE notes SET deleted = 1, share_token = NULL, share_expires_at = NULL, revision = revision + 1,
 		seq = `+nextSeq+`, updated_at = ? WHERE id = ? AND deleted = 0`, s.timeArg(now), id)
 	if err != nil {
 		return err
@@ -391,23 +401,57 @@ func newShareToken() string {
 	return hex.EncodeToString(b)
 }
 
-func (s *SQLStore) ShareNote(ctx context.Context, id int64) (string, error) {
+// Share is a note's public share link: its token and when it stops working
+// (nil for never).
+type Share struct {
+	Token     string
+	ExpiresAt *time.Time
+}
+
+// liveShare is the SQL condition of a share link that has not expired; it
+// takes the current time as its one argument.
+const liveShare = `(share_expires_at IS NULL OR share_expires_at > ?)`
+
+// expiryArg is the driver argument for share_expires_at: NULL for never.
+func (s *SQLStore) expiryArg(t *time.Time) any {
+	if t == nil {
+		return nil
+	}
+	return s.timeArg(*t)
+}
+
+// parseExpiry reads share_expires_at back; NULL is never.
+func parseExpiry(v sql.NullString) *time.Time {
+	if !v.Valid {
+		return nil
+	}
+	t, _ := time.Parse(sqliteTimeLayout, v.String)
+	return &t
+}
+
+func (s *SQLStore) ShareNote(ctx context.Context, id int64, expires *time.Time) (string, error) {
 	if err := s.checkNotes(); err != nil {
 		return "", err
 	}
-	// A note that is already shared keeps its token.
-	if _, err := s.db.ExecContext(ctx, `UPDATE notes SET share_token = ?
-		WHERE id = ? AND deleted = 0 AND share_token IS NULL`, newShareToken(), id); err != nil {
-		return "", err
+	// A live link keeps its token; a missing or expired one gets a new one.
+	var tok string
+	err := s.db.QueryRowContext(ctx, `UPDATE notes SET
+		share_token = CASE WHEN share_token IS NOT NULL AND `+liveShare+` THEN share_token ELSE ? END,
+		share_expires_at = ?
+		WHERE id = ? AND deleted = 0 RETURNING share_token`,
+		s.timeArg(time.Now()), newShareToken(), s.expiryArg(expires), id).Scan(&tok)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNoteNotFound
 	}
-	return s.NoteShareToken(ctx, id)
+	return tok, err
 }
 
 func (s *SQLStore) UnshareNote(ctx context.Context, id int64) error {
 	if err := s.checkNotes(); err != nil {
 		return err
 	}
-	res, err := s.db.ExecContext(ctx, `UPDATE notes SET share_token = NULL WHERE id = ? AND deleted = 0`, id)
+	res, err := s.db.ExecContext(ctx, `UPDATE notes SET share_token = NULL, share_expires_at = NULL
+		WHERE id = ? AND deleted = 0`, id)
 	if err != nil {
 		return err
 	}
@@ -417,25 +461,36 @@ func (s *SQLStore) UnshareNote(ctx context.Context, id int64) error {
 	return nil
 }
 
-func (s *SQLStore) NoteShareToken(ctx context.Context, id int64) (string, error) {
+func (s *SQLStore) NoteShare(ctx context.Context, id int64) (Share, error) {
 	if err := s.checkNotes(); err != nil {
-		return "", err
+		return Share{}, err
 	}
-	var tok sql.NullString
-	err := s.db.QueryRowContext(ctx, `SELECT share_token FROM notes WHERE id = ? AND deleted = 0`, id).Scan(&tok)
+	var tok, exp sql.NullString
+	var live bool
+	err := s.db.QueryRowContext(ctx, `SELECT share_token, share_expires_at, `+liveShare+`
+		FROM notes WHERE id = ? AND deleted = 0`, s.timeArg(time.Now()), id).Scan(&tok, &exp, &live)
 	if errors.Is(err, sql.ErrNoRows) {
-		return "", ErrNoteNotFound
+		return Share{}, ErrNoteNotFound
 	}
-	return tok.String, err
+	if err != nil || !tok.Valid || !live {
+		return Share{}, err
+	}
+	return Share{Token: tok.String, ExpiresAt: parseExpiry(exp)}, nil
 }
 
-func (s *SQLStore) GetSharedNote(ctx context.Context, token string) (*notes.Note, error) {
+func (s *SQLStore) GetSharedNote(ctx context.Context, token string) (*notes.Note, *time.Time, error) {
 	if err := s.checkNotes(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if token == "" {
-		return nil, ErrNoteNotFound
+		return nil, nil, ErrNoteNotFound
 	}
-	return scanNote(s.db.QueryRowContext(ctx,
-		`SELECT `+noteCols+` FROM notes WHERE share_token = ? AND deleted = 0`, token))
+	var exp sql.NullString
+	r := s.db.QueryRowContext(ctx, `SELECT `+noteCols+`, share_expires_at FROM notes
+		WHERE share_token = ? AND deleted = 0 AND `+liveShare, token, s.timeArg(time.Now()))
+	n, err := scanNote(scanFunc(func(dest ...any) error { return r.Scan(append(dest, &exp)...) }))
+	if err != nil {
+		return nil, nil, err
+	}
+	return n, parseExpiry(exp), nil
 }

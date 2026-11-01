@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func newNoteStore(t *testing.T) *SQLStore {
@@ -162,10 +163,10 @@ func TestShareNote(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if tok, err := s.NoteShareToken(ctx, n.ID); err != nil || tok != "" {
-		t.Fatalf("a new note is shared: %q %v", tok, err)
+	if tok, err := s.NoteShare(ctx, n.ID); err != nil || tok != (Share{}) {
+		t.Fatalf("a new note is shared: %+v %v", tok, err)
 	}
-	tok, err := s.ShareNote(ctx, n.ID)
+	tok, err := s.ShareNote(ctx, n.ID, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,15 +174,15 @@ func TestShareNote(t *testing.T) {
 		t.Errorf("token %q is not 128 bits of hex", tok)
 	}
 	// Sharing again keeps the link.
-	if again, err := s.ShareNote(ctx, n.ID); err != nil || again != tok {
+	if again, err := s.ShareNote(ctx, n.ID, nil); err != nil || again != tok {
 		t.Errorf("share again: %q %v, want %q", again, err, tok)
 	}
-	if got, err := s.NoteShareToken(ctx, n.ID); err != nil || got != tok {
-		t.Errorf("NoteShareToken: %q %v, want %q", got, err, tok)
+	if got, err := s.NoteShare(ctx, n.ID); err != nil || got != (Share{Token: tok}) {
+		t.Errorf("NoteShare: %+v %v, want %q and no expiry", got, err, tok)
 	}
-	got, err := s.GetSharedNote(ctx, tok)
-	if err != nil || got.ID != n.ID || got.Body != n.Body {
-		t.Fatalf("GetSharedNote: %v %+v", err, got)
+	got, exp, err := s.GetSharedNote(ctx, tok)
+	if err != nil || got.ID != n.ID || got.Body != n.Body || exp != nil {
+		t.Fatalf("GetSharedNote: %v %+v expires %v", err, got, exp)
 	}
 	// Sharing is not an edit: synced clients have nothing to fetch.
 	if got.Revision != n.Revision || got.Seq != n.Seq {
@@ -189,7 +190,7 @@ func TestShareNote(t *testing.T) {
 	}
 
 	other, _ := s.CreateNote(ctx, "# Other")
-	otherTok, err := s.ShareNote(ctx, other.ID)
+	otherTok, err := s.ShareNote(ctx, other.ID, nil)
 	if err != nil || otherTok == tok {
 		t.Errorf("second note's token %q (%v) repeats %q", otherTok, err, tok)
 	}
@@ -197,37 +198,96 @@ func TestShareNote(t *testing.T) {
 	if err := s.UnshareNote(ctx, n.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.GetSharedNote(ctx, tok); !errors.Is(err, ErrNoteNotFound) {
+	if _, _, err := s.GetSharedNote(ctx, tok); !errors.Is(err, ErrNoteNotFound) {
 		t.Errorf("revoked token: want ErrNoteNotFound, got %v", err)
 	}
-	if tok, _ := s.NoteShareToken(ctx, n.ID); tok != "" {
-		t.Errorf("token %q left after unsharing", tok)
+	if sh, _ := s.NoteShare(ctx, n.ID); sh != (Share{}) {
+		t.Errorf("share %+v left after unsharing", sh)
 	}
 	// Sharing anew gives a new link; the old one stays dead.
-	if fresh, err := s.ShareNote(ctx, n.ID); err != nil || fresh == tok {
+	if fresh, err := s.ShareNote(ctx, n.ID, nil); err != nil || fresh == tok {
 		t.Errorf("reshare: %q %v, want a new token", fresh, err)
 	}
 
 	for _, bad := range []string{"", "nope"} {
-		if _, err := s.GetSharedNote(ctx, bad); !errors.Is(err, ErrNoteNotFound) {
+		if _, _, err := s.GetSharedNote(ctx, bad); !errors.Is(err, ErrNoteNotFound) {
 			t.Errorf("GetSharedNote(%q): want ErrNoteNotFound, got %v", bad, err)
 		}
 	}
 	if err := s.DeleteNote(ctx, other.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.GetSharedNote(ctx, otherTok); !errors.Is(err, ErrNoteNotFound) {
+	if _, _, err := s.GetSharedNote(ctx, otherTok); !errors.Is(err, ErrNoteNotFound) {
 		t.Errorf("deleted note's token: want ErrNoteNotFound, got %v", err)
 	}
 	// The tombstone keeps no token, so nothing could bring the link back.
-	var left sql.NullString
-	if err := s.db.QueryRow(`SELECT share_token FROM notes WHERE id = ?`, other.ID).Scan(&left); err != nil || left.Valid {
-		t.Errorf("tombstone share_token = %v (%v), want NULL", left, err)
+	var left, leftExp sql.NullString
+	if err := s.db.QueryRow(`SELECT share_token, share_expires_at FROM notes WHERE id = ?`, other.ID).Scan(&left, &leftExp); err != nil || left.Valid || leftExp.Valid {
+		t.Errorf("tombstone share_token = %v, share_expires_at = %v (%v), want NULL", left, leftExp, err)
 	}
-	if _, err := s.ShareNote(ctx, other.ID); !errors.Is(err, ErrNoteNotFound) {
+	if _, err := s.ShareNote(ctx, other.ID, nil); !errors.Is(err, ErrNoteNotFound) {
 		t.Errorf("share deleted note: want ErrNoteNotFound, got %v", err)
 	}
 	if err := s.UnshareNote(ctx, other.ID); !errors.Is(err, ErrNoteNotFound) {
 		t.Errorf("unshare deleted note: want ErrNoteNotFound, got %v", err)
+	}
+}
+
+func TestShareNote_Expiry(t *testing.T) {
+	ctx := context.Background()
+	s := newNoteStore(t)
+	n, err := s.CreateNote(ctx, "# Timed\nbody")
+	if err != nil {
+		t.Fatal(err)
+	}
+	later := time.Now().Add(time.Hour).UTC().Truncate(time.Microsecond)
+	tok, err := s.ShareNote(ctx, n.ID, &later)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Before it expires the link works and says when it stops.
+	got, exp, err := s.GetSharedNote(ctx, tok)
+	if err != nil || got.ID != n.ID || exp == nil || !exp.Equal(later) {
+		t.Fatalf("GetSharedNote before expiry: %v %+v expires %v, want %v", err, got, exp, later)
+	}
+	if sh, err := s.NoteShare(ctx, n.ID); err != nil || sh.Token != tok || sh.ExpiresAt == nil || !sh.ExpiresAt.Equal(later) {
+		t.Errorf("NoteShare: %+v %v, want %q expiring %v", sh, err, tok, later)
+	}
+
+	// Sharing a live link again keeps its token and takes the new expiry.
+	if again, err := s.ShareNote(ctx, n.ID, nil); err != nil || again != tok {
+		t.Fatalf("share again: %q %v, want %q", again, err, tok)
+	}
+	if _, exp, err := s.GetSharedNote(ctx, tok); err != nil || exp != nil {
+		t.Errorf("made permanent: expires %v (%v), want never", exp, err)
+	}
+
+	// Once expired the link is a plain not-found, and the note reads as private.
+	past := time.Now().Add(-time.Minute)
+	if _, err := s.ShareNote(ctx, n.ID, &past); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.GetSharedNote(ctx, tok); !errors.Is(err, ErrNoteNotFound) {
+		t.Errorf("expired token: want ErrNoteNotFound, got %v", err)
+	}
+	if sh, err := s.NoteShare(ctx, n.ID); err != nil || sh != (Share{}) {
+		t.Errorf("expired share reads as %+v %v, want none", sh, err)
+	}
+	// Sharing again makes a new link; the expired one stays dead.
+	fresh, err := s.ShareNote(ctx, n.ID, &later)
+	if err != nil || fresh == tok {
+		t.Fatalf("reshare after expiry: %q %v, want a new token", fresh, err)
+	}
+	if _, _, err := s.GetSharedNote(ctx, tok); !errors.Is(err, ErrNoteNotFound) {
+		t.Errorf("old expired token came back: %v", err)
+	}
+
+	// Revoking clears the expiry with the token.
+	if err := s.UnshareNote(ctx, n.ID); err != nil {
+		t.Fatal(err)
+	}
+	var leftExp sql.NullString
+	if err := s.db.QueryRow(`SELECT share_expires_at FROM notes WHERE id = ?`, n.ID).Scan(&leftExp); err != nil || leftExp.Valid {
+		t.Errorf("share_expires_at after revoke = %v (%v), want NULL", leftExp, err)
 	}
 }

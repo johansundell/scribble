@@ -96,6 +96,11 @@ CREATE TABLE replica_pending_results (
 );
 `,
 	},
+	{
+		// When a share link stops working (#145); NULL for never.
+		name: "share_expires_at",
+		sql:  `ALTER TABLE notes ADD COLUMN share_expires_at TEXT;`,
+	},
 }
 
 // migrate applies the migrations the database's user_version has not yet

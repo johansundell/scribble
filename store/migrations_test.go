@@ -102,8 +102,8 @@ func TestNewSQLite_UpgradesUnversionedDatabase(t *testing.T) {
 		t.Errorf("Expected existing data intact, got %d notes and %d logs", notesCount, logsCount)
 	}
 	// Notes from before share links (#83) start unshared.
-	if tok, err := s.NoteShareToken(context.Background(), 1); err != nil || tok != "" {
-		t.Errorf("Expected the old note unshared, got %q %v", tok, err)
+	if sh, err := s.NoteShare(context.Background(), 1); err != nil || sh != (Share{}) {
+		t.Errorf("Expected the old note unshared, got %+v %v", sh, err)
 	}
 }
 
