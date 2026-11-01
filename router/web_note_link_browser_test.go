@@ -57,8 +57,7 @@ func TestWebNoteLinkBrowser(t *testing.T) {
 		}
 
 		// Down picks the second; Enter links it in place of the selection.
-		d.keys("\uE015", "\uE007")                                    // ArrowDown, Enter
-		d.waitFor(`return document.activeElement.id === "note-text"`) // the dialog closed
+		d.closingPicker(func() { d.keys("\uE015", "\uE007") }) // ArrowDown, Enter
 		var after struct {
 			Value, Focus string
 		}
@@ -80,8 +79,7 @@ func TestWebNoteLinkBrowser(t *testing.T) {
 			t.focus(); t.setSelectionRange(at, at + 4)`)
 		d.keys("\uE009", "\uE008", "k", "\uE008", "\uE009")
 		d.waitFor(`return document.getElementById("note-link-dialog").open`)
-		d.keys("\uE00C")                                              // Escape
-		d.waitFor(`return document.activeElement.id === "note-text"`) // the dialog closed
+		d.closingPicker(func() { d.keys("\uE00C") }) // Escape
 		d.execInto(&after, `return {value: document.getElementById("note-text").value, focus: document.activeElement.id}`)
 		if !strings.Contains(after.Value, "See here.") || strings.Contains(after.Value, "[[") || after.Focus != "note-text" {
 			t.Errorf("after Esc: text %q, focus on %q", after.Value, after.Focus)
@@ -91,8 +89,7 @@ func TestWebNoteLinkBrowser(t *testing.T) {
 		// A tap on a title links it at the cursor.
 		d.click("[data-note-link]")
 		d.waitFor(`return document.getElementById("note-link-dialog").open`)
-		d.click(`#note-link-list [role=option]:first-child`)
-		d.waitFor(`return document.activeElement.id === "note-text"`) // the dialog closed
+		d.closingPicker(func() { d.click(`#note-link-list [role=option]:first-child`) })
 		d.execInto(&after.Value, `return document.getElementById("note-text").value`)
 		if !strings.HasSuffix(after.Value, "[[Gamma]]") {
 			t.Errorf("after a tap: %q, want it to end with [[Gamma]]", after.Value)
@@ -133,6 +130,21 @@ func TestWebNoteLinkBrowser(t *testing.T) {
 			t.Errorf("titles under 44 px high: %v", small)
 		}
 	})
+}
+
+// closingPicker does close, which closes the picker, then waits until the
+// page has handled that. dialog.close() hands the focus back to the editor at
+// once, but the close event that puts the selection back and inserts the
+// link comes a task later: waiting for the focus alone let the test move
+// the cursor first, and the selection then went back to "here".
+func (d *webDriver) closingPicker(close func()) {
+	d.t.Helper()
+	// Added after app.js's listener, so it runs after closePicker.
+	d.exec(`window.pickerClosed = false;
+		document.getElementById("note-link-dialog").addEventListener("close",
+			function () { window.pickerClosed = true; }, {once: true})`)
+	close()
+	d.waitFor(`return window.pickerClosed`)
 }
 
 // waitFor waits until script returns true.
