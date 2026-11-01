@@ -277,7 +277,8 @@ The server refuses to start if the PIN isn't 6–12 digits, or if
   smart paste (a URL over selected text makes a link, spreadsheet cells make
   a table). "Link to note" on the toolbar, or `Ctrl+Shift+K`, searches the
   other notes (starting from any selected text) and puts a `[[link]]` to the
-  chosen one in place of the selection; `Ctrl+Z` takes it out again. Preview renders the text the way the saved note shows. Without
+  chosen one in place of the selection; `Ctrl+Z` takes it out again.
+  Preview renders the text the way the saved note shows. Without
   JavaScript it is a plain textarea, and saving still works. The toolbar and
   paste come from GitHub's `markdown-toolbar-element` and `paste-markdown`
   (MIT), vendored in `assets/js/vendor/`.

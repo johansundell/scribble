@@ -114,7 +114,7 @@ func (d *webDriver) keys(keys ...string) {
 	down := map[string]bool{}
 	for _, k := range keys {
 		switch k {
-		case "", "", "": // Shift, Ctrl, Meta
+		case "\uE008", "\uE009", "\uE03D": // Shift, Ctrl, Meta
 			if down[k] {
 				acts = append(acts, map[string]any{"type": "keyUp", "value": k})
 			} else {
@@ -125,7 +125,5 @@ func (d *webDriver) keys(keys ...string) {
 			acts = append(acts, map[string]any{"type": "keyDown", "value": k}, map[string]any{"type": "keyUp", "value": k})
 		}
 	}
-	d.call("POST", "/actions", map[string]any{"actions": []any{
-		map[string]any{"type": "key", "id": "keyboard", "actions": acts},
-	}}, nil)
+	d.call("POST", "/actions", map[string]any{"actions": []map[string]any{{"type": "key", "id": "keyboard", "actions": acts}}}, nil)
 }

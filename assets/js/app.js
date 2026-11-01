@@ -193,7 +193,7 @@ function openPicker(form) {
 	filterPicker();
 	// A filtered list doesn't hold every note: the unfiltered one does.
 	var f = document.querySelector("form.list-filter");
-	var filtered = f && (f.elements.q.value.trim() !== "" || f.elements.project.value !== "");
+	var filtered = f && ((f.elements.q && f.elements.q.value.trim() !== "") || (f.elements.project && f.elements.project.value !== ""));
 	if (!filtered && picker.titles.length) return;
 	fetch("/", { credentials: "same-origin" })
 		.then(function (res) {
@@ -244,7 +244,8 @@ function choose(i) {
 }
 
 // pickerKey handles the keys in the picker's search: Up and Down choose,
-// Enter links. Esc is the dialog's own.
+// Enter links, Esc closes. Esc is handled here because a search field with
+// text in it would otherwise take the first press to clear itself.
 function pickerKey(e) {
 	var n = picker.shown.length;
 	if ((e.key === "ArrowDown" || e.key === "ArrowUp") && n) {
@@ -254,6 +255,9 @@ function pickerKey(e) {
 		// Not the form's default button, which is Cancel.
 		e.preventDefault();
 		if (picker.active >= 0) linkDialog().close("link");
+	} else if (e.key === "Escape") {
+		e.preventDefault();
+		linkDialog().close("");
 	}
 }
 
@@ -264,6 +268,8 @@ function closePicker() {
 	if (!text) return;
 	picker.text = null;
 	picker.run++;
+	// nav.js may have swapped in another page while the picker was open.
+	if (!text.isConnected) return;
 	var title = linkDialog().returnValue === "link" ? picker.shown[picker.active] : "";
 	text.focus();
 	text.setSelectionRange(picker.start, picker.end);
@@ -286,8 +292,6 @@ document.addEventListener("click", function (e) {
 		choose(Array.prototype.indexOf.call(option.parentNode.children, option));
 		linkDialog().close("link");
 	}
-	// A tap outside the picker closes it.
-	if (e.target === linkDialog()) e.target.close();
 });
 
 document.addEventListener("keydown", function (e) {
