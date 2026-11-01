@@ -275,7 +275,9 @@ The server refuses to start if the PIN isn't 6–12 digits, or if
   tabs, `Ctrl+B` / `Ctrl+I` / `Ctrl+K` (Cmd on macOS) for bold, italic and
   link, `Ctrl+Shift+P` to switch tabs, lists that continue on Enter, and
   smart paste (a URL over selected text makes a link, spreadsheet cells make
-  a table). Preview renders the text the way the saved note shows. Without
+  a table). "Link to note" on the toolbar, or `Ctrl+Shift+K`, searches the
+  other notes (starting from any selected text) and puts a `[[link]]` to the
+  chosen one in place of the selection; `Ctrl+Z` takes it out again. Preview renders the text the way the saved note shows. Without
   JavaScript it is a plain textarea, and saving still works. The toolbar and
   paste come from GitHub's `markdown-toolbar-element` and `paste-markdown`
   (MIT), vendored in `assets/js/vendor/`.
@@ -294,6 +296,7 @@ The server refuses to start if the PIN isn't 6–12 digits, or if
   | `F2` | `F2` | Rename the open note |
   | `Ctrl+B` / `Ctrl+I` / `Ctrl+K` | | Bold / italic / link, in the editor |
   | `Ctrl+Shift+P` | | Switch Write / Preview, in the editor |
+  | `Ctrl+Shift+K` | Right-click, "Link to note…" | Link to another note, in the editor |
   | `?` | | Show the shortcuts |
   | `Esc` | | Close the shortcuts, or leave the search box |
 - **On a phone** (below 700 px wide) the app shows one screen at a time: the

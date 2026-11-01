@@ -42,7 +42,7 @@ function setup() {
 	form.querySelector("[data-md-bar]").hidden = false;
 	if (MAC) {
 		form.querySelectorAll(".md-button[title]").forEach(function (b) {
-			b.title = b.title.replace("Ctrl+", "⌘");
+			b.title = b.title.replace("Ctrl+Shift+", "⇧⌘").replace("Ctrl+", "⌘");
 		});
 	}
 	var text = editorText(form);
@@ -145,12 +145,156 @@ function insert(text, s) {
 	}
 }
 
+// Link to note (#149): a picker over the other notes' titles that puts a
+// [[link]] to the chosen one in place of the selection, as one undo step.
+// picker holds the open picker's state: the textarea it links into, the
+// selection there, the titles, those that match the search and the chosen
+// one. run counts openings, so a late fetch for an older one is dropped.
+var picker = { text: null, start: 0, end: 0, titles: [], shown: [], active: -1, run: 0 };
+
+function linkDialog() {
+	return document.getElementById("note-link-dialog");
+}
+
+// listTitles is the titles in doc's note list, less the note at path skip
+// and any a [[link]] cannot hold, as in the desktop app (#143).
+function listTitles(doc, skip) {
+	var out = [];
+	doc.querySelectorAll(".note-items a").forEach(function (a) {
+		if (new URL(a.getAttribute("href"), location.href).pathname === skip) return;
+		// The title is the link's own text, without the pin badge.
+		var title = Array.from(a.childNodes)
+			.filter(function (n) { return n.nodeType === Node.TEXT_NODE; })
+			.map(function (n) { return n.nodeValue; })
+			.join("")
+			.trim();
+		if (title && !/[\[\]\n]/.test(title) && out.indexOf(title) < 0) out.push(title);
+	});
+	return out;
+}
+
+function openPicker(form) {
+	var d = linkDialog();
+	if (!d || d.open) return;
+	var text = editorText(form);
+	var run = ++picker.run;
+	// The note being edited; a new note has none. Not form.action: that is
+	// the button named "action".
+	var skip = new URL(form.getAttribute("action"), location.href).pathname.replace(/\/edit$/, "");
+	picker.text = text;
+	picker.start = text.selectionStart;
+	picker.end = text.selectionEnd;
+	picker.titles = listTitles(document, skip);
+	var q = document.getElementById("note-link-search");
+	q.value = text.value.slice(picker.start, picker.end).trim();
+	d.returnValue = "";
+	d.showModal();
+	q.focus();
+	filterPicker();
+	// A filtered list doesn't hold every note: the unfiltered one does.
+	var f = document.querySelector("form.list-filter");
+	var filtered = f && (f.elements.q.value.trim() !== "" || f.elements.project.value !== "");
+	if (!filtered && picker.titles.length) return;
+	fetch("/", { credentials: "same-origin" })
+		.then(function (res) {
+			// An ended session is sent to the login page.
+			if (!res.ok || res.redirected) return;
+			return res.text().then(function (html) {
+				if (run !== picker.run) return;
+				picker.titles = listTitles(new DOMParser().parseFromString(html, "text/html"), skip);
+				filterPicker();
+			});
+		})
+		.catch(function () {});
+}
+
+// filterPicker lists the titles holding the search, ignoring case, the
+// first one chosen.
+function filterPicker() {
+	var q = document.getElementById("note-link-search").value.trim().toLowerCase();
+	var list = document.getElementById("note-link-list");
+	picker.shown = picker.titles.filter(function (t) {
+		return t.toLowerCase().indexOf(q) >= 0;
+	});
+	list.replaceChildren.apply(
+		list,
+		picker.shown.map(function (t, i) {
+			var li = document.createElement("li");
+			li.id = "note-link-" + i;
+			li.setAttribute("role", "option");
+			li.textContent = t;
+			return li;
+		})
+	);
+	linkDialog().querySelector("[data-note-link-empty]").hidden = picker.shown.length > 0;
+	linkDialog().querySelector("[data-note-link-ok]").disabled = picker.shown.length === 0;
+	choose(picker.shown.length ? 0 : -1);
+}
+
+// choose marks the title at index i as the one Enter or Link links to.
+function choose(i) {
+	picker.active = i;
+	var q = document.getElementById("note-link-search");
+	document.querySelectorAll("#note-link-list [role=option]").forEach(function (li, n) {
+		li.setAttribute("aria-selected", n === i ? "true" : "false");
+		if (n === i) li.scrollIntoView({ block: "nearest" });
+	});
+	if (i >= 0) q.setAttribute("aria-activedescendant", "note-link-" + i);
+	else q.removeAttribute("aria-activedescendant");
+}
+
+// pickerKey handles the keys in the picker's search: Up and Down choose,
+// Enter links. Esc is the dialog's own.
+function pickerKey(e) {
+	var n = picker.shown.length;
+	if ((e.key === "ArrowDown" || e.key === "ArrowUp") && n) {
+		e.preventDefault();
+		choose(Math.min(n - 1, Math.max(0, picker.active + (e.key === "ArrowDown" ? 1 : -1))));
+	} else if (e.key === "Enter") {
+		// Not the form's default button, which is Cancel.
+		e.preventDefault();
+		if (picker.active >= 0) linkDialog().close("link");
+	}
+}
+
+// closePicker puts the focus and selection back in the editor and, when a
+// title was chosen, its [[link]] in place of the selection.
+function closePicker() {
+	var text = picker.text;
+	if (!text) return;
+	picker.text = null;
+	picker.run++;
+	var title = linkDialog().returnValue === "link" ? picker.shown[picker.active] : "";
+	text.focus();
+	text.setSelectionRange(picker.start, picker.end);
+	if (title) insert(text, "[[" + title + "]]");
+}
+
+if (linkDialog()) linkDialog().addEventListener("close", closePicker);
+
+document.addEventListener("input", function (e) {
+	if (e.target.id === "note-link-search") filterPicker();
+});
+
 document.addEventListener("click", function (e) {
 	var tab = e.target.closest("form.editor [data-tab]");
 	if (tab) showTab(tab.form, tab.dataset.tab);
+	var link = e.target.closest("form.editor [data-note-link]");
+	if (link) openPicker(link.form);
+	var option = e.target.closest("#note-link-list [role=option]");
+	if (option) {
+		choose(Array.prototype.indexOf.call(option.parentNode.children, option));
+		linkDialog().close("link");
+	}
+	// A tap outside the picker closes it.
+	if (e.target === linkDialog()) e.target.close();
 });
 
 document.addEventListener("keydown", function (e) {
+	if (e.target.id === "note-link-search" && !e.isComposing) {
+		pickerKey(e);
+		return;
+	}
 	var form = e.target.closest && e.target.closest("form.editor");
 	if (!form || !form.dataset.markdown || e.isComposing) return;
 	var mod = e.ctrlKey || e.metaKey;
@@ -163,6 +307,11 @@ document.addEventListener("keydown", function (e) {
 		return;
 	}
 	if (e.target !== editorText(form)) return;
+	if (mod && e.shiftKey && !e.altKey && key === "k") {
+		e.preventDefault();
+		openPicker(form);
+		return;
+	}
 	if (mod && !e.shiftKey && !e.altKey && FORMAT_KEYS[key]) {
 		e.preventDefault();
 		form.querySelector(FORMAT_KEYS[key]).click();
