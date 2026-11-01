@@ -8,8 +8,9 @@
 	// A note's page, and the open-by-title page that sends on to it.
 	var NOTE = /^\/note\/\d+$/;
 	var TITLE = /^\/title\//;
-	// The note pane's pages with a form, which load in full.
-	var FORM = "form, .note-form";
+	// The note pane's pages with a form, which load in full. Pin note's form
+	// (#140) is on every note and changes no text, so it doesn't count.
+	var FORM = "form:not(.pin-form), .note-form";
 
 	// seq drops answers that arrive after a newer request was sent.
 	var seq = 0;
