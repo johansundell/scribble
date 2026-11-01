@@ -186,7 +186,9 @@ func TestWriteEnvReplacesTheFileInOneStep(t *testing.T) {
 	if got := readEnvFile(t, path)["SCRIBBLE_TOKEN"]; got != "new" {
 		t.Errorf("SCRIBBLE_TOKEN = %q, want new", got)
 	}
-	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o640 {
+	if info, err := os.Stat(path); err != nil {
+		t.Error(err)
+	} else if info.Mode().Perm() != 0o640 {
 		t.Errorf("the replaced .env has mode %v, want the old file's 0640", info.Mode().Perm())
 	}
 	entries, _ := os.ReadDir(dir)
@@ -246,5 +248,46 @@ func TestEnvOverridesSeesVariablesSetInTheEnvironment(t *testing.T) {
 	t.Setenv("SCRIBBLE_TOKEN", "") // set, even if empty: .env cannot change it
 	if got := envOverrides(); got != (gui.Overridden{URL: true, Token: true}) {
 		t.Errorf("envOverrides() = %+v, want both", got)
+	}
+}
+
+func TestWriteEnvKeepsTheFirstBackup(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".env")
+	broken := "SCRIBBLE_TOKEN=old\nFYNE_THEME=\"unterminated\n"
+	if err := os.WriteFile(path, []byte(broken), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tok := range []string{"one", "two"} {
+		if err := writeEnv(path, map[string]string{"SCRIBBLE_TOKEN": tok}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if bak, _ := os.ReadFile(path + ".bak"); string(bak) != broken {
+		t.Errorf(".env.bak holds %q after a second save, want the original %q", bak, broken)
+	}
+}
+
+func TestWriteEnvThroughASymlinkKeepsTheLink(t *testing.T) {
+	dir := t.TempDir()
+	real := filepath.Join(dir, "real.env")
+	if err := os.WriteFile(real, []byte("FYNE_THEME=dark\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, ".env")
+	if err := os.Symlink(real, path); err != nil {
+		t.Skip("no symlinks here:", err)
+	}
+
+	if err := writeEnv(path, map[string]string{"SCRIBBLE_TOKEN": "t"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if info, err := os.Lstat(path); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Error(".env is no longer a symlink")
+	}
+	if env := readEnvFile(t, real); env["SCRIBBLE_TOKEN"] != "t" || env["FYNE_THEME"] != "dark" {
+		t.Errorf("the linked file holds %v", env)
 	}
 }

@@ -139,8 +139,8 @@ func TestSettingsSaveNeedsAWebAddressAndAToken(t *testing.T) {
 	}
 }
 
-// hints is the hint text under the fields of the dialog on top of w.
-func hints(w fyne.Window) []string {
+// envHints is the hint text about the environment under the fields of the dialog on top of w.
+func envHints(w fyne.Window) []string {
 	var out []string
 	if top := w.Canvas().Overlays().Top(); top != nil {
 		for _, o := range test.LaidOutObjects(top) {
@@ -158,14 +158,14 @@ func TestSettingsSaysWhichFieldsTheEnvironmentOverrides(t *testing.T) {
 	ui.SaveSettings = func(s gui.Settings) error { saved = append(saved, s); return nil }
 
 	menuItem(t, w, "File", "Settings…").Action()
-	if h := hints(w); len(h) != 0 {
+	if h := envHints(w); len(h) != 0 {
 		t.Errorf("with nothing set in the environment, the dialog says %q", h)
 	}
 	tapDialogButton(t, w, "Cancel")
 
 	ui.Overridden = gui.Overridden{Token: true}
 	menuItem(t, w, "File", "Settings…").Action()
-	h := hints(w)
+	h := envHints(w)
 	if len(h) != 1 || !strings.Contains(h[0], "SCRIBBLE_TOKEN") {
 		t.Fatalf("with SCRIBBLE_TOKEN set in the environment, the dialog says %q", h)
 	}

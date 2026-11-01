@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"maps"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -37,8 +38,8 @@ func envOverrides() gui.Overridden {
 
 // setupScreen is the window's content while scribble-gui cannot reach a
 // server yet: msg, and a Settings… button that opens the Settings dialog
-// filled in with current, marked as overridden says. Once save succeeds it
-// calls saved.
+// filled in with current and noting the fields overridden marks. Once save
+// succeeds it calls saved.
 func setupScreen(w fyne.Window, msg string, current gui.Settings, overridden gui.Overridden, save func(gui.Settings) error, saved func()) fyne.CanvasObject {
 	label := widget.NewLabel(msg)
 	label.Wrapping = fyne.TextWrapWord
@@ -59,9 +60,14 @@ func setupScreen(w fyne.Window, msg string, current gui.Settings, overridden gui
 // if missing. A variable already there is changed where it is; one that is
 // not is added at the end. Every other line, comments included, is kept.
 // A file godotenv cannot read is first copied to path.bak, in case the
-// edit loses something in it. The new file replaces the old in one step,
+// edit loses something in it; an existing path.bak is left alone, as it
+// holds the file from before the first such edit. The new file replaces the old in one step,
 // so a crash midway leaves one or the other, never half of each.
 func writeEnv(path string, set map[string]string) error {
+	// Through a symlink, so the rename replaces the file, not the link.
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		path = real
+	}
 	raw, err := os.ReadFile(path)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
@@ -74,7 +80,14 @@ func writeEnv(path string, set map[string]string) error {
 			mode = info.Mode().Perm()
 		}
 		if _, err := godotenv.UnmarshalBytes(raw); err != nil {
-			if err := os.WriteFile(path+".bak", raw, 0o600); err != nil {
+			bak, err := os.OpenFile(path+".bak", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+			if err == nil {
+				_, err = bak.Write(raw)
+				if cerr := bak.Close(); err == nil {
+					err = cerr
+				}
+			}
+			if err != nil && !errors.Is(err, fs.ErrExist) {
 				return fmt.Errorf("cannot back up the .env file it cannot read: %w", err)
 			}
 		}

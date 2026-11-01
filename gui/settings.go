@@ -22,8 +22,8 @@ type Settings struct {
 type Overridden struct{ URL, Token bool }
 
 // ShowSettings opens the Settings dialog over w, filled in with current.
-// A field set in the environment says so, as overridden marks, but can still
-// be changed for the .env file. Save calls save with what was entered and
+// Each field overridden marks notes that the environment overrides it; it
+// can still be changed, for the .env file. Save calls save with what was entered and
 // shows any error it returns.
 func ShowSettings(w fyne.Window, current Settings, overridden Overridden, save func(Settings) error) {
 	addr := widget.NewEntry()
@@ -64,7 +64,7 @@ func ShowSettings(w fyne.Window, current Settings, overridden Overridden, save f
 // overrideHint is the note under a field whose variable name is set in the
 // environment.
 func overrideHint(name string) string {
-	return name + " is set in the environment, which wins over what is saved here"
+	return name + " is set in the environment, which wins over this from the next start"
 }
 
 // validateServerURL accepts an http or https address with a host.

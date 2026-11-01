@@ -99,8 +99,8 @@ func main() {
 }
 
 // startUI opens the local copy of the notes on server s and shows them,
-// syncing in the background. File > Settings… marks the fields overridden
-// marks. It returns what to undo when the app quits.
+// syncing in the background. File > Settings… notes which fields the
+// environment overrides. It returns what to undo when the app quits.
 func startUI(a fyne.App, w fyne.Window, ver string, s gui.Settings, overridden gui.Overridden, save func(gui.Settings) error) []func() {
 	cache, err := openCache(s.URL)
 	if err != nil {
