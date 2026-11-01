@@ -69,10 +69,15 @@ func (ui *UI) togglePin(id int64) {
 
 // noteRow is a row of the note list: the note's title, and a context menu
 // to pin or unpin it.
+//
+// Fyne gives a click to the innermost widget that takes clicks of either
+// button, so the list's own row never sees a left click on a noteRow:
+// Tapped does the list row's work instead (#155).
 type noteRow struct {
 	widget.BaseWidget
 	ui    *UI
 	label *widget.Label
+	index widget.ListItemID
 	id    int64
 }
 
@@ -82,8 +87,9 @@ func newNoteRow(ui *UI) *noteRow {
 	return r
 }
 
-// show makes the row show note n.
-func (r *noteRow) show(n notes.Note) {
+// show makes the row, at index in the list, show note n.
+func (r *noteRow) show(index widget.ListItemID, n notes.Note) {
+	r.index = index
 	r.id = n.ID
 	text := n.Title
 	if n.Pinned {
@@ -94,6 +100,15 @@ func (r *noteRow) show(n notes.Note) {
 
 func (r *noteRow) CreateRenderer() fyne.WidgetRenderer {
 	return widget.NewSimpleRenderer(r.label)
+}
+
+// Tapped opens the row's note, focusing the list as a click on a plain
+// list row does, so keys such as F2 and the arrows reach it.
+func (r *noteRow) Tapped(*fyne.PointEvent) {
+	if c := fyne.CurrentApp().Driver().CanvasForObject(r.ui.List); c != nil {
+		c.Focus(r.ui.List)
+	}
+	r.ui.List.Select(r.index)
 }
 
 // TappedSecondary shows the row's context menu.

@@ -10,9 +10,17 @@ import (
 	"github.com/johansundell/scribble/gui"
 )
 
+// clickableRow is a note list row: it takes left clicks and has a context
+// menu. See noteRow for why it must take both.
+type clickableRow interface {
+	fyne.CanvasObject
+	fyne.Tappable
+	fyne.SecondaryTappable
+}
+
 // listRow is the note list's row showing text: the widget around its label,
 // which has the row's context menu.
-func listRow(t *testing.T, ui *gui.UI, text string) fyne.SecondaryTappable {
+func listRow(t *testing.T, ui *gui.UI, text string) clickableRow {
 	t.Helper()
 	var row fyne.SecondaryTappable
 	for _, o := range test.LaidOutObjects(ui.List) {
@@ -23,11 +31,39 @@ func listRow(t *testing.T, ui *gui.UI, text string) fyne.SecondaryTappable {
 			if row == nil {
 				t.Fatalf("the row %q has no context menu", text)
 			}
-			return row
+			both, ok := row.(clickableRow)
+			if !ok {
+				t.Fatalf("the row %q takes no left click", text)
+			}
+			return both
 		}
 	}
 	t.Fatalf("the list shows no row %q (shows %q)", text, listTitles(ui))
 	return nil
+}
+
+// Fyne's test driver, unlike the real one, never hands left clicks to a
+// row with a context menu, so it can't show #155; listRow checks the row
+// takes them instead.
+func TestClickingAListRowOpensTheNoteAndFocusesTheList(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Groceries\nmilk")
+	create(t, c, "# Ideas\nfly")
+	ui, w := open(t, c)
+
+	test.Tap(listRow(t, ui, "Groceries"))
+	if ui.Editor.Text != "# Groceries\nmilk" {
+		t.Fatalf("clicking Groceries opened %q", ui.Editor.Text)
+	}
+	// So F2 and the arrow keys reach the list.
+	if w.Canvas().Focused() != ui.List {
+		t.Fatalf("clicking a note focused %T, not the list", w.Canvas().Focused())
+	}
+
+	test.Tap(listRow(t, ui, "Ideas"))
+	if ui.Editor.Text != "# Ideas\nfly" {
+		t.Fatalf("clicking Ideas opened %q", ui.Editor.Text)
+	}
 }
 
 func TestPinFromTheFileMenu(t *testing.T) {
