@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/johansundell/scribble/httperror"
@@ -33,15 +34,51 @@ const (
 	actionUnshare = "unshare"
 )
 
-var errUnknownAction = errors.New("unknown action")
+var (
+	errUnknownAction = errors.New("unknown action")
+	errUnknownTTL    = errors.New("unknown ttl")
+)
 
-// shareForm is the share pane of one note. URL is "" while it isn't shared.
+// shareTTLs are how long a new share link can work (#145), by the "ttl"
+// the share form sends; "never" (or no ttl) is a permanent link.
+var shareTTLs = map[string]time.Duration{
+	"1h":  time.Hour,
+	"1d":  24 * time.Hour,
+	"7d":  7 * 24 * time.Hour,
+	"30d": 30 * 24 * time.Hour,
+}
+
+// shareExpiry is when a link shared now with ttl stops working, nil for never.
+func shareExpiry(ttl string) (*time.Time, error) {
+	if ttl == "" || ttl == "never" {
+		return nil, nil
+	}
+	d, ok := shareTTLs[ttl]
+	if !ok {
+		return nil, errUnknownTTL
+	}
+	t := time.Now().Add(d)
+	return &t, nil
+}
+
+// expiresText says when a share link expires, "" for never, in UTC: the
+// public page has no script to show it in the reader's time zone.
+func expiresText(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	return "Expires on " + t.UTC().Format("2006-01-02 15:04 UTC")
+}
+
+// shareForm is the share pane of one note. URL is "" while it isn't shared;
+// Expires is nil for a link that never expires.
 type shareForm struct {
-	ID     int64
-	Action string
-	Cancel string
-	URL    string
-	QR     template.HTML
+	ID      int64
+	Action  string
+	Cancel  string
+	URL     string
+	QR      template.HTML
+	Expires *time.Time
 }
 
 // AppShareForm shows the share pane: the link, its QR code and Revoke when
@@ -51,14 +88,15 @@ func (h *Handler) AppShareForm(c *gin.Context) error {
 	if err != nil || n == nil {
 		return err
 	}
-	tok, err := ns.NoteShareToken(c.Request.Context(), n.ID)
+	sh, err := ns.NoteShare(c.Request.Context(), n.ID)
 	if err != nil {
 		return noteError(err)
 	}
 	p.Title = "Share " + n.Title
-	p.Share = &shareForm{ID: n.ID, Action: SharePath(n.ID) + p.Filter(), Cancel: NotePath(n.ID) + p.Filter()}
-	if tok != "" {
-		p.Share.URL = siteURL(c.Request) + SharedPath(tok)
+	p.Share = &shareForm{ID: n.ID, Action: SharePath(n.ID) + p.Filter(), Cancel: NotePath(n.ID) + p.Filter(),
+		Expires: sh.ExpiresAt}
+	if sh.Token != "" {
+		p.Share.URL = siteURL(c.Request) + SharedPath(sh.Token)
 		if p.Share.QR, err = qrSVG(p.Share.URL); err != nil {
 			return httperror.ReturnWithHTTPStatus(err, http.StatusInternalServerError)
 		}
@@ -66,8 +104,8 @@ func (h *Handler) AppShareForm(c *gin.Context) error {
 	return h.renderNotes(c, http.StatusOK, p)
 }
 
-// AppShare shares the note (keeping its link if it has one) or revokes its
-// link, and goes back to the share pane.
+// AppShare shares the note for the chosen ttl (keeping its link if it has
+// a live one) or revokes its link, and goes back to the share pane.
 func (h *Handler) AppShare(c *gin.Context) error {
 	p, ns, n, err := h.webNote(c)
 	if err != nil || n == nil {
@@ -76,7 +114,11 @@ func (h *Handler) AppShare(c *gin.Context) error {
 	ctx := c.Request.Context()
 	switch c.PostForm("action") {
 	case actionShare:
-		_, err = ns.ShareNote(ctx, n.ID)
+		expires, terr := shareExpiry(c.PostForm("ttl"))
+		if terr != nil {
+			return httperror.ReturnWithHTTPStatus(terr, http.StatusBadRequest)
+		}
+		_, err = ns.ShareNote(ctx, n.ID, expires)
 	case actionUnshare:
 		err = ns.UnshareNote(ctx, n.ID)
 	default:
@@ -97,16 +139,18 @@ type sharedPage struct {
 	Title    string
 	NoteHTML template.HTML
 	Updated  string
+	Expires  string
 }
 
 // Shared shows the note shared with :token to anyone, with no session and
-// none of the app around it. An unknown or revoked token is a plain 404.
+// none of the app around it. An unknown, revoked or expired token is a
+// plain 404.
 func (h *Handler) Shared(c *gin.Context) error {
 	ns, err := h.noteStore()
 	if err != nil {
 		return err
 	}
-	n, err := ns.GetSharedNote(c.Request.Context(), c.Param("token"))
+	n, expires, err := ns.GetSharedNote(c.Request.Context(), c.Param("token"))
 	if err != nil {
 		return noteError(err)
 	}
@@ -127,6 +171,7 @@ func (h *Handler) Shared(c *gin.Context) error {
 		Title:    n.Title,
 		NoteHTML: out,
 		Updated:  n.UpdatedAt.UTC().Format("2006-01-02 15:04 UTC"),
+		Expires:  expiresText(expires),
 	}); err != nil {
 		return httperror.ReturnWithHTTPStatus(err, http.StatusInternalServerError)
 	}

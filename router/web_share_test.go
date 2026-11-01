@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/johansundell/scribble/notes"
 )
@@ -17,11 +18,11 @@ func sharePath(n *notes.Note) string { return fmt.Sprintf("/note/%d/share", n.ID
 // shareToken is the note's token in e's store, "" when it isn't shared.
 func (e *webEnv) shareToken(t *testing.T, n *notes.Note) string {
 	t.Helper()
-	tok, err := e.store.NoteShareToken(context.Background(), n.ID)
+	sh, err := e.store.NoteShare(context.Background(), n.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return tok
+	return sh.Token
 }
 
 func TestWebShare_RequireSessionAndOrigin(t *testing.T) {
@@ -56,6 +57,7 @@ func TestWebShare_Pane(t *testing.T) {
 		"<title>Share Alpha – Scribble</title>",
 		fmt.Sprintf(`action="/note/%d/share?project=work"`, n.ID), `method="post"`,
 		`name="action" value="share"`, ">Create public link</button>",
+		`<select name="ttl"`, `value="1h"`, `value="1d"`, `value="7d"`, `value="30d"`, `value="never" selected`,
 		fmt.Sprintf(`href="/note/%d?project=work"`, n.ID),
 	)
 	wantNot(t, w.Body.String(), "/s/", "<svg", "Revoke")
@@ -74,7 +76,7 @@ func TestWebShare_Pane(t *testing.T) {
 	wantBody(t, w, http.StatusOK,
 		`value="`+link+`"`, "data-copy", ">Copy link</button>",
 		`<svg`, `class="qr"`, `name="action" value="unshare"`, ">Revoke link</button>",
-		"/assets/js/share.js",
+		"/assets/js/share.js", "Never expires",
 	)
 	// The QR code is drawn here, never fetched from anywhere.
 	svg := w.Body.String()[strings.Index(w.Body.String(), "<svg"):]
@@ -157,4 +159,53 @@ func TestWebShare_PublicPage(t *testing.T) {
 	if w := e.do(get("/s/" + tok)); w.Code != http.StatusNotFound {
 		t.Errorf("deleted note's link = %d, want 404", w.Code)
 	}
+}
+
+func TestWebShare_Expiry(t *testing.T) {
+	e := newWebEnv(t)
+	c := e.login(t)
+	n := e.note(t, "# Alpha\nbody")
+	ctx := context.Background()
+
+	for ttl, want := range map[string]time.Duration{
+		"1h": time.Hour, "1d": 24 * time.Hour, "7d": 7 * 24 * time.Hour, "30d": 30 * 24 * time.Hour,
+	} {
+		before := time.Now()
+		wantRedirect(t, e.do(postForm(sharePath(n), url.Values{"action": {"share"}, "ttl": {ttl}}, c)), sharePath(n))
+		sh, err := e.store.NoteShare(ctx, n.ID)
+		if err != nil || sh.ExpiresAt == nil {
+			t.Fatalf("ttl %s: %+v %v, want an expiry", ttl, sh, err)
+		}
+		if got := sh.ExpiresAt.Sub(before); got < want || got > want+time.Minute {
+			t.Errorf("ttl %s expires in %v, want %v", ttl, got, want)
+		}
+		// The pane and the public page say when.
+		utc := sh.ExpiresAt.UTC().Format("2006-01-02 15:04 UTC")
+		wantBody(t, e.do(get(sharePath(n), c)), http.StatusOK,
+			`Expires on <time datetime="`+sh.ExpiresAt.UTC().Format(time.RFC3339)+`">`+utc+"</time>")
+		wantBody(t, e.do(get("/s/"+sh.Token)), http.StatusOK, "Expires on "+utc)
+	}
+
+	// Never: no expiry, and the public page says nothing about one.
+	e.do(postForm(sharePath(n), url.Values{"action": {"share"}, "ttl": {"never"}}, c))
+	sh, _ := e.store.NoteShare(ctx, n.ID)
+	if sh.Token == "" || sh.ExpiresAt != nil {
+		t.Fatalf("never: %+v, want a permanent link", sh)
+	}
+	wantNot(t, e.do(get("/s/"+sh.Token)).Body.String(), "Expires")
+
+	if w := e.do(postForm(sharePath(n), url.Values{"action": {"share"}, "ttl": {"2y"}}, c)); w.Code != http.StatusBadRequest {
+		t.Errorf("unknown ttl = %d, want 400", w.Code)
+	}
+
+	// An expired link is a plain 404, and the pane offers a new one.
+	past := time.Now().Add(-time.Minute)
+	tok, err := e.store.ShareNote(ctx, n.ID, &past)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w := e.do(get("/s/" + tok)); w.Code != http.StatusNotFound {
+		t.Errorf("expired link = %d, want 404", w.Code)
+	}
+	wantBody(t, e.do(get(sharePath(n), c)), http.StatusOK, ">Create public link</button>")
 }

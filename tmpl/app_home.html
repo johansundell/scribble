@@ -108,6 +108,7 @@ a note, the list otherwise. */}}
 			<p class="muted">Anyone with this link can read the note, without the PIN. Revoke it to stop that.</p>
 			<label for="share-url">Public link</label>
 			<input type="text" id="share-url" value="{{.URL}}" class="text-field" readonly />
+			<p class="muted">{{with .Expires}}Expires on {{timeTag .}}{{else}}Never expires{{end}}</p>
 			<div class="editor-buttons">
 				<button type="button" class="button primary" data-copy="share-url" hidden>Copy link</button>
 				<span class="muted" data-copied role="status"></span>
@@ -121,8 +122,16 @@ a note, the list otherwise. */}}
 			</form>
 			<script src="/assets/js/share.js" defer></script>
 			{{- else}}
-			<p class="muted">This note is private. A public link lets anyone who has it read the note, without the PIN, until you revoke it.</p>
+			<p class="muted">This note is private. A public link lets anyone who has it read the note, without the PIN, until it expires or you revoke it.</p>
 			<form method="post" action="{{.Action}}" data-filtered="share-form">
+				<label for="share-ttl">Expires</label>
+				<select name="ttl" id="share-ttl" class="share-ttl">
+					<option value="1h">In 1 hour</option>
+					<option value="1d">In 1 day</option>
+					<option value="7d">In 7 days</option>
+					<option value="30d">In 30 days</option>
+					<option value="never" selected>Never</option>
+				</select>
 				<div class="editor-buttons">
 					<button type="submit" class="button primary" name="action" value="share">Create public link</button>
 					<a class="button" href="{{.Cancel}}" data-filtered="cancel">Cancel</a>

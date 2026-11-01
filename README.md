@@ -308,7 +308,9 @@ The server refuses to start if the PIN isn't 6–12 digits, or if
   private until shared. The page is sent with `Referrer-Policy: no-referrer`,
   so the link doesn't leak to sites the note links to. Share links are part
   of the web app: with `WEB_PIN` unset they answer 404. Deleting a note
-  revokes its link. (#83)
+  revokes its link. (#83) A link can expire in 1 hour, 1 day, 7 days or 30
+  days, or never (the default); the pane and the public page show when, and
+  an expired link answers 404 like a revoked one. (#145)
 - **History:** a note shows its revision and how many changes its history
   keeps ("Revision 4 (3 edits)"), and **History (r4)** opens the note's
   kept versions ([ADR 7](docs/adr/0007-note-history.md)), newest first, each

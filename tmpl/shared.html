@@ -17,6 +17,9 @@ around it. Its [[links]] go through the PIN screen. */}}<!DOCTYPE html>
 	<main class="shared">
 		<article class="note-body">{{.NoteHTML}}</article>
 		<p class="muted">Updated {{.Updated}}</p>
+		{{- with .Expires}}
+		<p class="muted">{{.}}</p>
+		{{- end}}
 	</main>
 	<footer class="app-footer">Shared from Scribble</footer>
 </body>

@@ -87,12 +87,12 @@ func TestCmdVersion(t *testing.T) {
 		want                 string
 	}{
 		{"update available", "v0.0.9", "v0.0.12",
-			"client v0.0.9 (API level 1)\nserver v0.0.12 (API level 2, schema 4)\nupdate available: https://github.com/johansundell/scribble/releases/latest\n" +
+			"client v0.0.9 (API level 1)\nserver v0.0.12 (API level 2, schema 5)\nupdate available: https://github.com/johansundell/scribble/releases/latest\n" +
 				installLine(runtime.GOOS)},
 		{"up to date", "v0.0.12", "v0.0.12",
-			"client v0.0.12 (API level 1)\nserver v0.0.12 (API level 2, schema 4)\n"},
+			"client v0.0.12 (API level 1)\nserver v0.0.12 (API level 2, schema 5)\n"},
 		{"dev build never compares", "dev", "v0.0.12",
-			"client dev (API level 1)\nserver v0.0.12 (API level 2, schema 4)\n"},
+			"client dev (API level 1)\nserver v0.0.12 (API level 2, schema 5)\n"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
