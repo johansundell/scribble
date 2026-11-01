@@ -14,28 +14,13 @@ import (
 // notes Groceries and Recipes, the cursor at the end of the text.
 func linking(t *testing.T, text string) (*gui.UI, fyne.Window) {
 	t.Helper()
-	c := newServer(t)
-	create(t, c, "# Groceries\nmilk")
-	create(t, c, "# Recipes\nsoup")
-	create(t, c, "# Ideas\nfly")
-	ui, w := open(t, c)
-	ui.List.Select(0)
-	test.Tap(ui.EditToggle)
-	ui.Editor.SetText(text)
-	w.Canvas().Focus(ui.Editor)
-	ui.Editor.TypedKey(&fyne.KeyEvent{Name: fyne.KeyPageDown})
-	return ui, w
+	return editingWith(t, text, "# Groceries\nmilk", "# Recipes\nsoup")
 }
 
-// menuLabels is the item labels of the pop-up menu on top of w.
-func menuLabels(t *testing.T, w fyne.Window) []string {
-	t.Helper()
-	top := w.Canvas().Overlays().Top()
-	if top == nil {
-		t.Fatal("no pop-up menu is open")
-	}
+// textsOf is the texts o draws.
+func textsOf(o fyne.CanvasObject) []string {
 	var out []string
-	for _, txt := range drawnTexts(top) {
+	for _, txt := range drawnTexts(o) {
 		out = append(out, txt.Text.Text)
 	}
 	return out
@@ -54,33 +39,23 @@ func pickLink(t *testing.T, ui *gui.UI, w fyne.Window) {
 // pickerChoices is the note titles the picker on top of w lists.
 func pickerChoices(t *testing.T, w fyne.Window) []string {
 	t.Helper()
-	var out []string
 	for _, o := range test.LaidOutObjects(w.Canvas().Overlays().Top()) {
 		if l, ok := o.(*widget.List); ok {
-			for _, txt := range drawnTexts(l) {
-				if txt.Text.Text != "" {
-					out = append(out, txt.Text.Text)
-				}
-			}
+			out := slices.DeleteFunc(textsOf(l), func(s string) bool { return s == "" })
 			// The list keeps rows it no longer needs until it is laid out.
 			return out[:min(len(out), l.Length())]
 		}
 	}
-	return out
+	t.Fatal("the dialog has no list")
+	return nil
 }
 
 // pickerQuery is the picker's search field, which has the focus.
-func pickerQuery(t *testing.T, w fyne.Window) interface {
-	fyne.Focusable
-	SelectedText() string
-} {
+func pickerQuery(t *testing.T, w fyne.Window) fyne.Focusable {
 	t.Helper()
-	f, ok := w.Canvas().Focused().(interface {
-		fyne.Focusable
-		SelectedText() string
-	})
-	if !ok {
-		t.Fatalf("the picker's search field has no focus, %T has", w.Canvas().Focused())
+	f := w.Canvas().Focused()
+	if _, ok := f.(interface{ SelectedText() string }); !ok {
+		t.Fatalf("the picker's search field has no focus, %T has", f)
 	}
 	return f
 }
@@ -88,7 +63,7 @@ func pickerQuery(t *testing.T, w fyne.Window) interface {
 func TestEditorRightClickMenuHasLinkToNote(t *testing.T) {
 	ui, w := linking(t, "fly")
 	test.TapSecondaryAt(ui.Editor, fyne.NewPos(5, 5))
-	got := menuLabels(t, w)
+	got := textsOf(w.Canvas().Overlays().Top())
 	for _, want := range []string{"Undo", "Redo", "Cut", "Copy", "Paste", "Select all", "Link to note…"} {
 		if !slices.Contains(got, want) {
 			t.Errorf("the editor's right-click menu has no %q item: %q", want, got)
@@ -97,7 +72,7 @@ func TestEditorRightClickMenuHasLinkToNote(t *testing.T) {
 
 	w.Canvas().Overlays().Top().Hide()
 	test.TapSecondaryAt(ui.Search, fyne.NewPos(5, 5))
-	if got := menuLabels(t, w); slices.Contains(got, "Link to note…") {
+	if got := textsOf(w.Canvas().Overlays().Top()); slices.Contains(got, "Link to note…") {
 		t.Errorf("the search box's right-click menu offers Link to note…: %q", got)
 	}
 }
@@ -142,10 +117,7 @@ func TestLinkToNoteInsertsTheChosenLinkAsOneUndo(t *testing.T) {
 
 func TestLinkToNoteReplacesTheSelectionItSearchesFor(t *testing.T) {
 	ui, w := linking(t, "# Ideas\nsee recipes now")
-	ui.Editor.TypedKey(&fyne.KeyEvent{Name: fyne.KeyLeft})
-	ui.Editor.TypedKey(&fyne.KeyEvent{Name: fyne.KeyLeft})
-	ui.Editor.TypedKey(&fyne.KeyEvent{Name: fyne.KeyLeft})
-	ui.Editor.TypedKey(&fyne.KeyEvent{Name: fyne.KeyLeft})
+	moveCursor(ui, 1, len("see recipes"))
 	selectBack(ui.Editor, len("recipes"))
 	pickLink(t, ui, w)
 
@@ -165,25 +137,37 @@ func TestLinkToNoteReplacesTheSelectionItSearchesFor(t *testing.T) {
 func TestLinkToNoteByDoubleClick(t *testing.T) {
 	ui, w := linking(t, "# Ideas\n")
 	pickLink(t, ui, w)
+	var row fyne.DoubleTappable
 	for _, o := range test.LaidOutObjects(w.Canvas().Overlays().Top()) {
-		if d, ok := o.(fyne.DoubleTappable); ok {
-			if l, ok := o.(interface{ fyne.Widget }); ok && slices.Contains(textsOf(l), "Recipes") {
-				d.DoubleTapped(&fyne.PointEvent{})
-				break
-			}
+		if d, ok := o.(fyne.DoubleTappable); ok && slices.Contains(textsOf(o), "Recipes") {
+			row = d
 		}
 	}
+	if row == nil {
+		t.Fatal("the picker has no Recipes row to double-click")
+	}
+	row.DoubleTapped(&fyne.PointEvent{})
 	if ui.Editor.Text != "# Ideas\n[[Recipes]]" {
 		t.Fatalf("double-clicking Recipes left %q", ui.Editor.Text)
 	}
 }
 
-func textsOf(o fyne.CanvasObject) []string {
-	var out []string
-	for _, txt := range drawnTexts(o) {
-		out = append(out, txt.Text.Text)
+func TestClickingAPickerRowKeepsEnterAndEsc(t *testing.T) {
+	ui, w := linking(t, "# Ideas\n")
+	pickLink(t, ui, w)
+	tapMenuItem(t, w, "Groceries") // a click on the row, through the window
+	pickerQuery(t, w).TypedKey(&fyne.KeyEvent{Name: fyne.KeyReturn})
+	if ui.Editor.Text != "# Ideas\n[[Groceries]]" {
+		t.Fatalf("Enter after clicking Groceries left %q", ui.Editor.Text)
 	}
-	return out
+}
+
+func TestLinkToNoteLeavesOutTitlesALinkCannotHold(t *testing.T) {
+	ui, w := editingWith(t, "", "# Recipes\nsoup", "# Odd [1]\nx")
+	pickLink(t, ui, w)
+	if got := pickerChoices(t, w); !slices.Equal(got, []string{"Recipes"}) {
+		t.Fatalf("the picker lists %q, want no title with brackets", got)
+	}
 }
 
 func TestCancellingLinkToNoteChangesNothing(t *testing.T) {

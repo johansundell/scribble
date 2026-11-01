@@ -11,7 +11,7 @@ import (
 
 // The note editor's right-click menu and its "Link to note…" (#143).
 
-// TappedSecondary shows the right-click menu. The note editor's adds
+// TappedSecondary shows the right-click menu. The note editor's menu adds
 // "Link to note…" to Entry's text actions, and its Undo and Redo go through
 // TypedShortcut, so a Markdown change still undoes in one go.
 func (f *TextField) TappedSecondary(e *fyne.PointEvent) {
@@ -49,15 +49,14 @@ func (f *TextField) TappedSecondary(e *fyne.PointEvent) {
 func (f *TextField) askNoteLink() {
 	query := strings.TrimSpace(f.SelectedText())
 	start, end := f.selection()
-	var titles []string
-	for _, n := range f.ui.store.List("", "") {
-		if n.Title != "" && (f.ui.current == nil || n.ID != f.ui.current.ID) {
-			titles = append(titles, n.Title)
-		}
-	}
 
 	var d *dialog.CustomDialog
+	closed := false
 	done := func(title string) {
+		if closed { // a double click and Enter may both get here
+			return
+		}
+		closed = true
 		d.Hide()
 		f.ui.w.Canvas().Focus(f)
 		if title == "" {
@@ -66,15 +65,10 @@ func (f *TextField) askNoteLink() {
 		}
 		f.applyEdit(insertNoteLink(start, end, title))
 	}
-	p := newNotePicker(titles, done)
-	cancel := widget.NewButton("Cancel", func() { done("") })
-	link := widget.NewButton("Link", p.choose)
-	link.Importance = widget.HighImportance
-	p.onFilter = func() { setEnabled(link, len(p.shown) > 0) }
-
+	p := newNotePicker(f.ui.linkTitles(), done)
 	d = dialog.NewCustomWithoutButtons("Link to note",
 		container.NewBorder(p.query, nil, nil, nil, p.list), f.ui.w)
-	d.SetButtons([]fyne.CanvasObject{cancel, link})
+	d.SetButtons([]fyne.CanvasObject{widget.NewButton("Cancel", func() { done("") }), p.link})
 	d.Resize(fyne.NewSize(400, 400))
 	p.query.SetText(query)
 	p.filter()
@@ -82,20 +76,34 @@ func (f *TextField) askNoteLink() {
 	f.ui.w.Canvas().Focus(p.query)
 }
 
+// linkTitles is the titles of the notes the open one can link to: the
+// others, leaving out any a [[link]] cannot hold.
+func (ui *UI) linkTitles() []string {
+	var out []string
+	for _, n := range ui.store.List("", "") {
+		if n.Title != "" && !strings.ContainsAny(n.Title, "[]\n") && (ui.current == nil || n.ID != ui.current.ID) {
+			out = append(out, n.Title)
+		}
+	}
+	return out
+}
+
 // notePicker is the note list of "Link to note…": a search field over the
-// titles that match it, the first selected.
+// titles that match it, the first selected, and the Link button.
 type notePicker struct {
 	query    *pickerField
 	list     *widget.List
-	titles   []string // every note that can be linked to
-	shown    []string // the titles matching the query
-	selected int      // index into shown, -1 for none
-	onFilter func()   // called after the list is narrowed
+	link     *widget.Button // links to the selected title; disabled when none match
+	titles   []string       // every note that can be linked to
+	shown    []string       // the titles matching the query
+	selected int            // index into shown, -1 for none
 	done     func(title string)
 }
 
 func newNotePicker(titles []string, done func(string)) *notePicker {
 	p := &notePicker{titles: titles, done: done, selected: -1}
+	p.link = widget.NewButton("Link", p.choose)
+	p.link.Importance = widget.HighImportance
 	p.query = &pickerField{p: p}
 	p.query.ExtendBaseWidget(p.query)
 	p.query.SetPlaceHolder("Search notes")
@@ -129,9 +137,7 @@ func (p *notePicker) filter() {
 	if len(p.shown) > 0 {
 		p.list.Select(0)
 	}
-	if p.onFilter != nil {
-		p.onFilter()
-	}
+	setEnabled(p.link, len(p.shown) > 0)
 }
 
 // choose links to the selected title, if any.
@@ -146,6 +152,14 @@ func (p *notePicker) move(by int) {
 	if i := p.selected + by; i >= 0 && i < len(p.shown) {
 		p.list.Select(i)
 		p.list.ScrollTo(i)
+	}
+}
+
+// focusQuery gives the search field the focus back: a click on the list,
+// which cannot hold it, takes it away.
+func (p *notePicker) focusQuery() {
+	if c := fyne.CurrentApp().Driver().CanvasForObject(p.query); c != nil {
+		c.Focus(p.query)
 	}
 }
 
@@ -171,7 +185,8 @@ func (f *pickerField) TypedKey(e *fyne.KeyEvent) {
 }
 
 // pickerItem is a title in the picker's list: a click selects it, a double
-// click links to it.
+// click links to it. Either leaves the focus in the search field, which
+// takes Enter and Esc.
 type pickerItem struct {
 	widget.Label
 	p  *notePicker
@@ -185,7 +200,10 @@ func newPickerItem(p *notePicker) *pickerItem {
 }
 
 // Tapped selects the title.
-func (i *pickerItem) Tapped(*fyne.PointEvent) { i.p.list.Select(i.id) }
+func (i *pickerItem) Tapped(*fyne.PointEvent) {
+	i.p.list.Select(i.id)
+	i.p.focusQuery()
+}
 
 // DoubleTapped links to the title.
 func (i *pickerItem) DoubleTapped(*fyne.PointEvent) {
