@@ -15,17 +15,15 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// saveSettings returns a function that writes settings to the .env file at
-// path and sets them in this process's environment too.
-func saveSettings(path string) func(gui.Settings) error {
-	return func(s gui.Settings) error {
-		if err := writeEnv(path, map[string]string{"SCRIBBLE_URL": s.URL, "SCRIBBLE_TOKEN": s.Token}); err != nil {
-			return err
-		}
-		os.Setenv("SCRIBBLE_URL", s.URL)
-		os.Setenv("SCRIBBLE_TOKEN", s.Token)
-		return nil
+// saveSettings writes s to the .env file at path and sets it in this
+// process's environment too.
+func saveSettings(path string, s gui.Settings) error {
+	if err := writeEnv(path, map[string]string{"SCRIBBLE_URL": s.URL, "SCRIBBLE_TOKEN": s.Token}); err != nil {
+		return err
 	}
+	os.Setenv("SCRIBBLE_URL", s.URL)
+	os.Setenv("SCRIBBLE_TOKEN", s.Token)
+	return nil
 }
 
 // setupScreen is the window's content while scribble-gui cannot reach a
@@ -52,15 +50,8 @@ func setupScreen(w fyne.Window, msg string, current gui.Settings, save func(gui.
 // not is added at the end. Every other line, comments included, is kept.
 func writeEnv(path string, set map[string]string) error {
 	raw, err := os.ReadFile(path)
-	mode := fs.FileMode(0o600) // a new file holds the token
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-	case err != nil:
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
-	default:
-		if info, err := os.Stat(path); err == nil {
-			mode = info.Mode().Perm()
-		}
 	}
 
 	var lines []string
@@ -85,7 +76,9 @@ func writeEnv(path string, set map[string]string) error {
 			out = append(out, envLine(key, set[key]))
 		}
 	}
-	return os.WriteFile(path, []byte(strings.Join(out, "\n")+"\n"), mode)
+	// A new file holds the token, so only the user may read it; an
+	// existing one keeps its mode.
+	return os.WriteFile(path, []byte(strings.Join(out, "\n")+"\n"), 0o600)
 }
 
 // envKey is the variable a .env line sets, if it sets one.

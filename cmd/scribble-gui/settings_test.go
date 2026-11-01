@@ -110,7 +110,7 @@ func TestSaveSettingsWritesDotEnvAndSetsTheEnvironment(t *testing.T) {
 	t.Setenv("SCRIBBLE_URL", "")
 	t.Setenv("SCRIBBLE_TOKEN", "")
 
-	if err := saveSettings(path)(gui.Settings{URL: "https://notes.example", Token: "tok"}); err != nil {
+	if err := saveSettings(path, gui.Settings{URL: "https://notes.example", Token: "tok"}); err != nil {
 		t.Fatal(err)
 	}
 

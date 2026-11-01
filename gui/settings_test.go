@@ -35,7 +35,11 @@ func settingsFields(t *testing.T, w fyne.Window) (url, token *widget.Entry) {
 // dialogButton is the button labelled text in the dialog on top of w.
 func dialogButton(t *testing.T, w fyne.Window, text string) *widget.Button {
 	t.Helper()
-	for _, o := range test.LaidOutObjects(w.Canvas().Overlays().Top()) {
+	top := w.Canvas().Overlays().Top()
+	if top == nil {
+		t.Fatal("no dialog is showing")
+	}
+	for _, o := range test.LaidOutObjects(top) {
 		if b, ok := o.(*widget.Button); ok && b.Text == text {
 			return b
 		}
