@@ -108,7 +108,7 @@ a note, the list otherwise. */}}
 			<p class="muted">Anyone with this link can read the note, without the PIN. Revoke it to stop that.</p>
 			<label for="share-url">Public link</label>
 			<input type="text" id="share-url" value="{{.URL}}" class="text-field" readonly />
-			<p class="muted">{{if .Expires}}{{.Expires}}{{else}}Never expires{{end}}</p>
+			<p class="muted">{{with .Expires}}Expires on {{timeTag .}}{{else}}Never expires{{end}}</p>
 			<div class="editor-buttons">
 				<button type="button" class="button primary" data-copy="share-url" hidden>Copy link</button>
 				<span class="muted" data-copied role="status"></span>

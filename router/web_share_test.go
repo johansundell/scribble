@@ -180,9 +180,10 @@ func TestWebShare_Expiry(t *testing.T) {
 			t.Errorf("ttl %s expires in %v, want %v", ttl, got, want)
 		}
 		// The pane and the public page say when.
-		when := "Expires on " + sh.ExpiresAt.UTC().Format("2006-01-02 15:04 UTC")
-		wantBody(t, e.do(get(sharePath(n), c)), http.StatusOK, when)
-		wantBody(t, e.do(get("/s/"+sh.Token)), http.StatusOK, when)
+		utc := sh.ExpiresAt.UTC().Format("2006-01-02 15:04 UTC")
+		wantBody(t, e.do(get(sharePath(n), c)), http.StatusOK,
+			`Expires on <time datetime="`+sh.ExpiresAt.UTC().Format(time.RFC3339)+`">`+utc+"</time>")
+		wantBody(t, e.do(get("/s/"+sh.Token)), http.StatusOK, "Expires on "+utc)
 	}
 
 	// Never: no expiry, and the public page says nothing about one.

@@ -61,7 +61,8 @@ func shareExpiry(ttl string) (*time.Time, error) {
 	return &t, nil
 }
 
-// expiresText says when a share link expires, "" for never.
+// expiresText says when a share link expires, "" for never, in UTC: the
+// public page has no script to show it in the reader's time zone.
 func expiresText(t *time.Time) string {
 	if t == nil {
 		return ""
@@ -70,14 +71,14 @@ func expiresText(t *time.Time) string {
 }
 
 // shareForm is the share pane of one note. URL is "" while it isn't shared;
-// Expires is "" for a link that never expires.
+// Expires is nil for a link that never expires.
 type shareForm struct {
 	ID      int64
 	Action  string
 	Cancel  string
 	URL     string
 	QR      template.HTML
-	Expires string
+	Expires *time.Time
 }
 
 // AppShareForm shows the share pane: the link, its QR code and Revoke when
@@ -93,7 +94,7 @@ func (h *Handler) AppShareForm(c *gin.Context) error {
 	}
 	p.Title = "Share " + n.Title
 	p.Share = &shareForm{ID: n.ID, Action: SharePath(n.ID) + p.Filter(), Cancel: NotePath(n.ID) + p.Filter(),
-		Expires: expiresText(sh.ExpiresAt)}
+		Expires: sh.ExpiresAt}
 	if sh.Token != "" {
 		p.Share.URL = siteURL(c.Request) + SharedPath(sh.Token)
 		if p.Share.QR, err = qrSVG(p.Share.URL); err != nil {
