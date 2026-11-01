@@ -2,6 +2,8 @@ package gui_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http/httptest"
 	"path/filepath"
 	"slices"
@@ -1340,7 +1342,7 @@ func TestTrayAndHotkeyRestoreMinimizedWindow(t *testing.T) {
 }
 
 func TestParseHotkey(t *testing.T) {
-	mods, key, err := gui.ParseHotkey("")
+	mods, key, err := gui.ParseHotkey("", gui.DefaultHotkey)
 	if err != nil {
 		t.Fatalf("default hotkey failed: %v", err)
 	}
@@ -1348,7 +1350,7 @@ func TestParseHotkey(t *testing.T) {
 		t.Fatalf("default hotkey = (%v, %v), want Ctrl+Alt+N", mods, key)
 	}
 
-	mods, key, err = gui.ParseHotkey("ctrl+shift+f12")
+	mods, key, err = gui.ParseHotkey("ctrl+shift+f12", gui.DefaultHotkey)
 	if err != nil {
 		t.Fatalf("ctrl+shift+f12 failed: %v", err)
 	}
@@ -1356,7 +1358,7 @@ func TestParseHotkey(t *testing.T) {
 		t.Fatalf("got (%v, %v), want Ctrl+Shift+F12", mods, key)
 	}
 
-	mods, key, err = gui.ParseHotkey("Alt+Super+Space")
+	mods, key, err = gui.ParseHotkey("Alt+Super+Space", gui.DefaultHotkey)
 	if err != nil {
 		t.Fatalf("Alt+Super+Space failed: %v", err)
 	}
@@ -1364,11 +1366,11 @@ func TestParseHotkey(t *testing.T) {
 		t.Fatalf("got (%v, %v), want Alt+Super+Space", mods, key)
 	}
 
-	_, key0, err := gui.ParseHotkey("Ctrl+Alt+0")
+	_, key0, err := gui.ParseHotkey("Ctrl+Alt+0", gui.DefaultHotkey)
 	if err != nil {
 		t.Fatalf("Ctrl+Alt+0 failed: %v", err)
 	}
-	_, key1, err := gui.ParseHotkey("Ctrl+Alt+1")
+	_, key1, err := gui.ParseHotkey("Ctrl+Alt+1", gui.DefaultHotkey)
 	if err != nil {
 		t.Fatalf("Ctrl+Alt+1 failed: %v", err)
 	}
@@ -1377,14 +1379,14 @@ func TestParseHotkey(t *testing.T) {
 	}
 
 	for _, disabled := range []string{"none", "OFF"} {
-		mods, key, err = gui.ParseHotkey(disabled)
+		mods, key, err = gui.ParseHotkey(disabled, gui.DefaultHotkey)
 		if err != nil || mods != nil || key != 0 {
 			t.Fatalf("ParseHotkey(%q) = (%v, %v, %v), want disabled", disabled, mods, key, err)
 		}
 	}
 
 	for _, bad := range []string{"N", "Ctrl+", "Ctrl+Unknown", "Unknown+N"} {
-		if _, _, err := gui.ParseHotkey(bad); err == nil {
+		if _, _, err := gui.ParseHotkey(bad, gui.DefaultHotkey); err == nil {
 			t.Errorf("ParseHotkey(%q) succeeded, want error", bad)
 		}
 	}
@@ -1408,6 +1410,120 @@ func TestHotkeyEventOpensFocusedNewNoteEditor(t *testing.T) {
 	}
 	if !ui.Editor.Visible() || w.Canvas().Focused() != ui.Editor {
 		t.Fatal("hotkey should open and focus the new-note editor")
+	}
+}
+
+func TestParseShowHotkeyDefaultsToCtrlAltS(t *testing.T) {
+	mods, key, err := gui.ParseHotkey("", gui.DefaultShowHotkey)
+	if err != nil {
+		t.Fatalf("default show hotkey failed: %v", err)
+	}
+	if !slices.Equal(mods, []hotkey.Modifier{gui.ModCtrl, gui.ModAlt}) || key != hotkey.KeyS {
+		t.Fatalf("default show hotkey = (%v, %v), want Ctrl+Alt+S", mods, key)
+	}
+	mods, key, err = gui.ParseHotkey("none", gui.DefaultShowHotkey)
+	if err != nil || mods != nil || key != 0 {
+		t.Fatalf("ParseHotkey(none) = (%v, %v, %v), want disabled", mods, key, err)
+	}
+}
+
+func TestShowHotkeyShowsHiddenWindowWithoutOpeningANote(t *testing.T) {
+	c := newServer(t)
+	create(t, c, "# Ideas\nfly")
+	ui, w := openWithSpy(t, c)
+	tray := &fakeTray{}
+	ui.SetupTray(tray, nil)
+	ui.OpenNewNote()
+	test.Type(ui.Editor, "# Draft")
+	ui.Close()
+	w.minimized = true
+
+	ch := make(chan hotkey.Event, 1)
+	done := ui.BindShowHotkey(ch)
+	ch <- hotkey.Event{}
+	close(ch)
+	<-done
+
+	if w.hidden || w.minimized {
+		t.Fatal("show hotkey should show and restore the hidden window")
+	}
+	if ui.Editor.Text != "# Draft" {
+		t.Fatalf("show hotkey changed the editor text to %q", ui.Editor.Text)
+	}
+	if w.Canvas().Focused() != ui.Editor {
+		t.Fatal("show hotkey should keep focus where it was")
+	}
+	if len(w.Canvas().Overlays().List()) != 0 {
+		t.Fatal("show hotkey should not ask any questions")
+	}
+}
+
+// fakeHotkeyRegistrar stands in for system hotkey registration for the rest
+// of the test and records each registered hotkey as "mods key".
+func fakeHotkeyRegistrar(t *testing.T) *[]string {
+	t.Helper()
+	var got []string
+	t.Cleanup(gui.SetRegisterHotkeyForTest(func(mods []hotkey.Modifier, key hotkey.Key) (<-chan hotkey.Event, func() error, error) {
+		got = append(got, fmt.Sprint(mods, key))
+		return make(chan hotkey.Event), func() error { return nil }, nil
+	}))
+	return &got
+}
+
+func TestRegisterHotkeysRegistersNewNoteThenShow(t *testing.T) {
+	got := fakeHotkeyRegistrar(t)
+	c := newServer(t)
+	ui, _ := openWithSpy(t, c)
+
+	unregister := ui.RegisterHotkeys("", "")
+	want := []string{
+		fmt.Sprint([]hotkey.Modifier{gui.ModCtrl, gui.ModAlt}, hotkey.KeyN),
+		fmt.Sprint([]hotkey.Modifier{gui.ModCtrl, gui.ModAlt}, hotkey.KeyS),
+	}
+	if !slices.Equal(*got, want) || len(unregister) != 2 {
+		t.Fatalf("registered %v (%d unregister funcs), want %v (2)", *got, len(unregister), want)
+	}
+	if ui.Status.Text != "" {
+		t.Fatalf("status = %q, want empty", ui.Status.Text)
+	}
+
+	*got = nil
+	if unregister := ui.RegisterHotkeys("none", "off"); len(*got) != 0 || len(unregister) != 0 {
+		t.Fatalf("disabled hotkeys registered %v", *got)
+	}
+}
+
+func TestShowHotkeySameAsNewNoteHotkeyReportsErrorAndKeepsNewNote(t *testing.T) {
+	got := fakeHotkeyRegistrar(t)
+	c := newServer(t)
+	ui, _ := openWithSpy(t, c)
+
+	unregister := ui.RegisterHotkeys("Ctrl+Alt+N", "alt+CTRL+n")
+	if len(*got) != 1 || len(unregister) != 1 {
+		t.Fatalf("registered %v, want only the new-note hotkey", *got)
+	}
+	if !strings.Contains(ui.Status.Text, "same") {
+		t.Fatalf("status = %q, want an error about the same keys", ui.Status.Text)
+	}
+}
+
+func TestShowHotkeyErrorsGoToStatusBar(t *testing.T) {
+	defer gui.SetRegisterHotkeyForTest(func(mods []hotkey.Modifier, key hotkey.Key) (<-chan hotkey.Event, func() error, error) {
+		if key == hotkey.KeyS {
+			return nil, nil, errors.New("taken by another app")
+		}
+		return make(chan hotkey.Event), func() error { return nil }, nil
+	})()
+	c := newServer(t)
+
+	ui, _ := openWithSpy(t, c)
+	if unregister := ui.RegisterHotkeys("", "Ctrl+Bogus"); len(unregister) != 1 || !strings.Contains(ui.Status.Text, "Bogus") {
+		t.Fatalf("bad spec: status = %q, %d registered", ui.Status.Text, len(unregister))
+	}
+
+	ui, _ = openWithSpy(t, c)
+	if unregister := ui.RegisterHotkeys("", ""); len(unregister) != 1 || !strings.Contains(ui.Status.Text, "taken by another app") {
+		t.Fatalf("register failure: status = %q, %d registered", ui.Status.Text, len(unregister))
 	}
 }
 

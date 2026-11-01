@@ -1,8 +1,9 @@
 // Command scribble-gui is the desktop client for a scribble server.
 //
-//	SCRIBBLE_URL     server address (default https://notes.sudde.net)
-//	SCRIBBLE_TOKEN   the server's AUTH_TOKEN
-//	SCRIBBLE_HOTKEY  global new-note shortcut (default Ctrl+Alt+N; "none" to disable)
+//	SCRIBBLE_URL          server address (default https://notes.sudde.net)
+//	SCRIBBLE_TOKEN        the server's AUTH_TOKEN
+//	SCRIBBLE_HOTKEY       global new-note shortcut (default Ctrl+Alt+N; "none" to disable)
+//	SCRIBBLE_SHOW_HOTKEY  global shortcut that only shows the window (default Ctrl+Alt+S; "none" to disable)
 //
 // They can also be set in a .env file next to the executable, which
 // File > Settings… writes SCRIBBLE_URL and SCRIBBLE_TOKEN to; variables
@@ -125,7 +126,7 @@ func startUI(a fyne.App, w fyne.Window, ver string, s gui.Settings, save func(gu
 	if desk, ok := a.(desktop.App); ok {
 		ui.SetupTray(desk, trayIcon())
 	}
-	if unregister, err := ui.RegisterHotkey(os.Getenv("SCRIBBLE_HOTKEY")); err == nil && unregister != nil {
+	for _, unregister := range ui.RegisterHotkeys(os.Getenv("SCRIBBLE_HOTKEY"), os.Getenv("SCRIBBLE_SHOW_HOTKEY")) {
 		cleanup = append(cleanup, func() { unregister() })
 	}
 	return cleanup
