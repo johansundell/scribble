@@ -27,7 +27,7 @@ func (ui *UI) canPin(id int64) bool {
 	return api == 0 || api >= pinAPILevel
 }
 
-// pinLabel is what the menu item that pins or unpins n says.
+// pinLabelOf is what the menu item that pins or unpins n says.
 func pinLabelOf(n notes.Note) string {
 	if n.Pinned {
 		return "Unpin note"

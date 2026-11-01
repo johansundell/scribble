@@ -136,12 +136,7 @@ func runWith(stdout io.Writer, args []string) error {
 	case "append":
 		return cmdAppend(ctx, c, rest)
 	case "ls":
-		list, err := c.List(ctx, "")
-		if err != nil {
-			return err
-		}
-		printList(os.Stdout, list)
-		return nil
+		return cmdLs(ctx, c, stdout)
 	case "search":
 		if len(rest) == 0 {
 			return fmt.Errorf("usage: sn search <text>")
@@ -282,15 +277,28 @@ func explain(err error, title string) error {
 
 func printList(w io.Writer, list []notes.Note) {
 	for _, n := range list {
+		fmt.Fprintln(w, n.Title)
+	}
+}
+
+// pinMark comes before a pinned note's title in sn ls (#140).
+const pinMark = "📌 "
+
+// cmdLs prints every title, pinned notes first and marked pinMark. Only ls
+// marks them, so the other lists stay plain titles for pipes.
+func cmdLs(ctx context.Context, c *client.Client, w io.Writer) error {
+	list, err := c.List(ctx, "")
+	if err != nil {
+		return err
+	}
+	for _, n := range list {
 		if n.Pinned {
 			fmt.Fprint(w, pinMark)
 		}
 		fmt.Fprintln(w, n.Title)
 	}
+	return nil
 }
-
-// pinMark comes before a pinned note's title in lists (#140).
-const pinMark = "📌 "
 
 // cmdPin pins or unpins the note titled args[0] (#140).
 func cmdPin(ctx context.Context, c *client.Client, w io.Writer, pin bool, args []string) error {

@@ -95,8 +95,8 @@ stderr as `sn: <message>`.
 
 Lists (`ls`, `search`, `backlinks`, `projects <name>`) print one title per
 line, so they work with `grep`, `head`, `xargs` and so on. `ls` and `search`
-show pinned notes first, then the most recently changed. A pinned note's
-title starts with `📌 ` in every list; strip it (`sed 's/^📌 //'`) before
+show pinned notes first, then the most recently changed. In `ls` only, a
+pinned note's title starts with `📌 `; strip it (`sed 's/^📌 //'`) before
 passing titles on.
 
 ### help

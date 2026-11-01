@@ -279,12 +279,10 @@ func TestCmdPin(t *testing.T) {
 	}
 	ls := func() string {
 		t.Helper()
-		list, err := c.List(ctx, "")
-		if err != nil {
+		var out bytes.Buffer
+		if err := cmdLs(ctx, c, &out); err != nil {
 			t.Fatal(err)
 		}
-		var out bytes.Buffer
-		printList(&out, list)
 		return out.String()
 	}
 
@@ -293,6 +291,13 @@ func TestCmdPin(t *testing.T) {
 	}
 	if got, want := ls(), "📌 Plans\nBugs\n"; got != want {
 		t.Errorf("ls after pin = %q, want %q", got, want)
+	}
+	// Other lists stay plain titles, for pipes.
+	list, _ := c.List(ctx, "plans")
+	var plain bytes.Buffer
+	printList(&plain, list)
+	if plain.String() != "Plans\n" {
+		t.Errorf("search printed %q, want no pin mark", plain.String())
 	}
 	if got := run("unpin", "Plans"); got != "unpinned \"Plans\"\n" {
 		t.Errorf("unpin printed %q", got)
