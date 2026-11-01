@@ -75,10 +75,9 @@ type UI struct {
 
 	backlinkButtons *fyne.Container // inside Backlinks
 
-	menu                                         *fyne.MainMenu
-	saveItem, renameItem, deleteItem, toggleItem *fyne.MenuItem // greyed out like their toolbar buttons
-	shareItem                                    *fyne.MenuItem
-	lastFocus                                    editable // the text field or viewer that had focus last, nil if another widget did
+	menu                                                    *fyne.MainMenu
+	saveItem, renameItem, deleteItem, toggleItem, shareItem *fyne.MenuItem // greyed out like their toolbar buttons
+	lastFocus                                               editable       // the text field or viewer that had focus last, nil if another widget did
 
 	w       fyne.Window
 	c       *client.Client
@@ -516,8 +515,7 @@ func (ui *UI) updateButtons() {
 	// or queued edits stale.
 	setEnabled(ui.Rename, writable && ui.onServer() && !ui.hasUnsavedChanges())
 	setEnabled(ui.Delete, writable && ui.isSaved())
-	// Sharing asks the server, so the note must be on it.
-	setEnabled(ui.Share, writable && !ui.offline && ui.current != nil && ui.current.ID > 0)
+	setEnabled(ui.Share, ui.canShare())
 	ui.updateMenu()
 }
 
@@ -928,13 +926,26 @@ func (ui *UI) selectCurrent() {
 
 // reportOnline is report for an action only the server can do.
 func (ui *UI) reportOnline(err error) bool {
-	if client.IsUnreachable(err) {
+	if err == nil {
+		return false
+	}
+	ui.Status.SetText(ui.serverTrouble(err, "The server is unreachable. Renaming, deleting, sharing and overwriting a note, and exporting and importing notes, need it; try again when it is back."))
+	return true
+}
+
+// serverTrouble notes what err from an action only the server can do says
+// about the server, marking the app offline or too old for it, and says
+// what went wrong: ifUnreachable when the server could not be reached.
+func (ui *UI) serverTrouble(err error, ifUnreachable string) string {
+	switch {
+	case client.IsUnreachable(err):
 		ui.offline = true
 		ui.setOffline()
-		ui.Status.SetText("The server is unreachable. Renaming, deleting, sharing and overwriting a note, and exporting and importing notes, need it; try again when it is back.")
-		return true
+		return ifUnreachable
+	case client.IsUpgradeRequired(err):
+		ui.setOutdated()
 	}
-	return ui.report(err)
+	return explain(err)
 }
 
 // report shows err in the status line and reports whether there was one.

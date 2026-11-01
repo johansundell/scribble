@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/johansundell/scribble/client"
 	"github.com/johansundell/scribble/gui"
+	"github.com/johansundell/scribble/notes"
 )
 
 // shareEnabled reports whether the Share button and File > Share note… are
@@ -24,12 +25,12 @@ func shareEnabled(t *testing.T, ui *gui.UI, w fyne.Window) bool {
 	return !ui.Share.Disabled()
 }
 
-// dialogLink is the share link's field in the dialog on top of w, nil if
-// it shows none.
-func dialogLink(w fyne.Window) *widget.Entry {
+// dialogLink is the share link's selectable label in the dialog on top of
+// w, nil if it shows none.
+func dialogLink(w fyne.Window) *widget.Label {
 	for _, o := range test.LaidOutObjects(w.Canvas().Overlays().Top()) {
-		if e, ok := o.(*widget.Entry); ok && e.Visible() {
-			return e
+		if l, ok := o.(*widget.Label); ok && l.Visible() && l.Selectable {
+			return l
 		}
 	}
 	return nil
@@ -45,6 +46,8 @@ func dialogHasQR(w fyne.Window) bool {
 	return false
 }
 
+// hasDialogButton reports whether the dialog on top of w shows a button
+// labelled text.
 func hasDialogButton(w fyne.Window, text string) bool {
 	for _, o := range test.LaidOutObjects(w.Canvas().Overlays().Top()) {
 		if b, ok := o.(*widget.Button); ok && b.Visible() && b.Text == text {
@@ -66,6 +69,15 @@ func TestShareNeedsASavedNoteAndTheServer(t *testing.T) {
 	ui.List.Select(0)
 	if !shareEnabled(t, ui, w) {
 		t.Fatal("Share disabled on a saved note")
+	}
+	test.Tap(ui.EditToggle)
+	test.Type(ui.Editor, "x")
+	if shareEnabled(t, ui, w) {
+		t.Error("Share enabled with unsaved edits")
+	}
+	test.Tap(ui.Save)
+	if !shareEnabled(t, ui, w) {
+		t.Fatal("Share disabled once the edits are saved")
 	}
 	// Opening the dialog while it is disabled does nothing.
 	test.Tap(ui.NewNote)
@@ -148,7 +160,7 @@ func TestShareMenuShowsAnExistingLink(t *testing.T) {
 	c := newSharingServer(t)
 	create(t, c, "# Ideas\nfly")
 	n := byTitle(t, c, "Ideas")
-	sh, err := c.ShareNote(context.Background(), n.ID, "")
+	sh, err := c.ShareNote(context.Background(), n.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,11 +194,64 @@ func TestShareRefusedWhenTheServerHasNoWebApp(t *testing.T) {
 
 // serverShare is the share link of the note titled title, as the server
 // has it.
-func serverShare(t *testing.T, c *client.Client, title string) client.Share {
+func serverShare(t *testing.T, c *client.Client, title string) notes.Share {
 	t.Helper()
 	sh, err := c.GetShare(context.Background(), byTitle(t, c, title).ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return sh
+}
+
+func TestShareFailuresKeepTheDialogAsItWas(t *testing.T) {
+	c := newSharingServer(t)
+	cb := plug(c)
+	create(t, c, "# Ideas\nfly")
+	ui, w := open(t, c)
+	ui.List.Select(0)
+
+	// The server drops before the dialog opens: no dialog, the reason in
+	// the status line, and Share greys out.
+	cb.unplugged.Store(true)
+	test.Tap(ui.Share)
+	if w.Canvas().Overlays().Top() != nil {
+		t.Fatal("a dialog opened without the server")
+	}
+	if !strings.Contains(ui.Status.Text, "unreachable") || shareEnabled(t, ui, w) {
+		t.Fatalf("status %q, Share enabled %v", ui.Status.Text, !ui.Share.Disabled())
+	}
+
+	cb.unplugged.Store(false)
+	ui.Sync()
+	test.Tap(ui.Share)
+	tapDialogButton(t, w, "Create public link")
+	sh := serverShare(t, c, "Ideas")
+
+	// The server drops before Revoke: the link stays, with the reason.
+	cb.unplugged.Store(true)
+	tapDialogButton(t, w, "Revoke link")
+	if link := dialogLink(w); link == nil || link.Text != sh.URL {
+		t.Fatalf("a failed revoke changed the link to %v", link)
+	}
+	if !strings.Contains(dialogText(w), "unreachable") {
+		t.Errorf("dialog says %q", dialogText(w))
+	}
+	cb.unplugged.Store(false)
+	if got := serverShare(t, c, "Ideas"); got.Token != sh.Token {
+		t.Errorf("the server's link changed: %+v", got)
+	}
+	if shareEnabled(t, ui, w) {
+		t.Error("Share enabled after the server was found unreachable")
+	}
+}
+
+// A server from before share links (API level 3) has no endpoints for them.
+func TestShareNeedsAServerWithShareLinks(t *testing.T) {
+	c := startServer(t, nil, 3)
+	create(t, c, "# Ideas\nfly")
+	ui, w := open(t, c)
+	ui.List.Select(0)
+	if shareEnabled(t, ui, w) {
+		t.Error("Share enabled against an API level 3 server")
+	}
 }

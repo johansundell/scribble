@@ -37,7 +37,7 @@ func (discardSink) Enqueue(types.UsageLog) {}
 // a client for it.
 func newServer(t *testing.T) *client.Client {
 	t.Helper()
-	return startServer(t, nil)
+	return startServer(t, nil, 0)
 }
 
 // newSharingServer is newServer with the web app on, which serves share
@@ -48,11 +48,12 @@ func newSharingServer(t *testing.T) *client.Client {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return startServer(t, a)
+	return startServer(t, a, 0)
 }
 
-// startServer starts the server, with the web app on when a is not nil.
-func startServer(t *testing.T, a *auth.Authenticator) *client.Client {
+// startServer starts the server, with the web app on when a is not nil, at
+// API level apiLevel (0: the current one).
+func startServer(t *testing.T, a *auth.Authenticator, apiLevel int) *client.Client {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	s, err := store.NewSQLite(filepath.Join(t.TempDir(), "gui.db"))
@@ -70,7 +71,7 @@ func startServer(t *testing.T, a *auth.Authenticator) *client.Client {
 	}
 	r, err := router.NewRouter(router.Config{
 		Handler: h, Auth: a, LogSink: discardSink{}, Settings: types.AppSettings{AuthToken: "tok"},
-		Assets: fstest.MapFS{}, Version: "dev",
+		Assets: fstest.MapFS{}, Version: "dev", APILevel: apiLevel,
 	})
 	if err != nil {
 		t.Fatal(err)

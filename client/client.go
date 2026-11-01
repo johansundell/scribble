@@ -225,26 +225,18 @@ func (c *Client) Rename(ctx context.Context, id int64, title string) (*notes.Not
 	return &n, nil
 }
 
-// Share is a note's public share link (#142): the zero Share while the
-// note is private. ExpiresAt is nil for a link that never expires.
-type Share struct {
-	Token     string     `json:"token"`
-	URL       string     `json:"url"`
-	ExpiresAt *time.Time `json:"expires_at,omitempty"`
-}
-
-// GetShare returns note id's live share link, or the zero Share.
-func (c *Client) GetShare(ctx context.Context, id int64) (Share, error) {
-	var sh Share
+// GetShare returns note id's live share link (#142), or the zero Share
+// while it is private.
+func (c *Client) GetShare(ctx context.Context, id int64) (notes.Share, error) {
+	var sh notes.Share
 	return sh, c.do(ctx, "GET", notePath(id, "/share"), nil, nil, &sh)
 }
 
-// ShareNote gives note id a public link, keeping its live one. ttl is how
-// long it works: "1h", "1d", "7d", "30d", or "" for never. The server
-// refuses while its web app is off (see IsSharingOff).
-func (c *Client) ShareNote(ctx context.Context, id int64, ttl string) (Share, error) {
-	var sh Share
-	return sh, c.do(ctx, "POST", notePath(id, "/share"), nil, map[string]string{"ttl": ttl}, &sh)
+// ShareNote gives note id a public link that never expires, keeping its
+// live one. The server refuses while its web app is off (see IsSharingOff).
+func (c *Client) ShareNote(ctx context.Context, id int64) (notes.Share, error) {
+	var sh notes.Share
+	return sh, c.do(ctx, "POST", notePath(id, "/share"), nil, nil, &sh)
 }
 
 // UnshareNote revokes note id's public link.

@@ -209,8 +209,8 @@ available".
 | DELETE | `/notes/:id` | 204; leaves a tombstone |
 | GET | `/notes/:id/backlinks` | notes containing `[[Title]]` for this note |
 | POST | `/notes/:id/rename` | `{"title": "New"}`; rewrites `[[links]]` in other notes in one transaction |
-| GET | `/notes/:id/share` | the note's live [share link](#web-app): `{"token": "…", "url": "https://…/s/<token>", "expires_at": "…"}` (`expires_at` left out for never); empty `token` and `url` while the note is private |
-| POST | `/notes/:id/share` | shares the note, keeping a live link's token, and returns the link as for `GET`. Optional `{"ttl": "1h"}` (`1h`, `1d`, `7d`, `30d`, `never`; default never). **501** while the web app is off (`WEB_PIN` unset), since it serves the links |
+| GET | `/notes/:id/share` | the note's live [share link](#web-app): `{"token": "…", "url": "https://…/s/<token>", "expires_at": "…"}` (`expires_at`, set in the web app, left out for never); empty `token` and `url` while the note is private or the web app is off |
+| POST | `/notes/:id/share` | shares the note with a link that never expires, keeping a live link's token, and returns the link as for `GET`. **501** while the web app is off (`WEB_PIN` unset), since it serves the links |
 | DELETE | `/notes/:id/share` | 204; revokes the link, which answers 404 at once |
 | GET | `/changes?since=N` | everything changed after seq N (deleted ones flagged) plus `latest_seq` to use next time |
 | GET | `/notes/:id/versions` | the note's kept versions, newest first, without bodies: `revision, title, reason, deleted, created_at, updated_at`. Works for deleted notes too |

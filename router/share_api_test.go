@@ -1,55 +1,44 @@
 package router_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
-	"testing/fstest"
 	"time"
 
-	"github.com/gin-gonic/gin"
-	"github.com/johansundell/scribble/router"
-	"github.com/johansundell/scribble/store"
-	"github.com/johansundell/scribble/types"
+	"github.com/johansundell/scribble/notes"
 )
 
-// shareAnswer is the JSON of the /notes/:id/share endpoints.
-type shareAnswer struct {
-	Token     string     `json:"token"`
-	URL       string     `json:"url"`
-	ExpiresAt *time.Time `json:"expires_at"`
-}
-
 // apiDo sends an authenticated API request to e's router.
-func (e *webEnv) apiDo(method, path, body string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(method, path, strings.NewReader(body))
+func (e *webEnv) apiDo(method, path string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, path, nil)
 	req.Header.Set("Authorization", "Bearer secret-token")
-	if body != "" {
-		req.Header.Set("Content-Type", "application/json")
-	}
 	return e.do(req)
 }
 
-func decodeShare(t *testing.T, w *httptest.ResponseRecorder, status int) shareAnswer {
+// decodeShare checks w's status and reads its share link.
+func decodeShare(t *testing.T, w *httptest.ResponseRecorder, status int) notes.Share {
 	t.Helper()
 	if w.Code != status {
 		t.Fatalf("status %d, want %d (body %q)", w.Code, status, w.Body.String())
 	}
-	var a shareAnswer
-	if err := json.Unmarshal(w.Body.Bytes(), &a); err != nil {
+	var sh notes.Share
+	if err := json.Unmarshal(w.Body.Bytes(), &sh); err != nil {
 		t.Fatalf("bad JSON %q: %v", w.Body.String(), err)
 	}
-	return a
+	return sh
 }
+
+func apiSharePath(n *notes.Note) string { return fmt.Sprintf("/notes/%d/share", n.ID) }
 
 func TestShareAPI(t *testing.T) {
 	e := newWebEnv(t)
 	n := e.note(t, "# Alpha\nbody")
-	path := fmt.Sprintf("/notes/%d/share", n.ID)
+	path := apiSharePath(n)
 
 	// The token is required.
 	if w := e.do(httptest.NewRequest("GET", path, nil)); w.Code != http.StatusUnauthorized {
@@ -57,96 +46,79 @@ func TestShareAPI(t *testing.T) {
 	}
 
 	// Private: an empty answer, not a 404, which means no such note.
-	if a := decodeShare(t, e.apiDo("GET", path, ""), http.StatusOK); a.Token != "" || a.URL != "" {
-		t.Fatalf("private note answers %+v", a)
+	if sh := decodeShare(t, e.apiDo("GET", path), http.StatusOK); sh.Token != "" || sh.URL != "" {
+		t.Fatalf("private note answers %+v", sh)
 	}
 
-	// Sharing makes a link; sharing again keeps it.
-	a := decodeShare(t, e.apiDo("POST", path, ""), http.StatusOK)
-	if len(a.Token) != 32 || a.URL != "http://example.com/s/"+a.Token || a.ExpiresAt != nil {
-		t.Fatalf("share answered %+v", a)
+	// Sharing makes a link that never expires; sharing again keeps it.
+	sh := decodeShare(t, e.apiDo("POST", path), http.StatusOK)
+	if len(sh.Token) != 32 || sh.URL != "http://example.com/s/"+sh.Token || sh.ExpiresAt != nil {
+		t.Fatalf("share answered %+v", sh)
 	}
-	if tok := e.shareToken(t, n); tok != a.Token {
-		t.Fatalf("store holds %q, answer %q", tok, a.Token)
+	if tok := e.shareToken(t, n); tok != sh.Token {
+		t.Fatalf("store holds %q, answer %q", tok, sh.Token)
 	}
-	if again := decodeShare(t, e.apiDo("POST", path, ""), http.StatusOK); again.Token != a.Token {
-		t.Fatalf("sharing again changed the token: %q to %q", a.Token, again.Token)
+	if again := decodeShare(t, e.apiDo("POST", path), http.StatusOK); again.Token != sh.Token {
+		t.Fatalf("sharing again changed the token: %q to %q", sh.Token, again.Token)
 	}
-	if got := decodeShare(t, e.apiDo("GET", path, ""), http.StatusOK); got != a {
-		t.Fatalf("GET answers %+v, want %+v", got, a)
+	if got := decodeShare(t, e.apiDo("GET", path), http.StatusOK); got != sh {
+		t.Fatalf("GET answers %+v, want %+v", got, sh)
 	}
-	// The link works.
-	if w := e.do(get("/s/" + a.Token)); w.Code != http.StatusOK {
+	if w := e.do(get("/s/" + sh.Token)); w.Code != http.StatusOK {
 		t.Fatalf("share link = %d", w.Code)
 	}
 
-	// A ttl gives the link an expiry, as in the web app's share pane.
-	exp := decodeShare(t, e.apiDo("POST", path, `{"ttl":"1d"}`), http.StatusOK)
-	if exp.ExpiresAt == nil || time.Until(*exp.ExpiresAt) < 23*time.Hour {
-		t.Fatalf("1d share answered %+v", exp)
+	// GET reports an expiry set in the web app's share pane.
+	exp := time.Now().Add(time.Hour)
+	if _, err := e.store.ShareNote(context.Background(), n.ID, &exp); err != nil {
+		t.Fatal(err)
 	}
-	if w := e.apiDo("POST", path, `{"ttl":"forever"}`); w.Code != http.StatusBadRequest {
-		t.Fatalf("unknown ttl = %d, want 400", w.Code)
+	if got := decodeShare(t, e.apiDo("GET", path), http.StatusOK); got.ExpiresAt == nil || got.ExpiresAt.Sub(exp).Abs() > time.Second {
+		t.Fatalf("GET answers expiry %v, want %v", got.ExpiresAt, exp)
 	}
 
 	// Revoking: the link stops working and the note reads as private.
-	if w := e.apiDo("DELETE", path, ""); w.Code != http.StatusNoContent {
+	if w := e.apiDo("DELETE", path); w.Code != http.StatusNoContent {
 		t.Fatalf("revoke = %d, want 204 (%q)", w.Code, w.Body.String())
 	}
-	if w := e.do(get("/s/" + a.Token)); w.Code != http.StatusNotFound {
+	if w := e.do(get("/s/" + sh.Token)); w.Code != http.StatusNotFound {
 		t.Fatalf("revoked link = %d, want 404", w.Code)
 	}
-	if got := decodeShare(t, e.apiDo("GET", path, ""), http.StatusOK); got.Token != "" {
+	if got := decodeShare(t, e.apiDo("GET", path), http.StatusOK); got.Token != "" {
 		t.Fatalf("revoked note answers %+v", got)
 	}
 
-	// No such note.
 	for _, m := range []string{"GET", "POST", "DELETE"} {
-		if w := e.apiDo(m, "/notes/999/share", ""); w.Code != http.StatusNotFound {
+		if w := e.apiDo(m, "/notes/999/share"); w.Code != http.StatusNotFound {
 			t.Errorf("%s of a missing note = %d, want 404", m, w.Code)
 		}
 	}
 }
 
-// Without the web app a share link would answer 404, so the API refuses to
-// make one. Reading and revoking still work.
+// Without the web app a share link answers 404, so the API makes none and
+// shows none, even one made while it was on. Revoking still works.
 func TestShareAPI_WebOff(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	s, err := store.NewSQLite(filepath.Join(t.TempDir(), "api.db"))
-	if err != nil {
+	on := newWebEnv(t)
+	n := on.note(t, "# Alpha")
+	if _, err := on.store.ShareNote(context.Background(), n.ID, nil); err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
-	h := mustNewHandler(t, s, false, fstest.MapFS{}, "test", "dev")
-	r, err := router.NewRouter(router.Config{
-		Handler: h, LogSink: &recordingSink{}, Settings: types.AppSettings{AuthToken: "tok"},
-		Assets: fstest.MapFS{}, Version: "dev",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	do := func(method, path string) *httptest.ResponseRecorder {
-		req := httptest.NewRequest(method, path, nil)
-		req.Header.Set("Authorization", "Bearer tok")
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-		return w
-	}
-	req := httptest.NewRequest("POST", "/notes", strings.NewReader(`{"body":"# Alpha"}`))
-	req.Header.Set("Authorization", "Bearer tok")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	if w.Code != http.StatusCreated {
-		t.Fatalf("create = %d", w.Code)
-	}
+	off := &webEnv{r: newWebRouter(t, on.store, nil, &testLogger{}, nil), store: on.store}
+	path := apiSharePath(n)
 
-	if w := do("POST", "/notes/1/share"); w.Code != http.StatusNotImplemented {
-		t.Fatalf("share with the web app off = %d, want 501", w.Code)
+	if w := off.apiDo("POST", path); w.Code != http.StatusNotImplemented || !strings.Contains(w.Body.String(), "Not Implemented") {
+		t.Fatalf("share with the web app off = %d %q, want 501", w.Code, w.Body.String())
 	}
-	if a := decodeShare(t, do("GET", "/notes/1/share"), http.StatusOK); a.Token != "" {
-		t.Fatalf("GET answers %+v", a)
+	if sh := decodeShare(t, off.apiDo("GET", path), http.StatusOK); sh.Token != "" || sh.URL != "" {
+		t.Fatalf("GET shows a link the web app is not serving: %+v", sh)
 	}
-	if w := do("DELETE", "/notes/1/share"); w.Code != http.StatusNoContent {
+	if w := off.apiDo("DELETE", path); w.Code != http.StatusNoContent {
 		t.Fatalf("revoke = %d, want 204", w.Code)
+	}
+	if tok := on.shareToken(t, n); tok != "" {
+		t.Fatalf("revoke left token %q", tok)
+	}
+	if w := off.apiDo("GET", "/notes/999/share"); w.Code != http.StatusNotFound {
+		t.Errorf("GET of a missing note = %d, want 404", w.Code)
 	}
 }
