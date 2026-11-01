@@ -324,17 +324,7 @@ func TestCreateNewNote(t *testing.T) {
 // tapDialogButton taps the button labelled text in the dialog on top of w.
 func tapDialogButton(t *testing.T, w fyne.Window, text string) {
 	t.Helper()
-	top := w.Canvas().Overlays().Top()
-	if top == nil {
-		t.Fatal("no dialog is showing")
-	}
-	for _, o := range test.LaidOutObjects(top) {
-		if b, ok := o.(*widget.Button); ok && b.Text == text {
-			test.Tap(b)
-			return
-		}
-	}
-	t.Fatalf("the dialog has no %q button", text)
+	test.Tap(dialogButton(t, w, text))
 }
 
 func TestTogglingToViewPreviewsUnsavedEdits(t *testing.T) {

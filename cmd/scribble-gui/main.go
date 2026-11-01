@@ -4,7 +4,8 @@
 //	SCRIBBLE_TOKEN   the server's AUTH_TOKEN
 //	SCRIBBLE_HOTKEY  global new-note shortcut (default Ctrl+Alt+N; "none" to disable)
 //
-// They can also be set in a .env file next to the executable; variables
+// They can also be set in a .env file next to the executable, which
+// File > Settings… writes SCRIBBLE_URL and SCRIBBLE_TOKEN to; variables
 // already in the environment win. The file is read before Fyne starts, so
 // Fyne's own variables (such as FYNE_THEME=dark) work there too.
 //
@@ -19,6 +20,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -58,13 +60,47 @@ func main() {
 	w := newWindow(a, "Scribble "+ver)
 	w.Resize(fyne.NewSize(1000, 700))
 
-	token := os.Getenv("SCRIBBLE_TOKEN")
-	baseURL := client.ServerURL()
-	if envErr != nil {
-		w.SetContent(widget.NewLabel("Cannot read the .env file next to scribble-gui: " + envErr.Error()))
-	} else if token == "" {
-		w.SetContent(widget.NewLabel("SCRIBBLE_TOKEN is not set. Set it to the server's AUTH_TOKEN, in the environment or in a .env file next to scribble-gui, and start it again."))
-	} else if cache, err := openCache(baseURL); err != nil {
+	var cleanup []func()
+	defer func() {
+		for _, f := range slices.Backward(cleanup) {
+			f()
+		}
+	}()
+	save := func(s gui.Settings) error {
+		path, err := envPathNextToExecutable()
+		if err != nil {
+			return err
+		}
+		return saveSettings(path, s)
+	}
+	// start shows the notes, or the setup screen if there is no way to
+	// reach the server yet. Saving settings there starts again.
+	var start func(envErr error)
+	start = func(envErr error) {
+		current := gui.Settings{URL: client.ServerURL(), Token: os.Getenv("SCRIBBLE_TOKEN")}
+		retry := func() { start(nil) }
+		switch {
+		case envErr != nil:
+			w.SetContent(setupScreen(w, "Cannot read the .env file next to scribble-gui: "+envErr.Error(), current, save, retry))
+		case current.Token == "":
+			w.SetContent(setupScreen(w, "SCRIBBLE_TOKEN is not set. Enter the server's address and AUTH_TOKEN in Settings, or set them in the environment or in a .env file next to scribble-gui.", current, save, retry))
+		default:
+			cleanup = append(cleanup, startUI(a, w, ver, current, save)...)
+		}
+	}
+	start(envErr)
+	// After start-up, so it overrides the title bar Fyne sets from the
+	// Windows app mode when it creates the window. SetOnStarted keeps one
+	// callback: add any other start-up work to this one.
+	a.Lifecycle().SetOnStarted(func() { gui.MatchTitleBar(w, a.Settings()) })
+	w.ShowAndRun()
+}
+
+// startUI opens the local copy of the notes on server s and shows them,
+// syncing in the background. It returns what to undo when the app quits.
+func startUI(a fyne.App, w fyne.Window, ver string, s gui.Settings, save func(gui.Settings) error) []func() {
+	cache, err := openCache(s.URL)
+	if err != nil {
 		var locked *offline.LockedError
 		if errors.As(err, &locked) {
 			msg := "Another scribble-gui instance is already running for this server."
@@ -78,24 +114,21 @@ func main() {
 		} else {
 			w.SetContent(widget.NewLabel("Cannot open the notes saved on this computer: " + err.Error()))
 		}
-	} else {
-		defer cache.Close()
-		c := client.New(baseURL, token)
-		c.Name, c.Version = "gui", ver
-		ui := gui.New(w, c, cache)
-		ui.StartSync(syncInterval)
-		if desk, ok := a.(desktop.App); ok {
-			ui.SetupTray(desk, trayIcon())
-		}
-		if unregister, err := ui.RegisterHotkey(os.Getenv("SCRIBBLE_HOTKEY")); err == nil && unregister != nil {
-			defer unregister()
-		}
+		return nil
 	}
-	// After start-up, so it overrides the title bar Fyne sets from the
-	// Windows app mode when it creates the window. SetOnStarted keeps one
-	// callback: add any other start-up work to this one.
-	a.Lifecycle().SetOnStarted(func() { gui.MatchTitleBar(w, a.Settings()) })
-	w.ShowAndRun()
+	cleanup := []func(){func() { cache.Close() }}
+	c := client.New(s.URL, s.Token)
+	c.Name, c.Version = "gui", ver
+	ui := gui.New(w, c, cache)
+	ui.SaveSettings = save
+	ui.StartSync(syncInterval)
+	if desk, ok := a.(desktop.App); ok {
+		ui.SetupTray(desk, trayIcon())
+	}
+	if unregister, err := ui.RegisterHotkey(os.Getenv("SCRIBBLE_HOTKEY")); err == nil && unregister != nil {
+		cleanup = append(cleanup, func() { unregister() })
+	}
+	return cleanup
 }
 
 // newApp loads the .env file, then creates the app, so variables Fyne reads
@@ -121,11 +154,20 @@ func newWindow(a fyne.App, title string) fyne.Window {
 // from. A desktop launcher starts it with an unpredictable working
 // directory, so the file is looked for there rather than in it.
 func loadEnvNextToExecutable() error {
-	exe, err := os.Executable()
+	path, err := envPathNextToExecutable()
 	if err != nil {
 		return nil // nowhere to look; the environment still applies
 	}
-	return loadEnv(filepath.Dir(exe))
+	return loadEnv(filepath.Dir(path))
+}
+
+// envPathNextToExecutable is the .env file next to scribble-gui.
+func envPathNextToExecutable() (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("cannot find the folder scribble-gui runs from: %w", err)
+	}
+	return filepath.Join(filepath.Dir(exe), ".env"), nil
 }
 
 // loadEnv sets the variables in dir/.env that are not set yet. A missing
