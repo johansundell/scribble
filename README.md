@@ -59,7 +59,8 @@ sn projects            # every #project; `projects <name>` lists its notes
 sn export              # every note as <title>.md in scribble-notes-YYYY-MM-DD.zip
 sn import notes.zip    # skips titles that exist; --overwrite replaces them
 
-# GUI (same SCRIBBLE_URL / SCRIBBLE_TOKEN; optional SCRIBBLE_HOTKEY, default Ctrl+Alt+N).
+# GUI (same SCRIBBLE_URL / SCRIBBLE_TOKEN; optional SCRIBBLE_HOTKEY, default Ctrl+Alt+N,
+# and SCRIBBLE_SHOW_HOTKEY, default Ctrl+Alt+S).
 # Also read from a .env next to the scribble-gui binary; the environment wins.
 # File > Settings… (Ctrl+, / Cmd+,) writes the URL and token to that .env.
 make build-gui
@@ -70,7 +71,13 @@ make build-gui
 **Quit**) so closing the main window keeps the app resident in the tray, and a
 global hotkey (`Ctrl+Alt+N` by default; override with `SCRIBBLE_HOTKEY`, or set
 `SCRIBBLE_HOTKEY=none` to disable) that opens or focuses a new-note editor from
-anywhere.
+anywhere. A second global hotkey (`Ctrl+Alt+S` by default, Ctrl+Option+S on
+macOS; override with `SCRIBBLE_SHOW_HOTKEY`, or set it to `none` to disable)
+only brings the window forward: it shows it from the tray, restores it if
+minimised and focuses it, without opening a note. Both use the same syntax and
+are set in `.env` or the environment. If a hotkey can't be used (bad syntax,
+taken by another app, or both set to the same keys), the status bar says so
+and the app keeps running.
 
 The window has a menu bar (on macOS, the system menu bar; there Ctrl is Cmd):
 
@@ -444,7 +451,7 @@ client/                          Go API client
 offline/                         the GUI's local copy of the notes and its sync
 cmd/sn/                          CLI
 gui/                             Fyne GUI: windows and widgets
-cmd/scribble-gui/                GUI entry point (reads SCRIBBLE_URL / SCRIBBLE_TOKEN / SCRIBBLE_HOTKEY)
+cmd/scribble-gui/                GUI entry point (reads SCRIBBLE_URL / SCRIBBLE_TOKEN / SCRIBBLE_HOTKEY / SCRIBBLE_SHOW_HOTKEY)
 docs/service-template.md         the template's own docs
 GLOSSARY.md                      the words used for notes, sync, history and the replica
 docs/adr/                        why things are as they are: one short decision record each

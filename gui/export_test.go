@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/widget"
 	"github.com/johansundell/scribble/offline"
+	"golang.design/x/hotkey"
 )
 
 // SetParseMarkdownForTest swaps the markdown parser for testing panic recovery.
@@ -46,4 +47,12 @@ func SetFilePickersForTest(save func(name string, cb func(fyne.URIWriteCloser, e
 	pickSaveFile = func(_ fyne.Window, name string, cb func(fyne.URIWriteCloser, error)) { save(name, cb) }
 	pickOpenFile = func(_ fyne.Window, cb func(fyne.URIReadCloser, error)) { open(cb) }
 	return func() { pickSaveFile, pickOpenFile = oldSave, oldOpen }
+}
+
+// SetRegisterHotkeyForTest swaps how global hotkeys are registered with the
+// system, so tests never grab real desktop shortcuts.
+func SetRegisterHotkeyForTest(fn func([]hotkey.Modifier, hotkey.Key) (<-chan hotkey.Event, func() error, error)) func() {
+	old := registerHotkey
+	registerHotkey = fn
+	return func() { registerHotkey = old }
 }
