@@ -263,6 +263,40 @@ a.button {
 	max-width: 100%;
 }
 
+/* Link to note (#149) uses the overlay's look too. */
+.shortcuts .note-link-form {
+	margin: 0;
+	text-align: left;
+}
+
+.note-link-list {
+	max-height: min(20rem, 50vh);
+	margin: 0.75rem 0;
+	padding: 0;
+	overflow-y: auto;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	list-style: none;
+}
+
+.note-link-list:empty {
+	display: none;
+}
+
+.note-link-list [role="option"] {
+	display: flex;
+	align-items: center;
+	min-height: 44px;
+	padding: 0 0.75rem;
+	overflow-wrap: anywhere;
+	cursor: pointer;
+}
+
+.note-link-list [aria-selected="true"] {
+	background: var(--accent);
+	color: var(--accent-text);
+}
+
 .dialog-buttons {
 	display: flex;
 	justify-content: flex-end;

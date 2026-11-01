@@ -106,12 +106,24 @@ func (d *webDriver) wantText(sel, want string) {
 	d.t.Errorf("%s: %q, want it to contain %q", sel, got, want)
 }
 
-// keys presses each key in turn, on whatever has the focus.
+// keys presses each key in turn on the focused element. A modifier stays
+// down until it is pressed again.
 func (d *webDriver) keys(keys ...string) {
 	d.t.Helper()
 	var acts []map[string]any
+	down := map[string]bool{}
 	for _, k := range keys {
-		acts = append(acts, map[string]any{"type": "keyDown", "value": k}, map[string]any{"type": "keyUp", "value": k})
+		switch k {
+		case "\uE008", "\uE009", "\uE03D": // Shift, Ctrl, Meta
+			if down[k] {
+				acts = append(acts, map[string]any{"type": "keyUp", "value": k})
+			} else {
+				acts = append(acts, map[string]any{"type": "keyDown", "value": k})
+			}
+			down[k] = !down[k]
+		default:
+			acts = append(acts, map[string]any{"type": "keyDown", "value": k}, map[string]any{"type": "keyUp", "value": k})
+		}
 	}
 	d.call("POST", "/actions", map[string]any{"actions": []map[string]any{{"type": "key", "id": "keyboard", "actions": acts}}}, nil)
 }

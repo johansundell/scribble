@@ -100,8 +100,9 @@ document.addEventListener("click", function (e) {
 		imp.showModal();
 		return;
 	}
-	// A tap outside the overlay or the import dialog closes it.
-	if (e.target === overlay() || e.target === imp) e.target.close();
+	// A tap outside the overlay, the import dialog or the note link picker
+	// (#149) closes it.
+	if (e.target === overlay() || e.target === imp || e.target.id === "note-link-dialog") e.target.close();
 });
 
 function setup() {
