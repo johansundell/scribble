@@ -75,11 +75,12 @@ stderr as `sn: <message>`.
 | `show <title> [-r <rev>]` | print a note's Markdown, or that of an old version |
 | `edit <title>` | edit a note in your editor |
 | `append <title> [text...]` | add text at the end of a note; creates it if missing |
-| `ls` | list all notes |
+| `ls` | list all notes, pinned ones first |
 | `search <text>` | list notes whose title or body contains the text |
 | `links <title>` | list the `[[links]]` in a note |
 | `backlinks <title>` | list the notes that link to a note |
 | `projects [<name>]` | list `#projects`, or the notes in one |
+| `pin <title>`, `unpin <title>` | keep a note at the top of lists, or stop |
 | `rename <title> <new>` | retitle a note and fix `[[links]]` to it |
 | `autolink <title>` | turn mentions of other note titles into `[[links]]` |
 | `import <path...>` | import Tomboy `.note` XML files or directories |
@@ -94,7 +95,9 @@ stderr as `sn: <message>`.
 
 Lists (`ls`, `search`, `backlinks`, `projects <name>`) print one title per
 line, so they work with `grep`, `head`, `xargs` and so on. `ls` and `search`
-show the most recently changed notes first.
+show pinned notes first, then the most recently changed. In `ls` only, a
+pinned note's title starts with `📌 `; strip it (`sed 's/^📌 //'`) before
+passing titles on.
 
 ### help
 
@@ -165,7 +168,7 @@ echo "- call the dentist" | sn append Todo
 
 ### ls
 
-Lists every note title.
+Lists every note title, pinned notes first, marked `📌 `.
 
 ```sh
 sn ls
@@ -206,6 +209,17 @@ With a name, lists the notes tagged with that project.
 ```sh
 sn projects
 sn projects scribble
+```
+
+### pin, unpin
+
+`pin` keeps a note at the top of every note list: in `sn ls`, the web app and
+the desktop app. `unpin` lets it sort by date again. Pinning isn't an edit: the
+note's revision and history stay as they were.
+
+```sh
+sn pin "Shopping list"
+sn unpin "Shopping list"
 ```
 
 ### rename

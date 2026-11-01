@@ -92,7 +92,7 @@ sn() {
     if [[ "$1" == "ls" ]]; then
         echo "Groceries"
         echo "Shopping List"
-        echo "Work Notes"
+        echo "📌 Work Notes"
         echo "-todo"
     elif [[ "$1" == "deleted" ]]; then
         echo "2026-10-20 12:00  Old Plans"
@@ -214,6 +214,13 @@ run_comp "sn" "undelete" "old"
 if [[ "${COMPREPLY[*]}" != 'Old\ Plans' ]]; then
     echo "undelete completion failed: expected 'Old\\ Plans', got '${COMPREPLY[*]}'"
     exit 14
+fi
+
+# 15. a pinned note completes without its pin mark, also for pin and unpin
+run_comp "sn" "unpin" "wor"
+if [[ "${COMPREPLY[*]}" != 'Work\ Notes' ]]; then
+    echo "pinned title completion failed: expected 'Work\\ Notes', got '${COMPREPLY[*]}'"
+    exit 17
 fi
 `
 

@@ -9,7 +9,7 @@ The desktop app keeps a copy of the notes on disk, so it starts instantly and wo
 
 ## Decision
 
-- Every note has a **`seq`**, taken from one counter for the whole database. Every write (create, edit, rename, link rewrite, delete) gives the note the next `seq`.
+- Every note has a **`seq`**, taken from one counter for the whole database. Every write (create, edit, rename, link rewrite, delete, pin or unpin) gives the note the next `seq`.
 - `GET /changes?since=N` returns every note with a `seq` above N, deleted ones included, plus `latest_seq` for the next call.
 - **Deleting leaves a tombstone:** the row stays, with `deleted = 1` and a new `seq`, so a client that syncs later learns about the delete. Tombstones are never removed.
 

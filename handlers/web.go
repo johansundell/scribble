@@ -329,6 +329,7 @@ var webFuncs = template.FuncMap{
 	"renamePath":      RenamePath,
 	"deletePath":      DeletePath,
 	"sharePath":       SharePath,
+	"pinPath":         PinPath,
 	"historyPath":     HistoryPath,
 	"deleteQuestion":  deleteQuestion,
 	"restoreQuestion": restoreQuestion,

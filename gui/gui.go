@@ -77,6 +77,7 @@ type UI struct {
 
 	menu                                                    *fyne.MainMenu
 	saveItem, renameItem, deleteItem, toggleItem, shareItem *fyne.MenuItem // greyed out like their toolbar buttons
+	pinItem                                                 *fyne.MenuItem // pins or unpins the open note (#140)
 	lastFocus                                               editable       // the text field or viewer that had focus last, nil if another widget did
 
 	w       fyne.Window
@@ -106,8 +107,8 @@ func New(w fyne.Window, c *client.Client, store *offline.Store) *UI {
 	ui := &UI{w: w, c: c, store: store}
 	ui.List = &NoteList{ui: ui, List: widget.List{
 		Length:     func() int { return len(ui.notes) },
-		CreateItem: func() fyne.CanvasObject { return widget.NewLabel("") },
-		UpdateItem: func(i widget.ListItemID, o fyne.CanvasObject) { o.(*widget.Label).SetText(ui.notes[i].Title) },
+		CreateItem: func() fyne.CanvasObject { return newNoteRow(ui) },
+		UpdateItem: func(i widget.ListItemID, o fyne.CanvasObject) { o.(*noteRow).show(ui.notes[i]) },
 	}}
 	ui.List.ExtendBaseWidget(ui.List)
 	ui.List.OnSelected = func(i widget.ListItemID) {

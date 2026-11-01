@@ -24,7 +24,7 @@ import (
 // APILevel is the server API level this client is written for. The CLI and
 // the GUI share it. Raise it with the server's when the client starts using
 // what a new level adds (ADR 8).
-const APILevel = 4
+const APILevel = 5
 
 // ReleasesURL is where the latest release can be downloaded.
 const ReleasesURL = "https://github.com/johansundell/scribble/releases/latest"
@@ -220,6 +220,15 @@ func (c *Client) Rename(ctx context.Context, id int64, title string) (*notes.Not
 	var n notes.Note
 	err := c.do(ctx, "POST", notePath(id, "/rename"), nil, map[string]string{"title": title}, &n)
 	if err != nil {
+		return nil, err
+	}
+	return &n, nil
+}
+
+// Pin pins or unpins note id (#140) and returns it as the server now has it.
+func (c *Client) Pin(ctx context.Context, id int64, pinned bool) (*notes.Note, error) {
+	var n notes.Note
+	if err := c.do(ctx, "POST", notePath(id, "/pin"), nil, map[string]bool{"pinned": pinned}, &n); err != nil {
 		return nil, err
 	}
 	return &n, nil

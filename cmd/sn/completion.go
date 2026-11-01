@@ -30,7 +30,7 @@ _sn() {
         cword=$COMP_CWORD
     fi
 
-    local commands="new show edit append ls search links backlinks projects rename autolink export import rm history diff restore deleted undelete completion version help"
+    local commands="new show edit append ls search links backlinks projects pin unpin rename autolink export import rm history diff restore deleted undelete completion version help"
 
     if [[ $cword -eq 1 ]]; then
         COMPREPLY=( $(compgen -W "$commands" -- "$cur") )
@@ -44,7 +44,7 @@ _sn() {
                 _sn_complete_titles "$cur" "$(sn ls 2>/dev/null)"
             fi
             ;;
-        edit|append|links|backlinks|autolink|rm|history|diff|rename)
+        edit|append|links|backlinks|autolink|rm|history|diff|rename|pin|unpin)
             if [[ $cword -eq 2 ]]; then
                 _sn_complete_titles "$cur" "$(sn ls 2>/dev/null)"
             fi
@@ -116,6 +116,7 @@ _sn_complete_titles() {
 
     local matches=()
     while IFS= read -r line; do
+        line="${line#📌 }" # sn ls marks pinned notes
         [[ -z "$line" ]] && continue
         if [[ "${line,,}" == "${prefix,,}"* ]]; then
             if [[ $quoted -eq 1 ]]; then

@@ -42,11 +42,13 @@ Usage:
   sn show <title> [-r <rev>]   print a note's Markdown, or that of an old version
   sn edit <title>              edit in $EDITOR
   sn append <title> [text...]  add text at the end (creates the note if missing; pipe-friendly)
-  sn ls                        list all notes
+  sn ls                        list all notes, pinned ones first (📌)
   sn search <text>             find notes containing text
   sn links <title>             notes this note links to
   sn backlinks <title>         notes that link to this note
   sn projects [<name>]         list #projects, or the notes in one
+  sn pin <title>               keep a note at the top of lists
+  sn unpin <title>             let it sort by date again
   sn rename <title> <new>      retitle a note and fix [[links]] to it
   sn autolink <title>          turn mentions of other note titles into [[links]]
   sn export [file.zip]         save every note as <title>.md in a ZIP archive
@@ -134,12 +136,7 @@ func runWith(stdout io.Writer, args []string) error {
 	case "append":
 		return cmdAppend(ctx, c, rest)
 	case "ls":
-		list, err := c.List(ctx, "")
-		if err != nil {
-			return err
-		}
-		printList(os.Stdout, list)
-		return nil
+		return cmdLs(ctx, c, stdout)
 	case "search":
 		if len(rest) == 0 {
 			return fmt.Errorf("usage: sn search <text>")
@@ -175,6 +172,8 @@ func runWith(stdout io.Writer, args []string) error {
 			fmt.Printf("renamed to %q\n", r.Title)
 			return nil
 		})
+	case "pin", "unpin":
+		return cmdPin(ctx, c, stdout, cmd == "pin", rest)
 	case "projects":
 		return cmdProjects(ctx, c, os.Stdout, rest)
 	case "autolink":
@@ -280,6 +279,41 @@ func printList(w io.Writer, list []notes.Note) {
 	for _, n := range list {
 		fmt.Fprintln(w, n.Title)
 	}
+}
+
+// pinMark comes before a pinned note's title in sn ls (#140).
+const pinMark = "📌 "
+
+// cmdLs prints every title, pinned notes first and marked pinMark. Only ls
+// marks them, so the other lists stay plain titles for pipes.
+func cmdLs(ctx context.Context, c *client.Client, w io.Writer) error {
+	list, err := c.List(ctx, "")
+	if err != nil {
+		return err
+	}
+	for _, n := range list {
+		if n.Pinned {
+			fmt.Fprint(w, pinMark)
+		}
+		fmt.Fprintln(w, n.Title)
+	}
+	return nil
+}
+
+// cmdPin pins or unpins the note titled args[0] (#140).
+func cmdPin(ctx context.Context, c *client.Client, w io.Writer, pin bool, args []string) error {
+	return withNote(ctx, c, args, 1, func(n *notes.Note, _ []string) error {
+		p, err := c.Pin(ctx, n.ID, pin)
+		if err != nil {
+			return explain(err, n.Title)
+		}
+		verb := "pinned"
+		if !pin {
+			verb = "unpinned"
+		}
+		fmt.Fprintf(w, "%s %q\n", verb, p.Title)
+		return nil
+	})
 }
 
 // cmdProjects prints every #project, or with one argument the titles of the

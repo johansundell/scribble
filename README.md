@@ -168,7 +168,7 @@ FileMaker the `"schema"` key is left out.
 ### API level and old clients
 
 Every response carries `X-Version` (the release, such as `v0.0.12`) and
-`X-Scribble-API` (the API level, an integer; 4 since share links over the API). The policy
+`X-Scribble-API` (the API level, an integer; 5 since pinned notes). The policy
 ([ADR 8](docs/adr/0008-api-level-and-minimum-client-level.md)):
 
 - **The API only grows.** Adding endpoints or fields raises the API level by
@@ -201,7 +201,7 @@ available".
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| GET | `/notes` | list, newest first. `?q=` searches title and body; `?project=` keeps notes tagged `#project` (combinable with `?q=`); `?title=` is an exact lookup returning `[]` or one note |
+| GET | `/notes` | list, pinned notes first, then newest first. `?q=` searches title and body; `?project=` keeps notes tagged `#project` (combinable with `?q=`); `?title=` is an exact lookup returning `[]` or one note |
 | GET | `/projects` | the `#project` names in use, lowercase and sorted |
 | POST | `/notes` | `{"body": "# Title\n..."}` -> 201. **409** if the title exists |
 | GET | `/notes/:id` | one note |
@@ -209,6 +209,7 @@ available".
 | DELETE | `/notes/:id` | 204; leaves a tombstone |
 | GET | `/notes/:id/backlinks` | notes containing `[[Title]]` for this note |
 | POST | `/notes/:id/rename` | `{"title": "New"}`; rewrites `[[links]]` in other notes in one transaction |
+| POST | `/notes/:id/pin` | `{"pinned": true}` pins the note, `false` unpins it, and no body toggles; returns the note, with `"pinned": true` while pinned. Takes a new seq, so it reaches `/changes`, but keeps the revision, `updated_at` and history |
 | GET | `/notes/:id/share` | the note's live [share link](#web-app): `{"token": "…", "url": "https://…/s/<token>", "expires_at": "…"}` (`expires_at`, set in the web app, left out for never); empty `token` and `url` while the note is private or the web app is off |
 | POST | `/notes/:id/share` | shares the note with a link that never expires, keeping a live link's token, and returns the link as for `GET`. **501** while the web app is off (`WEB_PIN` unset), since it serves the links |
 | DELETE | `/notes/:id/share` | 204; revokes the link, which answers 404 at once |
@@ -297,7 +298,7 @@ The server refuses to start if the PIN isn't 6–12 digits, or if
   | `Esc` | | Close the shortcuts, or leave the search box |
 - **On a phone** (below 700 px wide) the app shows one screen at a time: the
   list, or the open note with "← Notes" to go back (the search and project
-  filter stay). New and Edit are at the top; History, Share, Rename and
+  filter stay). New and Edit are at the top; History, Pin note, Share, Rename and
   Delete are under **⋯**. In the editor, Save, Done and Cancel sit in a bar
   at the bottom, above the on-screen keyboard. The keyboard shortcuts are simply not used on touch
   screens.
@@ -317,6 +318,12 @@ The server refuses to start if the PIN isn't 6–12 digits, or if
   has the same in its **Share** button and File → Share note…: Create
   public link, Copy link, a QR code and Revoke link. Its links never
   expire. (#142)
+- **Pinned notes:** **Pin note** on a note (under **⋯** on phones) keeps it
+  at the top of the list, marked 📌; **Unpin note** lets it sort by date
+  again. Pinning isn't an edit, so it doesn't change the note's revision or
+  history. The desktop app has File → Pin note and the same item on a right
+  click in its note list, and `sn pin` / `sn unpin` do it from the command
+  line. (#140)
 - **History:** a note shows its revision and how many changes its history
   keeps ("Revision 4 (3 edits)"), and **History (r4)** opens the note's
   kept versions ([ADR 7](docs/adr/0007-note-history.md)), newest first, each

@@ -1050,3 +1050,17 @@ body.web:has(.app-main) {
 	color: var(--accent-text);
 	font-weight: 600;
 }
+
+/* Pin note and Unpin note are forms (#140); their button sits among the
+   other actions as if it were one of them. */
+.pin-form {
+	display: contents;
+}
+
+/* A pinned note in the list (#140). */
+.pin-badge {
+	flex: none;
+	margin-left: auto;
+	padding-left: 0.5rem;
+	font-size: 0.875em;
+}
