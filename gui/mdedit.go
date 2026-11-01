@@ -65,6 +65,14 @@ func insertLink(start, end int) mdEdit {
 	}
 }
 
+// insertNoteLink puts a [[link]] to the note titled title in place of the
+// selection [start, end), or at the cursor, with the cursor after it.
+func insertNoteLink(start, end int, title string) mdEdit {
+	link := "[[" + title + "]]"
+	at := start + runeLen(link)
+	return mdEdit{ops: []mdOp{{at: start, n: end - start, s: link}}, selStart: at, selEnd: at}
+}
+
 // The line prefixes of the toolbar. Each takes the line's index in the
 // selection.
 func headingPrefix(int) string  { return "### " }

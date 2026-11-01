@@ -16,7 +16,16 @@ import (
 // its end and the focus on the editor.
 func editing(t *testing.T, text string) (*gui.UI, fyne.Window) {
 	t.Helper()
+	return editingWith(t, text)
+}
+
+// editingWith is editing, with notes others saved before the open one.
+func editingWith(t *testing.T, text string, others ...string) (*gui.UI, fyne.Window) {
+	t.Helper()
 	c := newServer(t)
+	for _, body := range others {
+		create(t, c, body)
+	}
 	create(t, c, "# Ideas\nfly")
 	ui, w := open(t, c)
 	ui.List.Select(0)

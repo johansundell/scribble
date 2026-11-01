@@ -210,8 +210,8 @@ func (f *TextField) applyEdit(e mdEdit) {
 }
 
 // undoGroup undoes the last Markdown change in one go when the text is as
-// it left it, and reports whether it did. The Undo of Entry's own
-// right-click menu bypasses it and goes a step at a time.
+// it left it, and reports whether it did. The editor's right-click menu
+// (notelink.go) undoes through TypedShortcut too, so it gets here.
 func (f *TextField) undoGroup() bool {
 	n := len(f.undo)
 	if n == 0 || f.undo[n-1].after != f.Text {
