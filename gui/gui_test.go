@@ -1458,12 +1458,20 @@ func TestShowHotkeyShowsHiddenWindowWithoutOpeningANote(t *testing.T) {
 	}
 }
 
-func TestRegisterHotkeysRegistersNewNoteThenShow(t *testing.T) {
+// fakeHotkeyRegistrar stands in for system hotkey registration for the rest
+// of the test and records each registered hotkey as "mods key".
+func fakeHotkeyRegistrar(t *testing.T) *[]string {
+	t.Helper()
 	var got []string
-	defer gui.SetRegisterHotkeyForTest(func(mods []hotkey.Modifier, key hotkey.Key) (<-chan hotkey.Event, func() error, error) {
+	t.Cleanup(gui.SetRegisterHotkeyForTest(func(mods []hotkey.Modifier, key hotkey.Key) (<-chan hotkey.Event, func() error, error) {
 		got = append(got, fmt.Sprint(mods, key))
 		return make(chan hotkey.Event), func() error { return nil }, nil
-	})()
+	}))
+	return &got
+}
+
+func TestRegisterHotkeysRegistersNewNoteThenShow(t *testing.T) {
+	got := fakeHotkeyRegistrar(t)
 	c := newServer(t)
 	ui, _ := openWithSpy(t, c)
 
@@ -1472,31 +1480,27 @@ func TestRegisterHotkeysRegistersNewNoteThenShow(t *testing.T) {
 		fmt.Sprint([]hotkey.Modifier{gui.ModCtrl, gui.ModAlt}, hotkey.KeyN),
 		fmt.Sprint([]hotkey.Modifier{gui.ModCtrl, gui.ModAlt}, hotkey.KeyS),
 	}
-	if !slices.Equal(got, want) || len(unregister) != 2 {
-		t.Fatalf("registered %v (%d unregister funcs), want %v (2)", got, len(unregister), want)
+	if !slices.Equal(*got, want) || len(unregister) != 2 {
+		t.Fatalf("registered %v (%d unregister funcs), want %v (2)", *got, len(unregister), want)
 	}
 	if ui.Status.Text != "" {
 		t.Fatalf("status = %q, want empty", ui.Status.Text)
 	}
 
-	got = nil
-	if unregister := ui.RegisterHotkeys("none", "off"); len(got) != 0 || len(unregister) != 0 {
-		t.Fatalf("disabled hotkeys registered %v", got)
+	*got = nil
+	if unregister := ui.RegisterHotkeys("none", "off"); len(*got) != 0 || len(unregister) != 0 {
+		t.Fatalf("disabled hotkeys registered %v", *got)
 	}
 }
 
 func TestShowHotkeySameAsNewNoteHotkeyReportsErrorAndKeepsNewNote(t *testing.T) {
-	var got []string
-	defer gui.SetRegisterHotkeyForTest(func(mods []hotkey.Modifier, key hotkey.Key) (<-chan hotkey.Event, func() error, error) {
-		got = append(got, fmt.Sprint(mods, key))
-		return make(chan hotkey.Event), func() error { return nil }, nil
-	})()
+	got := fakeHotkeyRegistrar(t)
 	c := newServer(t)
 	ui, _ := openWithSpy(t, c)
 
 	unregister := ui.RegisterHotkeys("Ctrl+Alt+N", "alt+CTRL+n")
-	if len(got) != 1 || len(unregister) != 1 {
-		t.Fatalf("registered %v, want only the new-note hotkey", got)
+	if len(*got) != 1 || len(unregister) != 1 {
+		t.Fatalf("registered %v, want only the new-note hotkey", *got)
 	}
 	if !strings.Contains(ui.Status.Text, "same") {
 		t.Fatalf("status = %q, want an error about the same keys", ui.Status.Text)

@@ -66,11 +66,11 @@ var hotkeyKeys = map[string]hotkey.Key{
 }
 
 // ParseHotkey parses a hotkey specification like "Ctrl+Alt+N". An empty spec
-// uses def; "none" or "off" disables the hotkey and returns (nil, 0, nil).
-func ParseHotkey(spec, def string) ([]hotkey.Modifier, hotkey.Key, error) {
+// uses fallback; "none" or "off" disables the hotkey and returns (nil, 0, nil).
+func ParseHotkey(spec, fallback string) ([]hotkey.Modifier, hotkey.Key, error) {
 	spec = strings.TrimSpace(spec)
 	if spec == "" {
-		spec = def
+		spec = fallback
 	}
 	switch strings.ToLower(spec) {
 	case "none", "off":
@@ -79,7 +79,7 @@ func ParseHotkey(spec, def string) ([]hotkey.Modifier, hotkey.Key, error) {
 
 	parts := strings.Split(spec, "+")
 	if len(parts) < 2 {
-		return nil, 0, fmt.Errorf("hotkey %q must have at least one modifier and a key (e.g. %s)", spec, def)
+		return nil, 0, fmt.Errorf("hotkey %q must have at least one modifier and a key (e.g. %s)", spec, fallback)
 	}
 	var mods []hotkey.Modifier
 	for _, p := range parts[:len(parts)-1] {
@@ -130,12 +130,7 @@ var registerHotkey = func(mods []hotkey.Modifier, key hotkey.Key) (<-chan hotkey
 	if err := hk.Register(); err != nil {
 		return nil, nil, err
 	}
-	keydown := hk.Keydown()
-	go func() {
-		for range keydown {
-		}
-	}()
-	return keydown, hk.Unregister, nil
+	return hk.Keydown(), hk.Unregister, nil
 }
 
 // RegisterHotkeys registers the global new-note hotkey (newNoteSpec, empty
@@ -162,7 +157,7 @@ func (ui *UI) RegisterHotkeys(newNoteSpec, showSpec string) []func() error {
 
 	newMods, newKey, err := ParseHotkey(newNoteSpec, DefaultHotkey)
 	if err != nil {
-		ui.reportHotkeyError(fmt.Errorf("new-note hotkey: %w", err))
+		ui.reportHotkeyError(err)
 	} else if newMods != nil {
 		register(newMods, newKey, ui.BindHotkey)
 	}
