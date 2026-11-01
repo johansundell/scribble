@@ -52,6 +52,7 @@ func pngIcon() fyne.Resource {
 }
 
 func main() {
+	overridden := envOverrides() // before the .env file sets the rest
 	a, envErr := newApp(loadEnvNextToExecutable, app.New)
 	ver := Version
 	if (ver == "" || ver == "dev") && a.Metadata().Version != "" {
@@ -82,11 +83,11 @@ func main() {
 		retry := func() { start(nil) }
 		switch {
 		case envErr != nil:
-			w.SetContent(setupScreen(w, "Cannot read the .env file next to scribble-gui: "+envErr.Error(), current, save, retry))
+			w.SetContent(setupScreen(w, "Cannot read the .env file next to scribble-gui: "+envErr.Error(), current, overridden, save, retry))
 		case current.Token == "":
-			w.SetContent(setupScreen(w, "SCRIBBLE_TOKEN is not set. Enter the server's address and AUTH_TOKEN in Settings, or set them in the environment or in a .env file next to scribble-gui.", current, save, retry))
+			w.SetContent(setupScreen(w, "SCRIBBLE_TOKEN is not set. Enter the server's address and AUTH_TOKEN in Settings, or set them in the environment or in a .env file next to scribble-gui.", current, overridden, save, retry))
 		default:
-			cleanup = append(cleanup, startUI(a, w, ver, current, save)...)
+			cleanup = append(cleanup, startUI(a, w, ver, current, overridden, save)...)
 		}
 	}
 	start(envErr)
@@ -98,8 +99,9 @@ func main() {
 }
 
 // startUI opens the local copy of the notes on server s and shows them,
-// syncing in the background. It returns what to undo when the app quits.
-func startUI(a fyne.App, w fyne.Window, ver string, s gui.Settings, save func(gui.Settings) error) []func() {
+// syncing in the background. File > Settings… notes which fields the
+// environment overrides. It returns what to undo when the app quits.
+func startUI(a fyne.App, w fyne.Window, ver string, s gui.Settings, overridden gui.Overridden, save func(gui.Settings) error) []func() {
 	cache, err := openCache(s.URL)
 	if err != nil {
 		var locked *offline.LockedError
@@ -122,6 +124,7 @@ func startUI(a fyne.App, w fyne.Window, ver string, s gui.Settings, save func(gu
 	c.Name, c.Version = "gui", ver
 	ui := gui.New(w, c, cache)
 	ui.SaveSettings = save
+	ui.Overridden = overridden
 	ui.StartSync(syncInterval)
 	if desk, ok := a.(desktop.App); ok {
 		ui.SetupTray(desk, trayIcon())
