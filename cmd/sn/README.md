@@ -380,11 +380,12 @@ sudo sn completion > /etc/bash_completion.d/sn
 
 ### version
 
-Prints the CLI's version and API level, then the server's, with the
-server's database schema version when it has one (SQLite only), and says
-`update available` when the server runs a newer release, with the
-command that installs it on Linux and macOS. `dev` builds
-never say so. It asks `/healthz`, so it does not need `SCRIBBLE_TOKEN`.
+Prints the CLI's version and API level, then the server's (with the
+server's database schema version when it has one), followed by the
+server URL and token in use, and says `update available` when the server
+runs a newer release, with the command that installs it on Linux and
+macOS. `dev` builds never say so. It asks `/healthz`, so it does not need
+`SCRIBBLE_TOKEN` (printing `token: (not set)` when unset).
 It is the only command that checks for a newer release, so scripts using
 the others see no extra output.
 
@@ -392,6 +393,8 @@ the others see no extra output.
 $ sn version
 client v0.0.11 (API level 1)
 server v0.0.12 (API level 2, schema 3)
+url: https://notes.sudde.net
+token: change-me
 update available: https://github.com/johansundell/scribble/releases/latest
 run: curl -fsSL https://raw.githubusercontent.com/johansundell/scribble/master/scripts/install-sn.sh | sh
 ```

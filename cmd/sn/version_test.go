@@ -21,7 +21,7 @@ import (
 
 // serveVersion starts a scribble server at version, refusing clients below
 // minClient, and points the CLI at it.
-func serveVersion(t *testing.T, version string, minClient int) {
+func serveVersion(t *testing.T, version string, minClient int) string {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	s, err := store.NewSQLite(filepath.Join(t.TempDir(), "cli.db"))
@@ -44,6 +44,7 @@ func serveVersion(t *testing.T, version string, minClient int) {
 	t.Cleanup(srv.Close)
 	t.Setenv("SCRIBBLE_URL", srv.URL)
 	t.Setenv("SCRIBBLE_TOKEN", "tok")
+	return srv.URL
 }
 
 // installLine is what version prints under "update available" on goos.
@@ -85,27 +86,30 @@ func TestInstallHint(t *testing.T) {
 func TestCmdVersion(t *testing.T) {
 	cases := []struct {
 		name, client, server string
-		want                 string
+		extra                string
 	}{
 		{"update available", "v0.0.9", "v0.0.12",
-			"client v0.0.9 (API level 5)\nserver v0.0.12 (API level 2, schema 6)\nupdate available: https://github.com/johansundell/scribble/releases/latest\n" +
+			"update available: https://github.com/johansundell/scribble/releases/latest\n" +
 				installLine(runtime.GOOS)},
-		{"up to date", "v0.0.12", "v0.0.12",
-			"client v0.0.12 (API level 5)\nserver v0.0.12 (API level 2, schema 6)\n"},
-		{"dev build never compares", "dev", "v0.0.12",
-			"client dev (API level 5)\nserver v0.0.12 (API level 2, schema 6)\n"},
+		{"up to date", "v0.0.12", "v0.0.12", ""},
+		{"dev build never compares", "dev", "v0.0.12", ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Too old as well: version still answers.
-			serveVersion(t, tc.server, client.APILevel+1)
+			srvURL := serveVersion(t, tc.server, client.APILevel+1)
 			setVersion(t, tc.client)
 			var out bytes.Buffer
 			if err := runWith(&out, []string{"version"}); err != nil {
 				t.Fatal(err)
 			}
-			if out.String() != tc.want {
-				t.Errorf("printed\n%s\nwant\n%s", out.String(), tc.want)
+			want := "client " + tc.client + " (API level 5)\n" +
+				"server " + tc.server + " (API level 2, schema 6)\n" +
+				"url: " + srvURL + "\n" +
+				"token: tok\n" +
+				tc.extra
+			if out.String() != want {
+				t.Errorf("printed\n%s\nwant\n%s", out.String(), want)
 			}
 		})
 	}
@@ -126,12 +130,12 @@ func TestCmdVersionWithoutSchema(t *testing.T) {
 	if err := runWith(&out, []string{"version"}); err != nil {
 		t.Fatal(err)
 	}
-	if want := "client v0.0.12 (API level 5)\nserver v0.0.12 (API level 2)\n"; out.String() != want {
+	if want := "client v0.0.12 (API level 5)\nserver v0.0.12 (API level 2)\nurl: " + srv.URL + "\ntoken: (not set)\n"; out.String() != want {
 		t.Errorf("printed %q, want %q", out.String(), want)
 	}
 }
 
-// TestCmdVersionWithoutServer prints the client's own version, then fails.
+// TestCmdVersionWithoutServer prints the client's own version, URL and token, then fails.
 func TestCmdVersionWithoutServer(t *testing.T) {
 	t.Setenv("SCRIBBLE_URL", "http://127.0.0.1:1")
 	t.Setenv("SCRIBBLE_TOKEN", "")
@@ -140,8 +144,20 @@ func TestCmdVersionWithoutServer(t *testing.T) {
 	if err := runWith(&out, []string{"version"}); err == nil {
 		t.Error("want an error when the server cannot be reached")
 	}
-	if want := "client v0.0.9 (API level 5)\n"; out.String() != want {
+	if want := "client v0.0.9 (API level 5)\nurl: http://127.0.0.1:1\ntoken: (not set)\n"; out.String() != want {
 		t.Errorf("printed %q, want %q", out.String(), want)
+	}
+}
+
+func TestCmdVersionDefaultURLAndToken(t *testing.T) {
+	t.Setenv("SCRIBBLE_URL", "")
+	t.Setenv("SCRIBBLE_TOKEN", "secret-token")
+	setVersion(t, "v0.0.9")
+	var out bytes.Buffer
+	_ = runWith(&out, []string{"version"})
+	wantPrefix := "client v0.0.9 (API level 5)\nurl: https://notes.sudde.net\ntoken: secret-token\n"
+	if !strings.HasPrefix(out.String(), wantPrefix) {
+		t.Errorf("got %q, want prefix %q", out.String(), wantPrefix)
 	}
 }
 
