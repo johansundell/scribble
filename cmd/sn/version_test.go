@@ -149,15 +149,16 @@ func TestCmdVersionWithoutServer(t *testing.T) {
 	}
 }
 
-func TestCmdVersionDefaultURLAndToken(t *testing.T) {
-	t.Setenv("SCRIBBLE_URL", "")
+func TestCmdVersionWithoutServerCustomToken(t *testing.T) {
+	t.Setenv("SCRIBBLE_URL", "http://127.0.0.1:1")
 	t.Setenv("SCRIBBLE_TOKEN", "secret-token")
 	setVersion(t, "v0.0.9")
 	var out bytes.Buffer
-	_ = runWith(&out, []string{"version"})
-	wantPrefix := "client v0.0.9 (API level 5)\nurl: https://notes.sudde.net\ntoken: secret-token\n"
-	if !strings.HasPrefix(out.String(), wantPrefix) {
-		t.Errorf("got %q, want prefix %q", out.String(), wantPrefix)
+	if err := runWith(&out, []string{"version"}); err == nil {
+		t.Error("want an error when the server cannot be reached")
+	}
+	if want := "client v0.0.9 (API level 5)\nurl: http://127.0.0.1:1\ntoken: secret-token\n"; out.String() != want {
+		t.Errorf("printed %q, want %q", out.String(), want)
 	}
 }
 
