@@ -205,12 +205,17 @@ func runWith(stdout io.Writer, args []string) error {
 }
 
 // cmdVersion prints the client's and the server's versions and API levels,
-// and says when the server runs a newer release. Only this command says so,
-// so scripts using the others aren't affected.
+// the server URL and token in use, and says when the server runs a newer release.
+// Only this command says so, so scripts using the others aren't affected.
 func cmdVersion(ctx context.Context, c *client.Client, w io.Writer) error {
 	fmt.Fprintf(w, "client %s (API level %d)\n", Version, client.APILevel)
+	tok := c.Token
+	if tok == "" {
+		tok = "(not set)"
+	}
 	h, err := c.Health(ctx)
 	if err != nil {
+		fmt.Fprintf(w, "url: %s\ntoken: %s\n", c.BaseURL, tok)
 		return fmt.Errorf("cannot ask the server for its version: %w", err)
 	}
 	schema := ""
@@ -218,6 +223,7 @@ func cmdVersion(ctx context.Context, c *client.Client, w io.Writer) error {
 		schema = fmt.Sprintf(", schema %d", h.Schema)
 	}
 	fmt.Fprintf(w, "server %s (API level %d%s)\n", h.Version, h.API, schema)
+	fmt.Fprintf(w, "url: %s\ntoken: %s\n", c.BaseURL, tok)
 	if client.NewerRelease(Version, h.Version) {
 		fmt.Fprintf(w, "update available: %s\n", client.ReleasesURL)
 		if h := installHint(runtime.GOOS, "run: "); h != "" {
