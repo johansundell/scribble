@@ -11,7 +11,8 @@ import (
 )
 
 // TestMain points the home and config folders at an empty directory, so no
-// test reads the ~/.scribble of whoever runs them.
+// test reads the ~/.scribble of whoever runs them. With SN_TEST_AS_SN=1 the
+// test binary is sn itself, so script tests can run it as their sn.
 func TestMain(m *testing.M) {
 	home, err := os.MkdirTemp("", "sn-home-*")
 	if err != nil {
@@ -19,6 +20,11 @@ func TestMain(m *testing.M) {
 	}
 	for _, k := range []string{"HOME", "USERPROFILE", "XDG_CONFIG_HOME", "AppData"} {
 		os.Setenv(k, home)
+	}
+	if os.Getenv("SN_TEST_AS_SN") == "1" {
+		main()
+		os.RemoveAll(home)
+		os.Exit(0)
 	}
 	code := m.Run()
 	os.RemoveAll(home)
