@@ -28,6 +28,7 @@ func TestWebCode_FencedBlockIsHighlighted(t *testing.T) {
 	wantNot(t, w.Body.String(), "style=", "<hi>")
 }
 
+// A block in a language Chroma doesn't know, or none, is plain escaped code.
 func TestWebCode_UnknownLanguageIsPlain(t *testing.T) {
 	e := newWebEnv(t)
 	c := e.login(t)
@@ -41,6 +42,7 @@ func TestWebCode_UnknownLanguageIsPlain(t *testing.T) {
 	}
 }
 
+// The note and shared pages load copy.js; the PIN screen doesn't.
 func TestWebCode_PagesLoadCopyButton(t *testing.T) {
 	e := newWebEnv(t)
 	c := e.login(t)
@@ -49,6 +51,7 @@ func TestWebCode_PagesLoadCopyButton(t *testing.T) {
 	wantBody(t, e.do(get(notePath(n), c)), http.StatusOK, tag)
 	e.do(postForm(sharePath(n), url.Values{"action": {"share"}}, c))
 	wantBody(t, e.do(get("/s/"+e.shareToken(t, n))), http.StatusOK, tag)
+	wantNot(t, e.do(get("/login")).Body.String(), "copy.js")
 	if w := e.do(get("/assets/js/copy.js")); w.Code != http.StatusOK {
 		t.Errorf("GET copy.js = %d, want 200", w.Code)
 	}

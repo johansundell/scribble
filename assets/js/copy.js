@@ -10,13 +10,21 @@
 	var FAILED = "Copy failed";
 
 	// write puts text on the clipboard. navigator.clipboard needs a secure
-	// context (HTTPS or localhost), so on a plain-HTTP LAN address it falls
-	// back to execCommand.
+	// context (HTTPS or localhost) and may still refuse, so execCommand is
+	// tried when it is missing or fails, as on a plain-HTTP LAN address.
 	function write(text) {
 		if (navigator.clipboard && window.isSecureContext) {
-			return navigator.clipboard.writeText(text);
+			return navigator.clipboard.writeText(text).catch(function () {
+				return fallback(text);
+			});
 		}
+		return fallback(text);
+	}
+
+	// fallback copies text with a hidden textarea, then gives focus back.
+	function fallback(text) {
 		return new Promise(function (resolve, reject) {
+			var focused = document.activeElement;
 			var area = document.createElement("textarea");
 			area.value = text;
 			area.setAttribute("readonly", "");
@@ -29,6 +37,7 @@
 				ok = document.execCommand("copy");
 			} catch (e) {}
 			area.remove();
+			if (focused && focused.focus) focused.focus();
 			if (ok) {
 				resolve();
 			} else {
@@ -37,7 +46,8 @@
 		});
 	}
 
-	function add(pre) {
+	// addButton wraps pre in .code-block and gives it a Copy button.
+	function addButton(pre) {
 		if (pre.parentElement.classList.contains("code-block")) return;
 		var wrap = document.createElement("div");
 		wrap.className = "code-block";
@@ -47,11 +57,12 @@
 		button.type = "button";
 		button.className = "code-copy";
 		button.textContent = LABEL;
-		button.setAttribute("aria-label", "Copy code");
+		// Its text is its name, so a screen reader hears "✓ Copied" too.
+		button.setAttribute("aria-live", "polite");
 		var timer;
 		button.addEventListener("click", function () {
 			var code = pre.querySelector("code") || pre;
-			var done = function (label) {
+			var showLabel = function (label) {
 				button.textContent = label;
 				clearTimeout(timer);
 				timer = setTimeout(function () {
@@ -60,10 +71,10 @@
 			};
 			write(code.textContent).then(
 				function () {
-					done(DONE);
+					showLabel(DONE);
 				},
 				function () {
-					done(FAILED);
+					showLabel(FAILED);
 				},
 			);
 		});
@@ -71,7 +82,7 @@
 	}
 
 	function enhance() {
-		document.querySelectorAll(".note-body pre").forEach(add);
+		document.querySelectorAll(".note-body pre").forEach(addButton);
 	}
 
 	enhance();
