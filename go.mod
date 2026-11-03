@@ -4,6 +4,7 @@ go 1.27.2
 
 require (
 	fyne.io/fyne/v2 v2.8.2
+	github.com/alecthomas/chroma/v2 v2.27.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/joho/godotenv v1.5.1
@@ -12,6 +13,7 @@ require (
 	github.com/stretchr/testify v1.12.1
 	github.com/tc-hib/winres v0.3.1
 	github.com/yuin/goldmark v1.8.6
+	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc
 	golang.design/x/hotkey v0.6.4
 	rsc.io/qr v0.2.0
 )
@@ -28,6 +30,7 @@ require (
 	github.com/bytedance/sonic/loader v0.5.2 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/cloudwego/base64x v0.1.7 // indirect
+	github.com/dlclark/regexp2/v2 v2.2.1 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/fyne-io/gl-js v0.2.1-0.20260315212741-029c47fd27e8 // indirect
 	github.com/fyne-io/glfw-js v0.4.0 // indirect
