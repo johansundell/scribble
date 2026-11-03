@@ -1,11 +1,15 @@
 package gui
 
 import (
+	"image/color"
 	"net/url"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
+	"github.com/alecthomas/chroma/v2"
 	"github.com/johansundell/scribble/offline"
 	"golang.design/x/hotkey"
 )
@@ -55,4 +59,19 @@ func SetRegisterHotkeyForTest(fn func([]hotkey.Modifier, hotkey.Key) (<-chan hot
 	old := registerHotkey
 	registerHotkey = fn
 	return func() { registerHotkey = old }
+}
+
+// CodeColorForTest is the colour of code tokens of type tt in GitHub Dark,
+// or GitHub Light if not dark; false if they keep the text colour.
+func CodeColorForTest(tt chroma.TokenType, dark bool) (color.Color, bool) {
+	fg, _ := codeColors(tt, dark, test.Theme(), fyne.CurrentApp().Settings().ThemeVariant())
+	return fg, fg != nil
+}
+
+// SetAfterFuncForTest swaps how the code blocks' Copy buttons wait to say
+// Copy again.
+func SetAfterFuncForTest(fn func(time.Duration, func()) func() bool) func() {
+	old := afterFunc
+	afterFunc = fn
+	return func() { afterFunc = old }
 }

@@ -107,6 +107,7 @@ func TestCmdVersion(t *testing.T) {
 				"server " + tc.server + " (API level 2, schema 7)\n" +
 				"url: " + srvURL + "\n" +
 				"token: tok\n" +
+				"config: none (environment / defaults)\n" +
 				tc.extra
 			if out.String() != want {
 				t.Errorf("printed\n%s\nwant\n%s", out.String(), want)
@@ -130,7 +131,7 @@ func TestCmdVersionWithoutSchema(t *testing.T) {
 	if err := runWith(&out, []string{"version"}); err != nil {
 		t.Fatal(err)
 	}
-	if want := "client v0.0.12 (API level 6)\nserver v0.0.12 (API level 2)\nurl: " + srv.URL + "\ntoken: (not set)\n"; out.String() != want {
+	if want := "client v0.0.12 (API level 6)\nserver v0.0.12 (API level 2)\nurl: " + srv.URL + "\ntoken: (not set)\nconfig: none (environment / defaults)\n"; out.String() != want {
 		t.Errorf("printed %q, want %q", out.String(), want)
 	}
 }
@@ -144,7 +145,7 @@ func TestCmdVersionWithoutServer(t *testing.T) {
 	if err := runWith(&out, []string{"version"}); err == nil {
 		t.Error("want an error when the server cannot be reached")
 	}
-	if want := "client v0.0.9 (API level 6)\nurl: http://127.0.0.1:1\ntoken: (not set)\n"; out.String() != want {
+	if want := "client v0.0.9 (API level 6)\nurl: http://127.0.0.1:1\ntoken: (not set)\nconfig: none (environment / defaults)\n"; out.String() != want {
 		t.Errorf("printed %q, want %q", out.String(), want)
 	}
 }
@@ -157,7 +158,7 @@ func TestCmdVersionWithoutServerCustomToken(t *testing.T) {
 	if err := runWith(&out, []string{"version"}); err == nil {
 		t.Error("want an error when the server cannot be reached")
 	}
-	if want := "client v0.0.9 (API level 6)\nurl: http://127.0.0.1:1\ntoken: secret-token\n"; out.String() != want {
+	if want := "client v0.0.9 (API level 6)\nurl: http://127.0.0.1:1\ntoken: secret-token\nconfig: none (environment / defaults)\n"; out.String() != want {
 		t.Errorf("printed %q, want %q", out.String(), want)
 	}
 }
