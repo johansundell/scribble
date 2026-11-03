@@ -35,7 +35,8 @@ Then `sn ls`, `sn show "Welcome to the demo"` or `sn history "Work log"`.
 For the desktop app, enter the same URL and token in **File > Settings…**.
 
 The sample notes are in [`demo/notes`](demo/notes), and the server's setup
-is in [`docs/demo.md`](docs/demo.md).
+is in [`docs/demo.md`](docs/demo.md) (nginx beside the real site:
+[`docs/demo-nginx.md`](docs/demo-nginx.md)).
 
 ## Notes model
 

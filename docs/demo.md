@@ -103,19 +103,7 @@ The service is `active (running)`, and `curl` prints JSON with `"dbStatus":"OK"`
 
 ## 4. Put nginx in front
 
-Copy [`docs/nginx/demo1.sudde.net.conf`](nginx/demo1.sudde.net.conf) to `/etc/nginx/sites-available/scribble-demo`. It is the same as the real server's site, with the demo's name and port, and an upstream called `scribble_demo`, so the two sites don't clash. As in [`install-vps.md`, step 4](install-vps.md#4-put-nginx-in-front), comment out the `listen 443` block until the certificate exists:
-
-```bash
-sudo ln -s /etc/nginx/sites-available/scribble-demo /etc/nginx/sites-enabled/scribble-demo
-sudo nginx -t && sudo systemctl reload nginx
-sudo certbot certonly --webroot -w /var/www/certbot -d demo1.sudde.net
-```
-
-Uncomment the `listen 443` block again and reload:
-
-```bash
-sudo nginx -t && sudo systemctl reload nginx
-```
+Follow [`demo-nginx.md`](demo-nginx.md). It adds the site `demo1.sudde.net` beside the real one, gets its certificate, and checks that each name reaches its own server. In short: [`docs/nginx/demo1.sudde.net.conf`](nginx/demo1.sudde.net.conf) is the real site's file with the demo's name, certificate, logs and port, and an upstream called `scribble_demo`, so the two sites don't clash.
 
 **Check:** from your own machine:
 
