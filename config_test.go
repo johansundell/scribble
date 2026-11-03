@@ -341,3 +341,22 @@ func TestLoadSettings_Web(t *testing.T) {
 		t.Error("expected an invalid COOKIE_SECURE to keep the safe default true")
 	}
 }
+
+func TestLoadSettings_WebLoginHint(t *testing.T) {
+	defer unsetEnv("WEB_LOGIN_HINT")()
+	tmpEnv, err := os.CreateTemp("", ".env.*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpEnv.Name())
+	if _, err := tmpEnv.WriteString("WEB_LOGIN_HINT=\"Demo: the PIN is 123456.\"\n"); err != nil {
+		t.Fatal(err)
+	}
+	tmpEnv.Close()
+
+	loadSettings(tmpEnv.Name())
+	defer loadSettings()
+	if got := settings.Web.LoginHint; got != "Demo: the PIN is 123456." {
+		t.Errorf("LoginHint = %q", got)
+	}
+}

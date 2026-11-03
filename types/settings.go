@@ -63,6 +63,9 @@ type WebSettings struct {
 	SessionSecret  string        `json:"sessionSecret"`  // SESSION_SECRET
 	SessionTimeout time.Duration `json:"sessionTimeout"` // WEB_SESSION_TIMEOUT
 	CookieSecure   bool          `json:"cookieSecure"`   // COOKIE_SECURE
+	// LoginHint is plain text shown under the PIN field, such as a demo
+	// server's PIN (#168); "" shows nothing.
+	LoginHint string `json:"loginHint"` // WEB_LOGIN_HINT
 }
 
 // Enabled reports whether the web app is turned on.

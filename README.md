@@ -247,7 +247,9 @@ TRUSTED_PROXIES=127.0.0.1   # behind nginx on the same host
 The server refuses to start if the PIN isn't 6–12 digits, or if
 `SESSION_SECRET` is missing, shorter than 32 characters or the same as
 `AUTH_TOKEN`. See `docs/service-template.md` for `WEB_SESSION_TIMEOUT` and
-`COOKIE_SECURE`. For a whole new server, follow
+`COOKIE_SECURE`. `WEB_LOGIN_HINT` optionally shows a line of plain text
+under the PIN field, such as a demo server's PIN (#168):
+`WEB_LOGIN_HINT="Demo: the PIN is 123456. Notes are reset every night."` For a whole new server, follow
 [`docs/install-vps.md`](docs/install-vps.md).
 
 - **The PIN is for the browser only.** The API, the CLI and the desktop app

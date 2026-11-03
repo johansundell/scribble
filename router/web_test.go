@@ -73,10 +73,10 @@ func newWebEnv(t *testing.T, trustedProxies ...string) *webEnv {
 	return &webEnv{r: newWebRouter(t, s, a, tl, trustedProxies), auth: a, clock: clk, log: tl, store: s}
 }
 
-func newWebRouter(t *testing.T, s store.Store, a *auth.Authenticator, l router.Logger, trustedProxies []string) *gin.Engine {
+func newWebRouter(t *testing.T, s store.Store, a *auth.Authenticator, l router.Logger, trustedProxies []string, opts ...handlers.Option) *gin.Engine {
 	t.Helper()
 	repo := os.DirFS("..")
-	h, err := handlers.NewHandler(s, false, repo, "test", "v9.8.7", handlers.WithAuth(a))
+	h, err := handlers.NewHandler(s, false, repo, "test", "v9.8.7", append([]handlers.Option{handlers.WithAuth(a)}, opts...)...)
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}

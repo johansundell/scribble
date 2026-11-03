@@ -1136,6 +1136,12 @@ body.web:has(.app-main) {
 	text-align: center;
 }
 
+.login-hint {
+	margin: 0;
+	color: var(--muted);
+	text-align: center;
+}
+
 .pin-error {
 	margin: 0;
 	color: var(--error);

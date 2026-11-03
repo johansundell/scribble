@@ -5,6 +5,9 @@
 		<input type="hidden" name="next" value="{{.Next}}" />
 		<input type="password" name="pin" id="pin" class="pin-field" inputmode="numeric" pattern="[0-9]*"
 			minlength="6" maxlength="12" autocomplete="current-password" aria-label="PIN" required autofocus />
+		{{- with .Hint}}
+		<p class="login-hint">{{.}}</p>
+		{{- end}}
 		{{- with .Error}}
 		<p class="pin-error" role="alert">{{.}}</p>
 		{{- end}}
