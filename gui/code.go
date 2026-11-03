@@ -104,7 +104,13 @@ type codeBlock struct {
 	Text    string
 	Lang    string // the fence's language, "" if none
 	quoting int    // how many blockquotes it is in
-	copied  func() // called after the Copy button copied the code
+	hooks   *codeHooks
+}
+
+// codeHooks are how code blocks reach the window around the viewer.
+type codeHooks struct {
+	copied   func()                  // called after a Copy button copied its code
+	scrolled func(*fyne.ScrollEvent) // scrolls the note, for a vertical wheel over code
 }
 
 func (c *codeBlock) Inline() bool              { return false }
@@ -127,8 +133,8 @@ func (c *codeBlock) Unselect()                 {}
 var markdownExtensions = goldmark.WithExtensions(extension.Strikethrough, extension.TaskList, extension.Table)
 
 // withCodeBlocks replaces the code blocks Fyne parsed from md in segs with
-// codeBlocks that know their language, calling copied after a Copy.
-func withCodeBlocks(md string, segs []widget.RichTextSegment, copied func()) []widget.RichTextSegment {
+// codeBlocks that know their language and use hooks.
+func withCodeBlocks(md string, segs []widget.RichTextSegment, hooks *codeHooks) []widget.RichTextSegment {
 	// Fyne drops empty blocks and a block's last newline.
 	var found []*codeBlock
 	source := []byte(md)
@@ -159,7 +165,7 @@ func withCodeBlocks(md string, segs []widget.RichTextSegment, copied func()) []w
 				quoting++
 			}
 		}
-		found = append(found, &codeBlock{Text: strings.TrimSuffix(b.String(), "\n"), Lang: lang, quoting: quoting, copied: copied})
+		found = append(found, &codeBlock{Text: strings.TrimSuffix(b.String(), "\n"), Lang: lang, quoting: quoting, hooks: hooks})
 		return ast.WalkSkipChildren, nil
 	})
 
@@ -170,7 +176,7 @@ func withCodeBlocks(md string, segs []widget.RichTextSegment, copied func()) []w
 			case *widget.CodeBlockSegment:
 				// A block the two parses disagree on stays plain
 				// without costing the ones after it their language.
-				segs[i] = &codeBlock{Text: s.Text, copied: copied}
+				segs[i] = &codeBlock{Text: s.Text, hooks: hooks}
 				for j, b := range found {
 					if b.Text == s.Text {
 						segs[i], found = b, found[j+1:]
@@ -196,7 +202,7 @@ type codeView struct {
 	seg *codeBlock
 
 	copy   *widget.Button
-	scroll *container.Scroll
+	scroll *codeScroll
 	reset  func() bool // stops putting the button back to Copy, nil if none
 }
 
@@ -211,8 +217,8 @@ func newCodeView(seg *codeBlock) *codeView {
 // copyCode puts the code on the clipboard and says so for a while.
 func (v *codeView) copyCode() {
 	fyne.CurrentApp().Clipboard().SetContent(v.seg.Text)
-	if v.seg.copied != nil {
-		v.seg.copied()
+	if h := v.seg.hooks; h != nil && h.copied != nil {
+		h.copied()
 	}
 	v.resetCopy()
 	v.copy.SetText("Copied")
@@ -247,7 +253,7 @@ func (v *codeView) textOrigin() fyne.Position {
 
 func (v *codeView) CreateRenderer() fyne.WidgetRenderer {
 	r := &codeViewRenderer{v: v, bg: canvas.NewRectangle(color.Transparent), lines: &fyne.Container{Layout: &fixedLayout{}}}
-	v.scroll = container.NewHScroll(r.lines)
+	v.scroll = newCodeScroll(v, r.lines)
 	r.Refresh()
 	return r
 }
@@ -417,3 +423,31 @@ type fixedLayout struct{ size fyne.Size }
 
 func (l *fixedLayout) Layout([]fyne.CanvasObject, fyne.Size) {}
 func (l *fixedLayout) MinSize([]fyne.CanvasObject) fyne.Size { return l.size }
+
+// codeScroll scrolls a code block's lines sideways. Fyne's horizontal
+// scroller turns a vertical wheel into a sideways scroll and keeps it from
+// the note's scroller, so a wheel over code would never scroll the note:
+// codeScroll hands vertical scrolls on instead.
+type codeScroll struct {
+	container.Scroll
+	v *codeView
+}
+
+func newCodeScroll(v *codeView, content fyne.CanvasObject) *codeScroll {
+	s := &codeScroll{v: v}
+	s.Direction = container.ScrollHorizontalOnly
+	s.Content = content
+	s.ExtendBaseWidget(s)
+	return s
+}
+
+// Scrolled scrolls the code for a sideways scroll, as from a trackpad or
+// Shift and the wheel, and the note for any other.
+func (s *codeScroll) Scrolled(e *fyne.ScrollEvent) {
+	d := e.Scrolled
+	if h := s.v.seg.hooks; h != nil && h.scrolled != nil && max(d.DY, -d.DY) > max(d.DX, -d.DX) {
+		h.scrolled(e)
+		return
+	}
+	s.Scroll.Scrolled(e)
+}

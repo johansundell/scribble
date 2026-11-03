@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -227,4 +228,46 @@ func dragMono(t *testing.T, ui *gui.UI, from, to string) {
 	end = end.AddXY(monoWidth(to)-1, h/2)
 	ui.Viewer.Dragged(&fyne.DragEvent{PointEvent: fyne.PointEvent{Position: end}, Dragged: fyne.NewDelta(end.X-start.X, end.Y-start.Y)})
 	ui.Viewer.DragEnd()
+}
+
+// noteScroll is the scroller the viewer sits in.
+func noteScroll(t *testing.T, w fyne.Window, ui *gui.UI) *container.Scroll {
+	t.Helper()
+	for _, o := range test.LaidOutObjects(w.Content()) {
+		if s, ok := o.(*container.Scroll); ok && s.Content == ui.Viewer {
+			return s
+		}
+	}
+	t.Fatal("the viewer is not in a scroller")
+	return nil
+}
+
+func TestMouseWheelOverCodeScrollsTheNote(t *testing.T) {
+	long := strings.Repeat("x", 300)
+	ui, w := openNote(t, "# Code\n\n```go\nvar short = 1\n```\n\n```go\nvar wide = \""+long+"\"\n```\n"+strings.Repeat("\nfiller line\n", 60))
+	page := noteScroll(t, w, ui)
+	abs := fyne.CurrentApp().Driver().AbsolutePositionForObject(ui.Viewer)
+
+	for _, word := range []string{"short", "wide"} {
+		page.ScrollToTop()
+		before, _ := textAt(t, ui, word)
+		test.Scroll(w.Canvas(), abs.Add(monoPointIn(t, ui, word)), 0, -50)
+		if page.Offset.Y == 0 {
+			t.Errorf("a wheel over the %s code block did not scroll the note", word)
+		}
+		if after, _ := textAt(t, ui, word); after.X != before.X {
+			t.Errorf("a vertical wheel over the %s code block scrolled it sideways", word)
+		}
+	}
+
+	// A sideways scroll, as from a trackpad, still scrolls wide code.
+	page.ScrollToTop()
+	before, _ := textAt(t, ui, "wide")
+	test.Scroll(w.Canvas(), abs.Add(monoPointIn(t, ui, "wide")), -50, 0)
+	if after, _ := textAt(t, ui, "wide"); after.X >= before.X {
+		t.Error("a sideways scroll did not scroll the wide code block")
+	}
+	if page.Offset.Y != 0 {
+		t.Error("a sideways scroll over code scrolled the note")
+	}
 }
