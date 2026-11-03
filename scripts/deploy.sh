@@ -60,13 +60,14 @@ tar -xzf "$NAME.tar.gz" "$BIN" sn
 
 # deploy_to dir service health-url [file...] installs the server, and the
 # other files, into dir and restarts the service. If the service doesn't
-# answer at health-url, the previous files are put back and the deploy fails.
-# (It exits rather than returns, because set -e is off in a function called
-# from a condition.)
+# answer at health-url, the previous files are put back (a file that had none
+# is removed) and the deploy stops with an error.
 deploy_to() {
 	local dir=$1 service=$2 health_url=$3
 	shift 3
-	local files=("$BIN" "$@") f
+	# The server goes last, so a failed swap of another file leaves the
+	# running server as it was.
+	local files=("$@" "$BIN") f
 
 	# Swap each file with a rename, which is safe while the old one is running.
 	for f in "${files[@]}"; do
@@ -99,6 +100,8 @@ deploy_to() {
 	for f in "${files[@]}"; do
 		if [[ -e "$dir/$f.prev" ]]; then
 			mv "$dir/$f.prev" "$dir/$f"
+		else
+			rm -f "$dir/$f"
 		fi
 	done
 	systemctl restart "$service" || echo "restarting $service with the previous binary failed too" >&2

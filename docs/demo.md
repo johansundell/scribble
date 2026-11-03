@@ -151,7 +151,7 @@ Run the first reset by hand:
 sudo /opt/scribble-demo/demo-reset.sh
 ```
 
-The script stops `scribble-demo`, removes its database, starts it, waits for `/healthz`, creates one note for each `notes/*.md` file, pins "Welcome to the demo", and edits "Work log" so that it has a history.
+The script stops `scribble-demo`, removes its database, starts it, waits for `/healthz`, creates one note for each `notes/*.md` file, pins "Welcome to the demo", and edits "Work log" and "Shell snippets" so that they have a history.
 
 **Check:** it ends with `demo reset: 6 notes loaded` (one per file). Open `https://demo1.sudde.net/`: the PIN screen shows the hint, PIN `123456` logs in, and "Welcome to the demo" is at the top.
 

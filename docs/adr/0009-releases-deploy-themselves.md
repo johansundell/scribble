@@ -1,7 +1,7 @@
 # 9. Releases deploy themselves
 
 - **Status:** Accepted
-- **Tickets:** #44 (setup in [`docs/deploy-vps.md`](../deploy-vps.md))
+- **Tickets:** #44 (setup in [`docs/deploy-vps.md`](../deploy-vps.md)), #161 (the demo instance)
 
 ## Context
 
@@ -17,5 +17,6 @@ The server runs on a VPS that also hosts other projects, such as johansundell/an
 ## Consequences
 
 - The server is almost always on the newest release, so the clients are the side that falls behind ([ADR 8](0008-api-level-and-minimum-client-level.md)).
+- The public demo (#161, [`docs/demo.md`](../demo.md)) is a second instance on the same VPS. `deploy.sh` updates it after the real server, with the `sn` its nightly reset uses. If the demo doesn't answer, only the demo is rolled back, and the deploy fails while the real server keeps the new release: a red Deploy run does not always mean the real server was rolled back.
 - GitHub never gets a shell or file access on the VPS. Changing what a deploy does means changing the script on the server by hand.
 - `/healthz` must stay unauthenticated, and must answer 200 only when the storage works (it answers 503 otherwise).

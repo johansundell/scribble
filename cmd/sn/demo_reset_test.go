@@ -43,7 +43,7 @@ func TestDemoReset(t *testing.T) {
 	}
 	bin := t.TempDir()
 	calls := filepath.Join(t.TempDir(), "systemctl.log")
-	writeFile(t, filepath.Join(bin, "systemctl"), "#!/bin/sh\necho \"$*\" >> "+calls+"\n")
+	writeFile(t, filepath.Join(bin, "systemctl"), "#!/bin/sh\necho \"$*\" >> '"+calls+"'\n")
 	if err := os.Chmod(filepath.Join(bin, "systemctl"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestDemoReset(t *testing.T) {
 			pinned, projects, code, links)
 	}
 
-	// The reset gave at least one note a history.
+	// The reset gave some notes a history.
 	var history int
 	for _, n := range list {
 		vs, err := c.Versions(ctx, n.ID)
@@ -129,7 +129,7 @@ func TestDemoReset(t *testing.T) {
 			history++
 		}
 	}
-	if history == 0 {
-		t.Error("no note has more than one version")
+	if history < 2 {
+		t.Errorf("%d notes have more than one version, want at least 2", history)
 	}
 }

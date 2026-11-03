@@ -51,9 +51,10 @@ done
 
 "$SN" pin "Welcome to the demo"
 
-# An edit, so "Work log" has an old version to compare and restore. More
-# edits now would merge into this one: the server merges saves within 5
-# minutes (ADR 7).
+# One edit each, so these notes have an old version to compare and restore.
+# A second edit of the same note now would merge into the first: the server
+# merges saves within 5 minutes (ADR 7).
 "$SN" append "Work log" "**Wednesday:** wrote the sample notes for the demo. Next: the nightly reset, see [[Welcome to the demo]]."
+"$SN" append "Shell snippets" "$(printf 'Which process holds a port:\n\n```bash\nss -ltnp '"'"'sport = :8083'"'"'\n```')"
 
 echo "demo reset: ${#files[@]} notes loaded"
