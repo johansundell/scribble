@@ -7,8 +7,10 @@ import (
 	"net/url"
 	"strings"
 
+	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
 	"github.com/johansundell/scribble/notes"
 	"github.com/yuin/goldmark"
+	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/renderer"
@@ -17,9 +19,13 @@ import (
 )
 
 // webMarkdown renders notes for the web app: GFM, with raw HTML shown as
-// text (never passed through) by escapedHTML.
+// text (never passed through) by escapedHTML. Fenced code in a language
+// Chroma knows is highlighted with classes (#160), which app.css colours for
+// light and dark; any other code block stays plain.
 var webMarkdown = goldmark.New(
-	goldmark.WithExtensions(extension.GFM),
+	goldmark.WithExtensions(extension.GFM, highlighting.NewHighlighting(
+		highlighting.WithFormatOptions(chromahtml.WithClasses(true)),
+	)),
 	goldmark.WithRendererOptions(renderer.WithNodeRenderers(util.Prioritized(escapedHTML{}, 100))),
 )
 

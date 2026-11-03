@@ -103,6 +103,8 @@ function loadPreview(form, body, preview) {
 			preview.classList.remove("muted");
 			// Rendered by the server, which escapes raw HTML as in the view.
 			preview.innerHTML = html;
+			// copy.js adds the code blocks' Copy buttons.
+			document.dispatchEvent(new Event("scribble:preview"));
 		});
 	}).catch(failed);
 }

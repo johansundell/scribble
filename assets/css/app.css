@@ -11,6 +11,19 @@
 	--error: #b91c1c;
 	--alert-bg: #fef3c7;
 	--alert-text: #78350f;
+	/* Code highlighting (#160): GitHub Light, and GitHub Dark below. */
+	--code-keyword: #cf222e;
+	--code-constant: #0550ae;
+	--code-function: #6639ba;
+	--code-string: #0a3069;
+	--code-variable: #953800;
+	--code-tag: #0550ae;
+	--code-class: #1f2328;
+	--code-comment: #57606a;
+	--code-deleted: #82071e;
+	--code-deleted-bg: #ffebe9;
+	--code-inserted: #116329;
+	--code-inserted-bg: #dafbe1;
 	color-scheme: light dark;
 }
 
@@ -28,6 +41,18 @@
 		--error: #fca5a5;
 		--alert-bg: #422006;
 		--alert-text: #fde68a;
+		--code-keyword: #ff7b72;
+		--code-constant: #79c0ff;
+		--code-function: #d2a8ff;
+		--code-string: #a5d6ff;
+		--code-variable: #79c0ff;
+		--code-tag: #7ee787;
+		--code-class: #f0883e;
+		--code-comment: #8b949e;
+		--code-deleted: #ffa198;
+		--code-deleted-bg: #490202;
+		--code-inserted: #56d364;
+		--code-inserted-bg: #0f5323;
 	}
 }
 
@@ -46,6 +71,18 @@
 	--error: #fca5a5;
 	--alert-bg: #422006;
 	--alert-text: #fde68a;
+	--code-keyword: #ff7b72;
+	--code-constant: #79c0ff;
+	--code-function: #d2a8ff;
+	--code-string: #a5d6ff;
+	--code-variable: #79c0ff;
+	--code-tag: #7ee787;
+	--code-class: #f0883e;
+	--code-comment: #8b949e;
+	--code-deleted: #ffa198;
+	--code-deleted-bg: #490202;
+	--code-inserted: #56d364;
+	--code-inserted-bg: #0f5323;
 	color-scheme: dark;
 }
 
@@ -472,6 +509,55 @@ body.web:has(.app-main) {
 .note-body code {
 	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 	font-size: 0.9em;
+}
+
+/* Chroma's classes on highlighted code blocks (#160). The block keeps the
+   note's own background and text colour. */
+.chroma .k, .chroma .kc, .chroma .kd, .chroma .kn, .chroma .kp, .chroma .kr, .chroma .kt { color: var(--code-keyword); }
+.chroma .no, .chroma .nl, .chroma .py, .chroma .ld,
+.chroma .m, .chroma .mb, .chroma .mf, .chroma .mh, .chroma .mi, .chroma .il, .chroma .mo,
+.chroma .o, .chroma .ow, .chroma .or { color: var(--code-constant); }
+.chroma .nf, .chroma .fm, .chroma .nb, .chroma .ni, .chroma .nd { color: var(--code-function); }
+.chroma .l, .chroma .s, .chroma .sa, .chroma .sb, .chroma .sc, .chroma .dl, .chroma .sd, .chroma .s2, .chroma .se,
+.chroma .sh, .chroma .si, .chroma .sx, .chroma .sr, .chroma .s1, .chroma .ss { color: var(--code-string); }
+.chroma .nv, .chroma .vc, .chroma .vg, .chroma .vi, .chroma .vm { color: var(--code-variable); }
+.chroma .nt { color: var(--code-tag); }
+.chroma .nc, .chroma .ne { color: var(--code-class); }
+.chroma .c, .chroma .ch, .chroma .cm, .chroma .c1, .chroma .cs, .chroma .cp, .chroma .cpf { color: var(--code-comment); }
+.chroma .gd { color: var(--code-deleted); background-color: var(--code-deleted-bg); }
+.chroma .gi { color: var(--code-inserted); background-color: var(--code-inserted-bg); }
+.chroma .err, .chroma .gr { color: var(--error); }
+.chroma .gh, .chroma .gs { font-weight: bold; }
+.chroma .ge { font-style: italic; }
+.chroma .gl { text-decoration: underline; }
+
+/* The Copy button on a code block (#160). copy.js wraps each block in
+   .code-block, so the button stays put when the code scrolls sideways. */
+.note-body .code-block {
+	position: relative;
+}
+
+.note-body .code-block pre {
+	padding-right: 5.5rem;
+}
+
+.code-copy {
+	position: absolute;
+	top: 0.4rem;
+	right: 0.4rem;
+	padding: 0.15rem 0.5rem;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	background: var(--bg);
+	color: var(--muted);
+	font: inherit;
+	font-size: 0.8rem;
+	cursor: pointer;
+}
+
+.code-copy:hover,
+.code-copy:focus-visible {
+	color: var(--text);
 }
 
 .note-body table {
