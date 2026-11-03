@@ -111,16 +111,19 @@ func TestClientRoundTrip(t *testing.T) {
 		t.Errorf("link not rewritten: %q", o2.Body)
 	}
 
-	changed, seq, err := c.Changes(ctx, upd.Seq)
-	if err != nil || len(changed) == 0 || seq < upd.Seq {
-		t.Fatalf("changes: %v %d %+v", err, seq, changed)
+	cs, err := c.Changes(ctx, upd.Seq)
+	if err != nil || len(cs.Notes) == 0 || cs.LatestSeq < upd.Seq || len(cs.DatabaseID) != 32 {
+		t.Fatalf("changes: %v %+v", err, cs)
 	}
 	if err := c.Delete(ctx, other.ID); err != nil {
 		t.Fatal(err)
 	}
-	changed, _, _ = c.Changes(ctx, seq)
-	if len(changed) != 1 || !changed[0].Deleted {
-		t.Errorf("want a tombstone, got %+v", changed)
+	again, _ := c.Changes(ctx, cs.LatestSeq)
+	if len(again.Notes) != 1 || !again.Notes[0].Deleted {
+		t.Errorf("want a tombstone, got %+v", again.Notes)
+	}
+	if again.DatabaseID != cs.DatabaseID {
+		t.Errorf("database ID changed from %q to %q", cs.DatabaseID, again.DatabaseID)
 	}
 	list, _ := c.List(ctx, "thoughts")
 	if len(list) != 1 {

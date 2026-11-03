@@ -37,12 +37,18 @@ func NewSQLite(file string) (*SQLStore, error) {
 		db.Close()
 		return nil, fmt.Errorf("read schema version: %w", err)
 	}
+	var dbID string
+	if err := db.QueryRow("SELECT database_id FROM database_info WHERE id = 1").Scan(&dbID); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("read database ID: %w", err)
+	}
 	return &SQLStore{
 		db:           db,
 		timeArg:      func(t time.Time) any { return t.UTC().Format(sqliteTimeLayout) },
 		noLimit:      -1, // SQLite: a negative LIMIT means no limit
 		notesEnabled: true,
 		schema:       schema,
+		databaseID:   dbID,
 	}, nil
 }
 

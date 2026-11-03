@@ -84,7 +84,8 @@ func TestHealthCheckJSON(t *testing.T) {
 		t.Errorf("Expected status 200, got %d", w.Code)
 	}
 
-	expectedJSON := `{"dbStatus":"OK","name":"test-service","schema":6,"title":"Health Check","version":"v1.0"}`
+	id, _ := s.DatabaseID()
+	expectedJSON := `{"database_id":"` + id + `","dbStatus":"OK","name":"test-service","schema":7,"title":"Health Check","version":"v1.0"}`
 	if w.Body.String() != expectedJSON {
 		t.Errorf("Expected body '%s', got '%s'", expectedJSON, w.Body.String())
 	}
@@ -148,10 +149,10 @@ func TestHealthCheck_SchemaVersion(t *testing.T) {
 		store              store.Store
 		wantJSON, wantHTML string
 	}{
-		{"sqlite", s, `"schema":6`, "api=2 schema=6"},
+		{"sqlite", s, `"schema":7`, "api=2 schema=7"},
 		{"no schema version", noSchemaStore{s}, "", "api=2 schema=<no value>"},
 		// A failing database still reports its schema version.
-		{"storage down", down, `"schema":6`, "api=2 schema=6"},
+		{"storage down", down, `"schema":7`, "api=2 schema=7"},
 	} {
 		h := mustNewHandler(t, tc.store, false, mockFS, "test-service", "v1.0")
 		for _, accept := range []string{"application/json", "text/html"} {

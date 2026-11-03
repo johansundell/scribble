@@ -263,3 +263,34 @@ func TestNewSQLite_RefusesNewerSchemaVersion(t *testing.T) {
 		t.Errorf("Expected error to contain %q, got %q", want, err)
 	}
 }
+
+// Each database gets its own ID when it is created, and keeps it (#167).
+func TestSQLStore_DatabaseID(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "a.db")
+	a, err := NewSQLite(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, ok := a.DatabaseID()
+	if !ok || len(id) != 32 {
+		t.Fatalf("got (%q, %v), want a 32-character ID", id, ok)
+	}
+	a.Close()
+
+	again, err := NewSQLite(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer again.Close()
+	if got, _ := again.DatabaseID(); got != id {
+		t.Errorf("reopened: got %q, want %q", got, id)
+	}
+	if other, _ := newTestSQLite(t).DatabaseID(); other == id {
+		t.Errorf("two databases share the ID %q", id)
+	}
+
+	// MySQL holds no notes, so it has no ID.
+	if id, ok := (&SQLStore{}).DatabaseID(); ok {
+		t.Errorf("MySQL: got (%q, true), want no ID", id)
+	}
+}

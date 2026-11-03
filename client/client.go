@@ -24,7 +24,7 @@ import (
 // APILevel is the server API level this client is written for. The CLI and
 // the GUI share it. Raise it with the server's when the client starts using
 // what a new level adds (ADR 8).
-const APILevel = 5
+const APILevel = 6
 
 // ReleasesURL is where the latest release can be downloaded.
 const ReleasesURL = "https://github.com/johansundell/scribble/releases/latest"
@@ -253,15 +253,24 @@ func (c *Client) UnshareNote(ctx context.Context, id int64) error {
 	return c.do(ctx, "DELETE", notePath(id, "/share"), nil, nil, nil)
 }
 
-// Changes returns everything modified after sequence number since (deleted
-// notes have Deleted set) and the cursor to pass next time.
-func (c *Client) Changes(ctx context.Context, since int64) (changed []notes.Note, latestSeq int64, err error) {
-	var resp struct {
-		Notes     []notes.Note `json:"notes"`
-		LatestSeq int64        `json:"latest_seq"`
-	}
-	err = c.do(ctx, "GET", "/changes", url.Values{"since": {strconv.FormatInt(since, 10)}}, nil, &resp)
-	return resp.Notes, resp.LatestSeq, err
+// ChangeSet is the answer to Changes.
+type ChangeSet struct {
+	// Notes changed after the cursor; deleted ones have Deleted set.
+	Notes []notes.Note `json:"notes"`
+	// LatestSeq is the cursor to pass next time.
+	LatestSeq int64 `json:"latest_seq"`
+	// DatabaseID names the server's database (API level 6, #167). When it
+	// differs from the one a copy was made from, the database was
+	// replaced and the cursor and note IDs mean nothing any more. "" from
+	// older servers.
+	DatabaseID string `json:"database_id"`
+}
+
+// Changes returns everything modified after sequence number since.
+func (c *Client) Changes(ctx context.Context, since int64) (ChangeSet, error) {
+	var cs ChangeSet
+	err := c.do(ctx, "GET", "/changes", url.Values{"since": {strconv.FormatInt(since, 10)}}, nil, &cs)
+	return cs, err
 }
 
 // Versions returns note id's kept versions, newest first, without bodies.

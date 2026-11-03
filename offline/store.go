@@ -38,6 +38,10 @@ type Edit struct {
 	// revision, a taken title, ...). A refused edit is kept but not sent
 	// again until it is queued anew or dropped.
 	Err *client.Error `json:"err,omitempty"`
+	// FromReset marks a new note made from an edit of a database that was
+	// replaced (#167). If its title is taken on the new one, it is saved
+	// as "<title> (from this computer)" instead of being refused.
+	FromReset bool `json:"from_reset,omitempty"`
 
 	version int64 // tells a re-queued edit apart while a sync sends it
 }
@@ -45,7 +49,15 @@ type Edit struct {
 // Report says what a Sync did with the queued edits.
 type Report struct {
 	Failed []int64 // edits the server refused, see Edit.Err
+	// Reset is true when the server's database turned out to be a
+	// different one than the copy was made from (#167, ADR 2): the copy
+	// was replaced with the new database's notes. See TakeReset.
+	Reset bool
 }
+
+// fromThisComputer goes after the title of a note made from an edit of a
+// replaced database when the new one has the title already (#167).
+const fromThisComputer = " (from this computer)"
 
 // Store is the local copy. It is safe for concurrent use.
 type Store struct {
@@ -54,7 +66,8 @@ type Store struct {
 
 	syncing sync.Mutex // one Sync at a time
 	mu      sync.Mutex
-	seq     int64 // the server's latest_seq as of the last sync
+	seq     int64  // the server's latest_seq as of the last sync
+	dbID    string // the server's database ID as of the last sync
 	notes   map[int64]notes.Note
 	edits   []Edit          // in the order they were queued
 	localID int64           // the last local ID handed out
@@ -65,15 +78,21 @@ type Store struct {
 	// note created offline is recorded as an edit from revision 0.
 	acked   map[int64]map[int64]int64
 	version int64
+	// moved is non-nil from a reset until TakeReset: it maps note IDs from
+	// before the reset to the local IDs of the new notes their edits
+	// became. Until then the GUI only knows IDs from before the reset, so
+	// Queue and ServerID take every positive ID as one of those.
+	moved map[int64]int64
 }
 
 // state is the file format.
 type state struct {
-	LatestSeq int64           `json:"latest_seq"`
-	LocalID   int64           `json:"local_id"`
-	Notes     []notes.Note    `json:"notes"`
-	Edits     []Edit          `json:"edits"`
-	Sent      map[int64]int64 `json:"sent,omitempty"`
+	LatestSeq  int64           `json:"latest_seq"`
+	DatabaseID string          `json:"database_id,omitempty"`
+	LocalID    int64           `json:"local_id"`
+	Notes      []notes.Note    `json:"notes"`
+	Edits      []Edit          `json:"edits"`
+	Sent       map[int64]int64 `json:"sent,omitempty"`
 }
 
 // Open loads the copy saved at path, or starts an empty one if there is no
@@ -107,7 +126,7 @@ func Open(path string) (*Store, error) {
 		_ = s.lock.Close()
 		return nil, err
 	}
-	s.seq, s.localID, s.edits = st.LatestSeq, st.LocalID, st.Edits
+	s.seq, s.dbID, s.localID, s.edits = st.LatestSeq, st.DatabaseID, st.LocalID, st.Edits
 	if st.Sent != nil {
 		s.sent = st.Sent
 	}
@@ -160,7 +179,7 @@ func (s *Store) save() error {
 	if s.path == "" {
 		return nil
 	}
-	st := state{LatestSeq: s.seq, LocalID: s.localID, Edits: s.edits, Sent: s.sent}
+	st := state{LatestSeq: s.seq, DatabaseID: s.dbID, LocalID: s.localID, Edits: s.edits, Sent: s.sent}
 	for _, n := range s.notes {
 		st.Notes = append(st.Notes, n)
 	}
@@ -207,6 +226,9 @@ func (s *Store) ServerID(id int64) int64 {
 }
 
 func (s *Store) serverID(id int64) int64 {
+	if nid, ok := s.moved[id]; ok && id > 0 {
+		id = nid
+	}
 	if sid, ok := s.sent[id]; ok {
 		return sid
 	}
@@ -224,6 +246,18 @@ func (s *Store) Queue(id int64, body string, baseRevision int64) (notes.Note, er
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	edits, localID := slices.Clone(s.edits), s.localID
+	fromReset, oldID, added := false, id, false
+	if s.moved != nil && id > 0 {
+		// An ID from before a reset the GUI has not taken yet: never the
+		// new database's note that has it now.
+		nid, ok := s.moved[id]
+		if !ok {
+			s.localID--
+			nid, added = s.localID, true
+			s.moved[id] = nid
+		}
+		id, baseRevision, fromReset = nid, 0, true
+	}
 	if sid, ok := s.sent[id]; ok {
 		// Created offline and sent meanwhile: the editor's revision 0 is
 		// the one we created it from.
@@ -236,8 +270,9 @@ func (s *Store) Queue(id int64, body string, baseRevision int64) (notes.Note, er
 		id = s.localID
 	}
 	s.version++
-	e := Edit{ID: id, Body: body, BaseRevision: baseRevision, Queued: time.Now(), version: s.version}
+	e := Edit{ID: id, Body: body, BaseRevision: baseRevision, Queued: time.Now(), FromReset: fromReset, version: s.version}
 	if i := s.editIndex(id); i >= 0 {
+		e.FromReset = e.FromReset || s.edits[i].FromReset
 		s.edits[i] = e
 	} else {
 		s.edits = append(s.edits, e)
@@ -246,6 +281,9 @@ func (s *Store) Queue(id int64, body string, baseRevision int64) (notes.Note, er
 	if err := s.save(); err != nil {
 		// Not on disk, so not queued: it must not be sent later.
 		s.edits, s.localID = edits, localID
+		if added {
+			delete(s.moved, oldID)
+		}
 		return notes.Note{}, err
 	}
 	return n, nil
@@ -453,21 +491,50 @@ func (s *Store) Backlinks(id int64) []notes.Note {
 // Sync sends the queued edits to the server, then fetches what changed
 // there since the last sync. An edit the server refuses is kept with its
 // Err set and listed in the Report; an unreachable server stops the sync
-// with an error and leaves the queue as it was.
+// with an error and leaves the queue as it was. When the server's database
+// was replaced, the copy is replaced too and unsent edits become new notes
+// (see Report.Reset).
 func (s *Store) Sync(ctx context.Context, c *client.Client) (Report, error) {
 	s.syncing.Lock()
 	defer s.syncing.Unlock()
 	var r Report
-	if err := s.push(ctx, c, &r); err != nil {
+	// An edit sent to a replaced database would land on whichever note now
+	// has its ID, and the reset would lose track of a note just created,
+	// so look first when there is one to send. Only edits queued before
+	// the look are sent; later ones wait for the next sync.
+	queue := s.queue()
+	if len(queue) > 0 {
+		if err := s.pull(ctx, c, &r); err != nil {
+			return r, err
+		}
+		queue = s.queue() // a reset gave the edits new IDs
+	}
+	if err := s.push(ctx, c, &r, queue); err != nil {
 		return r, err
 	}
-	return r, s.pull(ctx, c)
+	return r, s.pull(ctx, c, &r)
 }
 
-func (s *Store) push(ctx context.Context, c *client.Client, r *Report) error {
+func (s *Store) queue() []Edit {
 	s.mu.Lock()
-	queue := slices.Clone(s.edits)
-	s.mu.Unlock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.edits)
+}
+
+// TakeReset returns, once, what the last reset not yet taken moved: the
+// note IDs from before it that had unsent edits, mapped to the local IDs of
+// the new notes those became. ok is false when there was no such reset.
+// Until it is called, Queue and ServerID take positive IDs as ones from
+// before the reset; the GUI calls it once it has let go of them.
+func (s *Store) TakeReset() (moved map[int64]int64, ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	moved, ok = s.moved, s.moved != nil
+	s.moved = nil
+	return moved, ok
+}
+
+func (s *Store) push(ctx context.Context, c *client.Client, r *Report, queue []Edit) error {
 	for _, e := range queue {
 		if e.Err != nil {
 			continue
@@ -476,6 +543,9 @@ func (s *Store) push(ctx context.Context, c *client.Client, r *Report) error {
 		var err error
 		if e.ID < 0 {
 			n, err = c.Create(ctx, e.Body)
+			if e.FromReset && client.IsTitleTaken(err) {
+				n, err = c.Create(ctx, notes.SetTitle(e.Body, notes.TitleOf(e.Body)+fromThisComputer))
+			}
 		} else {
 			n, err = c.Update(ctx, e.ID, e.Body, e.BaseRevision)
 		}
@@ -524,20 +594,64 @@ func (s *Store) push(ctx context.Context, c *client.Client, r *Report) error {
 	return nil
 }
 
-func (s *Store) pull(ctx context.Context, c *client.Client) error {
-	changed, latest, err := c.Changes(ctx, s.LatestSeq())
+func (s *Store) pull(ctx context.Context, c *client.Client, r *Report) error {
+	cs, err := c.Changes(ctx, s.LatestSeq())
 	if err != nil {
 		return err
 	}
 	s.mu.Lock()
+	replaced := cs.DatabaseID != "" && s.dbID != "" && cs.DatabaseID != s.dbID
+	s.mu.Unlock()
+	if replaced {
+		// Download the new database first, so that if this fails the copy
+		// still has the old notes to read, and the next sync tries again.
+		if cs, err = c.Changes(ctx, 0); err != nil {
+			return err
+		}
+	}
+	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, n := range changed {
+	if replaced {
+		s.reset(r)
+	}
+	if cs.DatabaseID != "" {
+		s.dbID = cs.DatabaseID // a copy from before database IDs adopts it
+	}
+	for _, n := range cs.Notes {
 		if n.Deleted {
 			delete(s.notes, n.ID)
 		} else if old, ok := s.notes[n.ID]; !ok || old.Seq <= n.Seq {
 			s.notes[n.ID] = n
 		}
 	}
-	s.seq = max(s.seq, latest)
+	s.seq = max(s.seq, cs.LatestSeq)
 	return s.save()
+}
+
+// reset forgets the copy of a database that was replaced, and turns each
+// unsent edit into a new note to send again, so nothing typed is lost and
+// nothing is written over the new database's note with the same ID. An
+// edit the old database refused is tried again on the new one. Callers
+// hold s.mu and s.syncing, and save.
+func (s *Store) reset(r *Report) {
+	if s.moved == nil {
+		s.moved = map[int64]int64{}
+	}
+	for i, e := range s.edits {
+		id := e.ID
+		if id > 0 {
+			s.localID--
+			id = s.localID
+			s.moved[e.ID] = id
+		}
+		s.edits[i] = Edit{ID: id, Body: e.Body, Queued: e.Queued, FromReset: true, version: e.version}
+	}
+	for local, server := range s.sent {
+		if id, ok := s.moved[server]; ok {
+			s.moved[local] = id
+		}
+	}
+	s.seq = 0
+	s.notes, s.sent, s.acked = map[int64]notes.Note{}, map[int64]int64{}, map[int64]map[int64]int64{}
+	r.Reset = true
 }

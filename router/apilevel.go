@@ -15,8 +15,9 @@ import (
 // APILevel is the server's API level, sent in APIHeader on every response
 // and in /healthz. It goes up by one whenever endpoints or fields are added
 // (ADR 8). Level 2 added note history (#55), level 3 export and import (#117),
-// level 4 share links (#142), level 5 pinned notes (#140).
-const APILevel = 5
+// level 4 share links (#142), level 5 pinned notes (#140), level 6 the
+// database ID in /changes (#167).
+const APILevel = 6
 
 // minClientAPI is the lowest client API level the note endpoints accept.
 // It is raised only by a breaking change: a field renamed or removed, or a

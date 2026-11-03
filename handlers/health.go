@@ -37,6 +37,9 @@ func (h *Handler) HealthCheck(c *gin.Context) error {
 			data["schema"] = v
 		}
 	}
+	if id := databaseID(h.store); id != "" {
+		data["database_id"] = id
+	}
 	// The replica can't make the service unhealthy: SQLite is the master.
 	if h.replica != nil {
 		data["replica"] = h.replica.Status(c.Request.Context())
@@ -61,6 +64,15 @@ func (h *Handler) HealthCheck(c *gin.Context) error {
 		return httperror.ReturnWithHTTPStatus(err, http.StatusInternalServerError)
 	}
 	return nil
+}
+
+// databaseID is s's database ID, or "" when it has none (#167).
+func databaseID(s any) string {
+	if di, ok := s.(store.DatabaseIdentifier); ok {
+		id, _ := di.DatabaseID()
+		return id
+	}
+	return ""
 }
 
 // RootToHealth sends the root to the health check. The router uses it only

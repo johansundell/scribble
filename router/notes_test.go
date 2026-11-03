@@ -113,14 +113,19 @@ func TestNotesAPI(t *testing.T) {
 	wantStatus(do("DELETE", "/notes/2", ""), http.StatusNoContent)
 	wantStatus(do("DELETE", "/notes/2", ""), http.StatusNotFound)
 	var ch struct {
-		Notes     []notes.Note `json:"notes"`
-		LatestSeq int64        `json:"latest_seq"`
+		Notes      []notes.Note `json:"notes"`
+		LatestSeq  int64        `json:"latest_seq"`
+		DatabaseID string       `json:"database_id"`
 	}
 	w = do("GET", "/changes?since=0", "")
 	wantStatus(w, http.StatusOK)
 	decode(w, &ch)
 	if len(ch.Notes) != 2 || ch.LatestSeq < 3 {
 		t.Fatalf("changes: %+v", ch)
+	}
+	// The database ID lets a sync client tell a replaced database (#167).
+	if id, _ := s.DatabaseID(); ch.DatabaseID != id || id == "" {
+		t.Errorf("changes: database_id %q, want %q", ch.DatabaseID, id)
 	}
 	var sawTombstone bool
 	for _, n := range ch.Notes {
