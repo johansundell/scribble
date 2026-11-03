@@ -1,15 +1,16 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/johansundell/scribble/client"
-	"github.com/joho/godotenv"
 )
 
 // config is the server and token sn uses, and the file they were read
@@ -20,6 +21,7 @@ type config struct {
 
 // configFiles are the files sn reads its settings from, first found wins
 // (#165): ~/.scribble, then scribble/.env in the user's config folder.
+// Only the first that exists is read, even if it lacks a setting.
 func configFiles() []string {
 	var files []string
 	if home, err := os.UserHomeDir(); err == nil {
@@ -44,14 +46,14 @@ func resolveConfig(getenv func(string) string, files []string) (config, error) {
 		if err != nil {
 			return cfg, fmt.Errorf("cannot read %s: %w", path, err)
 		}
-		vars, err := godotenv.Parse(f)
+		vars, err := parseConfig(f)
 		f.Close()
 		if err != nil {
 			return cfg, fmt.Errorf("cannot read %s: %w", path, err)
 		}
 		cfg.Source = path
-		cfg.URL = setting(vars, "SCRIBBLE_URL", "url")
-		cfg.Token = setting(vars, "SCRIBBLE_TOKEN", "token")
+		cfg.URL = setting(vars, "scribble_url", "url")
+		cfg.Token = setting(vars, "scribble_token", "token")
 		break
 	}
 	if v := getenv("SCRIBBLE_URL"); v != "" {
@@ -66,21 +68,68 @@ func resolveConfig(getenv func(string) string, files []string) (config, error) {
 	return cfg, nil
 }
 
-// setting is the value of the first of names in vars, ignoring case.
+// parseConfig reads KEY=VALUE lines, skipping blank lines and lines
+// starting with #. Keys are lower-cased and a later line wins. Values are
+// taken as written, without expanding $VAR, except that one pair of
+// surrounding quotes is removed; inside double quotes a backslash escapes
+// the next character, as the GUI writes them (godotenv.Marshal).
+func parseConfig(r io.Reader) (map[string]string, error) {
+	vars := map[string]string{}
+	sc := bufio.NewScanner(r)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		vars[strings.ToLower(strings.TrimSpace(key))] = unquote(strings.TrimSpace(value))
+	}
+	return vars, sc.Err()
+}
+
+func unquote(v string) string {
+	if len(v) < 2 || v[0] != v[len(v)-1] || (v[0] != '"' && v[0] != '\'') {
+		return v
+	}
+	q, v := v[0], v[1:len(v)-1]
+	if q == '\'' {
+		return v
+	}
+	var b strings.Builder
+	for i := 0; i < len(v); i++ {
+		if v[i] == '\\' && i+1 < len(v) {
+			i++
+			switch v[i] {
+			case 'n':
+				b.WriteByte('\n')
+			case 'r':
+				b.WriteByte('\r')
+			default:
+				b.WriteByte(v[i])
+			}
+			continue
+		}
+		b.WriteByte(v[i])
+	}
+	return b.String()
+}
+
+// setting is the value of the first of names (lower case) in vars.
 func setting(vars map[string]string, names ...string) string {
 	for _, name := range names {
-		for k, v := range vars {
-			if strings.EqualFold(k, name) {
-				return v
-			}
+		if v, ok := vars[name]; ok {
+			return v
 		}
 	}
 	return ""
 }
 
-// displayPath is path with the home folder shown as ~, as sn version
-// prints it.
-func displayPath(path string) string {
+// sourceLabel is how sn version names the config file at path: with the
+// home folder shown as ~, or "none" when there was no file.
+func sourceLabel(path string) string {
 	if path == "" {
 		return "none (environment / defaults)"
 	}

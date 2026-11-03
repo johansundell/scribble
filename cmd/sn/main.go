@@ -225,7 +225,7 @@ func cmdVersion(ctx context.Context, c *client.Client, w io.Writer, source strin
 	}
 	h, err := c.Health(ctx)
 	if err != nil {
-		fmt.Fprintf(w, "url: %s\ntoken: %s\nconfig: %s\n", c.BaseURL, tok, displayPath(source))
+		fmt.Fprintf(w, "url: %s\ntoken: %s\nconfig: %s\n", c.BaseURL, tok, sourceLabel(source))
 		return fmt.Errorf("cannot ask the server for its version: %w", err)
 	}
 	schema := ""
@@ -233,7 +233,7 @@ func cmdVersion(ctx context.Context, c *client.Client, w io.Writer, source strin
 		schema = fmt.Sprintf(", schema %d", h.Schema)
 	}
 	fmt.Fprintf(w, "server %s (API level %d%s)\n", h.Version, h.API, schema)
-	fmt.Fprintf(w, "url: %s\ntoken: %s\nconfig: %s\n", c.BaseURL, tok, displayPath(source))
+	fmt.Fprintf(w, "url: %s\ntoken: %s\nconfig: %s\n", c.BaseURL, tok, sourceLabel(source))
 	if client.NewerRelease(Version, h.Version) {
 		fmt.Fprintf(w, "update available: %s\n", client.ReleasesURL)
 		if h := installHint(runtime.GOOS, "run: "); h != "" {

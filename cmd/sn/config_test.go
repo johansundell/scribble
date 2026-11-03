@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/joho/godotenv"
 )
 
 // TestMain points the home and config folders at an empty directory, so no
@@ -84,6 +86,10 @@ func TestResolveConfigKeys(t *testing.T) {
 		{"comments, blank lines and spaces", "# my server\n\n  url = https://a  \n#token=no\ntoken=t\n", "https://a", "t"},
 		{"quoted values, as the GUI writes them", "SCRIBBLE_URL=\"https://a\"\nSCRIBBLE_TOKEN='t'\n", "https://a", "t"},
 		{"other keys are ignored", "EDITOR=vim\ntoken=t\n", "https://notes.sudde.net", "t"},
+		{"$ is not expanded", "HOME=x\ntoken=a$HOME\n", "https://notes.sudde.net", "a$HOME"},
+		{"a later line wins, whatever its case", "URL=https://a\nurl=https://b\nUrl=https://c\n", "https://c", ""},
+		{"GUI escapes are undone", `SCRIBBLE_TOKEN="a\$b\"c\\d"`, "https://notes.sudde.net", `a$b"c\d`},
+		{"lines without = are skipped", "nonsense\ntoken=t\n", "https://notes.sudde.net", "t"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -130,8 +136,8 @@ func TestDisplayPath(t *testing.T) {
 		filepath.Join(home, ".config", "x"):  filepath.Join("~", ".config", "x"),
 		filepath.Join(home+"x", ".scribble"): filepath.Join(home+"x", ".scribble"),
 	} {
-		if got := displayPath(in); got != want {
-			t.Errorf("displayPath(%q) = %q, want %q", in, got, want)
+		if got := sourceLabel(in); got != want {
+			t.Errorf("sourceLabel(%q) = %q, want %q", in, got, want)
 		}
 	}
 }
@@ -173,7 +179,7 @@ func TestRunReadsTheGUIConfig(t *testing.T) {
 	if err := runWith(&out, []string{"version"}); err != nil {
 		t.Fatal(err)
 	}
-	if want := "config: " + displayPath(path) + "\n"; !strings.Contains(out.String(), want) {
+	if want := "config: " + sourceLabel(path) + "\n"; !strings.Contains(out.String(), want) {
 		t.Errorf("version printed\n%s\nwant it to contain %q", out.String(), want)
 	}
 }
@@ -184,5 +190,22 @@ func TestMissingTokenNamesTheDotfile(t *testing.T) {
 	err := runWith(&bytes.Buffer{}, []string{"ls"})
 	if err == nil || !strings.Contains(err.Error(), "~/.scribble") {
 		t.Errorf("got %v, want it to point at ~/.scribble", err)
+	}
+}
+
+// A token the GUI saves (with godotenv.Marshal) reads back unchanged.
+func TestParseConfigReadsWhatTheGUIWrites(t *testing.T) {
+	for _, tok := range []string{"plain", `a$b"c\d!e` + "`f", "with space", "#hash", "x='y'"} {
+		line, err := godotenv.Marshal(map[string]string{"SCRIBBLE_TOKEN": tok})
+		if err != nil {
+			t.Fatal(err)
+		}
+		vars, err := parseConfig(strings.NewReader(line + "\n"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := vars["scribble_token"]; got != tok {
+			t.Errorf("wrote %q as %s, read back %q", tok, line, got)
+		}
 	}
 }
