@@ -920,6 +920,12 @@ body.web:has(.app-main) {
 		height: auto;
 	}
 
+	/* A tap target, as the other buttons are (#160). */
+	.code-copy {
+		min-width: 44px;
+		min-height: 44px;
+	}
+
 	.app-main {
 		grid-template-columns: minmax(0, 1fr);
 		grid-template-rows: none;
