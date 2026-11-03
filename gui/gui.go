@@ -435,6 +435,8 @@ func (ui *UI) showView() {
 	if err != nil {
 		ui.Status.SetText("Failed to render note as Markdown; showing raw text.")
 		segs = []widget.RichTextSegment{&widget.TextSegment{Text: ui.Editor.Text}}
+	} else {
+		segs = withCodeBlocks(md, segs, func() { ui.Status.SetText("Copied code to clipboard") })
 	}
 	ui.hookLinks(segs)
 	ui.Viewer.Segments = segs

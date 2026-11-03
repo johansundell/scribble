@@ -30,7 +30,8 @@ type drawnText struct {
 	pos fyne.Position
 }
 
-// drawnTexts returns the texts o draws, looking inside its widgets. The test
+// drawnTexts returns the texts o draws, looking inside its widgets but
+// not its buttons. The test
 // driver's AbsolutePositionForObject misses some of them.
 func drawnTexts(o fyne.CanvasObject) []drawnText {
 	var out []drawnText
@@ -46,6 +47,7 @@ func drawnTexts(o fyne.CanvasObject) []drawnText {
 			for _, child := range o.Objects {
 				walk(child, pos.Add(child.Position()))
 			}
+		case *widget.Button: // a code block's Copy button is not the note's text
 		case fyne.Widget:
 			for _, child := range test.WidgetRenderer(o).Objects() {
 				walk(child, pos.Add(child.Position()))
