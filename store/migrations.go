@@ -109,6 +109,19 @@ ALTER TABLE notes ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX notes_pinned ON notes(pinned, updated_at DESC);
 `,
 	},
+	{
+		// The database ID (#167, ADR 2): random, made once when the
+		// database is created (or upgraded to this version), so clients
+		// can tell a replaced database from the one they synced with.
+		name: "database_id",
+		sql: `
+CREATE TABLE database_info (
+	id INTEGER PRIMARY KEY CHECK (id = 1),
+	database_id TEXT NOT NULL
+);
+INSERT INTO database_info (id, database_id) VALUES (1, lower(hex(randomblob(16))));
+`,
+	},
 }
 
 // migrate applies the migrations the database's user_version has not yet

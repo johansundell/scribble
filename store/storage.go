@@ -61,6 +61,8 @@ type SQLStore struct {
 	notesEnabled bool
 	// schema is the SQLite schema version once migrated; 0 for MySQL.
 	schema int
+	// databaseID is the SQLite database's ID (#167); "" for MySQL.
+	databaseID string
 }
 
 // SchemaVersioner is a store with a schema version: how many migrations its
@@ -75,6 +77,20 @@ type SchemaVersioner interface {
 // none.
 func (s *SQLStore) SchemaVersion() (int, bool) {
 	return s.schema, s.schema > 0
+}
+
+// DatabaseIdentifier is a store whose database has an ID, made when it was
+// created, that sync clients use to tell a replaced database from the one
+// they copied (#167, ADR 2). Only SQLite, which holds the notes, has one.
+type DatabaseIdentifier interface {
+	// DatabaseID returns the ID read at open, and false when the store
+	// has none.
+	DatabaseID() (string, bool)
+}
+
+// DatabaseID returns the SQLite database's ID; MySQL has none.
+func (s *SQLStore) DatabaseID() (string, bool) {
+	return s.databaseID, s.databaseID != ""
 }
 
 func (s *SQLStore) Ping(ctx context.Context) error {

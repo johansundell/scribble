@@ -662,7 +662,11 @@ func (ui *UI) write(id int64, body string, base int64) (notes.Note, error) {
 	ctx, cancel := requestContext()
 	defer cancel()
 	r, err := ui.store.Sync(ctx, ui.c)
-	key := ui.store.ServerID(n.ID)
+	key := n.ID
+	if id, ok := r.Moved[key]; ok {
+		key = id // the server's database was replaced (#167)
+	}
+	key = ui.store.ServerID(key)
 	if e, ok := ui.store.Pending(key); ok && e.Err != nil {
 		ui.report(ui.store.Drop(key))
 		return n, e.Err
@@ -831,6 +835,10 @@ func (ui *UI) synced(r offline.Report, err error) {
 	case wasOffline && ui.Status.Text == unreachable:
 		ui.Status.SetText("")
 	}
+	if r.Reset {
+		ui.followReset(r.Moved)
+		ui.Status.SetText(resetNotice)
+	}
 	// Opening a note may have taken its refused edit back into the
 	// editor since the sync ran, so look again.
 	var refused []offline.Edit
@@ -849,6 +857,28 @@ func (ui *UI) synced(r offline.Report, err error) {
 	}
 	ui.reload()
 	ui.followOpenNote()
+}
+
+// resetNotice is the status line after a sync found the server's database
+// replaced (#167).
+const resetNotice = "The server's notes were replaced, so this computer's copy was too. Edits not yet sent were saved as new notes."
+
+// followReset keeps the open note after the server's database was replaced:
+// as the new note its unsent edit became (moved), or, with unsaved text in
+// the editor, as a new note on the next save. Otherwise it closes, since
+// its ID now names another note.
+func (ui *UI) followReset(moved map[int64]int64) {
+	if !ui.isSaved() {
+		return
+	}
+	switch id, ok := moved[ui.current.ID]; {
+	case ok:
+		ui.current.ID, ui.current.Revision = id, 0
+	case ui.hasUnsavedChanges():
+		ui.current.ID, ui.current.Revision = 0, 0
+	default:
+		ui.closeNote()
+	}
 }
 
 // followOpenNote keeps the open note in step with the local copy after a

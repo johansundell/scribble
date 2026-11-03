@@ -28,10 +28,13 @@ type renameRequest struct {
 }
 
 // changesResponse is the GET /changes body. LatestSeq is the cursor to pass
-// as ?since= next time.
+// as ?since= next time. DatabaseID names the database the notes and the
+// cursor belong to: when it changes, the client's copy is of a database
+// that was replaced (#167, ADR 2).
 type changesResponse struct {
-	Notes     []notes.Note `json:"notes"`
-	LatestSeq int64        `json:"latest_seq"`
+	Notes      []notes.Note `json:"notes"`
+	LatestSeq  int64        `json:"latest_seq"`
+	DatabaseID string       `json:"database_id,omitempty"`
 }
 
 // noteStore returns the notes side of the store, or 501 when the configured
@@ -287,6 +290,9 @@ func (h *Handler) NoteChanges(c *gin.Context) error {
 		return noteError(err)
 	}
 	resp := changesResponse{Notes: list, LatestSeq: int64(since)}
+	if di, ok := ns.(store.DatabaseIdentifier); ok {
+		resp.DatabaseID, _ = di.DatabaseID()
+	}
 	for _, n := range list {
 		resp.LatestSeq = max(resp.LatestSeq, n.Seq)
 	}

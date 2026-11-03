@@ -37,6 +37,11 @@ func (h *Handler) HealthCheck(c *gin.Context) error {
 			data["schema"] = v
 		}
 	}
+	if di, ok := h.store.(store.DatabaseIdentifier); ok {
+		if id, ok := di.DatabaseID(); ok {
+			data["database_id"] = id
+		}
+	}
 	// The replica can't make the service unhealthy: SQLite is the master.
 	if h.replica != nil {
 		data["replica"] = h.replica.Status(c.Request.Context())
