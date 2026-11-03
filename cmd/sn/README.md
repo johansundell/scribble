@@ -32,8 +32,8 @@ go build -o sn ./cmd/sn
 
 ## Configuration
 
-Apart from `show -r` and `restore -y`, the CLI has no flags. It reads two
-environment variables:
+Apart from `show -r` and `restore -y`, the CLI has no flags. It needs two
+settings:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
@@ -45,9 +45,42 @@ export SCRIBBLE_URL=https://notes.example.com
 export SCRIBBLE_TOKEN=change-me
 ```
 
-If `SCRIBBLE_TOKEN` is not set, every command except `help`, `completion` and `version` fails with
-`SCRIBBLE_TOKEN is not set`. If the server does not accept the token, the
-error is `the server rejected SCRIBBLE_TOKEN`.
+### Config file
+
+Instead of exporting the variables in every shell, put them in
+`~/.scribble`, one `KEY=VALUE` per line. Blank lines and lines starting
+with `#` are ignored, values may be quoted, and the keys may also be
+written `url` and `token`, in any case:
+
+```sh
+# ~/.scribble
+url=https://notes.example.com
+token=change-me
+```
+
+The file holds the token, so only you should be able to read it:
+
+```sh
+chmod 600 ~/.scribble
+```
+
+Each setting is taken from the first of these that has it:
+
+1. the environment (`SCRIBBLE_URL`, `SCRIBBLE_TOKEN`; empty counts as unset)
+2. `~/.scribble`
+3. if there is no `~/.scribble`: `scribble/.env` in your config folder
+   (`~/.config/scribble/.env` on Linux, `~/Library/Application Support/scribble/.env`
+   on macOS, `%AppData%\scribble\.env` on Windows)
+4. the default above
+
+Only one file is read: when `~/.scribble` exists, the other is ignored.
+A file that exists but cannot be read is an error. `sn version` prints
+which file was used (see [version](#version)).
+
+If `SCRIBBLE_TOKEN` is not set in any of them, every command except `help`,
+`completion` and `version` fails with
+`SCRIBBLE_TOKEN is not set (set it in the environment or in ~/.scribble)`.
+If the server does not accept the token, the error is `the server rejected SCRIBBLE_TOKEN`.
 
 `sn edit` also reads `VISUAL`, then `EDITOR`, to choose the editor
 (fallback: `vi`, or `notepad` on Windows). `sn diff` reads `NO_COLOR`
@@ -382,7 +415,9 @@ sudo sn completion > /etc/bash_completion.d/sn
 
 Prints the CLI's version and API level, then the server's (with the
 server's database schema version when it has one), followed by the
-server URL and token in use, and says `update available` when the server
+server URL and token in use and the config file they were read from
+(`config: none (environment / defaults)` when none was), and says
+`update available` when the server
 runs a newer release, with the command that installs it on Linux and
 macOS. `dev` builds never say so. It asks `/healthz`, so it does not need
 `SCRIBBLE_TOKEN` (printing `token: (not set)` when unset).
@@ -395,6 +430,7 @@ client v0.0.11 (API level 1)
 server v0.0.12 (API level 2, schema 3)
 url: https://notes.sudde.net
 token: change-me
+config: ~/.scribble
 update available: https://github.com/johansundell/scribble/releases/latest
 run: curl -fsSL https://raw.githubusercontent.com/johansundell/scribble/master/scripts/install-sn.sh | sh
 ```
