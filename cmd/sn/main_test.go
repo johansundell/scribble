@@ -26,6 +26,13 @@ func (discardSink) Enqueue(types.UsageLog) {}
 // newClient starts a real scribble server on a temp SQLite file.
 func newClient(t *testing.T) *client.Client {
 	t.Helper()
+	return client.New(newServerURL(t, "tok"), "tok")
+}
+
+// newServerURL starts a real scribble server on a temp SQLite file, with
+// token as its AUTH_TOKEN, and returns its address.
+func newServerURL(t *testing.T, token string) string {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
 	s, err := store.NewSQLite(filepath.Join(t.TempDir(), "cli.db"))
 	if err != nil {
@@ -37,7 +44,7 @@ func newClient(t *testing.T) *client.Client {
 		t.Fatal(err)
 	}
 	r, err := router.NewRouter(router.Config{
-		Handler: h, LogSink: discardSink{}, Settings: types.AppSettings{AuthToken: "tok"},
+		Handler: h, LogSink: discardSink{}, Settings: types.AppSettings{AuthToken: token},
 		Assets: fstest.MapFS{}, Version: "dev",
 	})
 	if err != nil {
@@ -45,7 +52,7 @@ func newClient(t *testing.T) *client.Client {
 	}
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
-	return client.New(srv.URL, "tok")
+	return srv.URL
 }
 
 func TestCmdProjects(t *testing.T) {
@@ -259,7 +266,6 @@ Fresh note</note-content></text></note>`
 		t.Errorf("empty dir err = %v, want mention of .note", err)
 	}
 }
-
 
 func TestCmdPin(t *testing.T) {
 	ctx := context.Background()

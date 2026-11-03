@@ -16,6 +16,27 @@ create and update notes over an HTTP API.
   server is unreachable.
 - **Client library** (`client/`): Go API client shared by the CLI and the GUI.
 
+## Try the demo
+
+A public demo runs at **<https://demo1.sudde.net>**. Open it in a browser
+and log in with the PIN **123456**. Anyone can read and change what is
+there, and **every note is reset every night** at 04:00 (Stockholm time), so
+don't put anything private in it.
+
+To try `sn` against it ([install it](#quick-start) first), put this in
+`~/.scribble`:
+
+```
+url=https://demo1.sudde.net
+token=demo
+```
+
+Then `sn ls`, `sn show "Welcome to the demo"` or `sn history "Work log"`.
+For the desktop app, enter the same URL and token in **File > Settings…**.
+
+The sample notes are in [`demo/notes`](demo/notes), and the server's setup
+is in [`docs/demo.md`](docs/demo.md).
+
 ## Notes model
 
 - A note is Markdown text. Its **title is the first non-empty line**
@@ -478,6 +499,7 @@ offline/                         the GUI's local copy of the notes and its sync
 cmd/sn/                          CLI
 gui/                             Fyne GUI: windows and widgets
 cmd/scribble-gui/                GUI entry point (reads SCRIBBLE_URL / SCRIBBLE_TOKEN / SCRIBBLE_HOTKEY / SCRIBBLE_SHOW_HOTKEY)
+demo/notes/, scripts/demo-reset.sh  the public demo's sample notes and nightly reset (docs/demo.md)
 docs/service-template.md         the template's own docs
 GLOSSARY.md                      the words used for notes, sync, history and the replica
 docs/adr/                        why things are as they are: one short decision record each

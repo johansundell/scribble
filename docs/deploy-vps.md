@@ -62,6 +62,8 @@ It should end with the `/healthz` JSON and `deployed v0.0.9`. The previous binar
 
 > The server runs its own copy of the script. If `scripts/deploy.sh` changes in the repo, repeat this step.
 
+> If the public demo is installed in `/opt/scribble-demo` ([`demo.md`](demo.md)), the script updates it too, after the real server.
+
 ## 3. Create the deploy user and allow the script
 
 If there is no `deploy` user yet, create it on the VPS:
