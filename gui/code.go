@@ -28,19 +28,19 @@ var afterFunc = func(d time.Duration, f func()) (stop func() bool) {
 }
 
 // codeRole is how highlighted code shows one kind of token, as in the web
-// app (#160): the colour in GitHub Light and GitHub Dark, and the
+// app (#160): the color in GitHub Light and GitHub Dark, and the
 // background behind it, if any. classes are Chroma's CSS classes for the
 // tokens, as app.css lists them.
 type codeRole struct {
 	classes             string
 	light, dark         string
 	lightBack, darkBack string
-	errorColour         bool // drawn in the theme's error colour instead
+	errorColor          bool // drawn in the theme's error color instead
 }
 
 var codeRoles = []codeRole{
 	{classes: "k kc kd kn kp kr kt", light: "#cf222e", dark: "#ff7b72"},
-	{classes: "no nl py ld m mb mf mh mi il mo o ow", light: "#0550ae", dark: "#79c0ff"},
+	{classes: "no nl py ld m mb mf mh mi il mo o ow or", light: "#0550ae", dark: "#79c0ff"},
 	{classes: "nf fm nb ni nd", light: "#6639ba", dark: "#d2a8ff"},
 	{classes: "l s sa sb sc dl sd s2 se sh si sx sr s1 ss", light: "#0a3069", dark: "#a5d6ff"},
 	{classes: "nv vc vg vi vm", light: "#953800", dark: "#79c0ff"},
@@ -49,10 +49,10 @@ var codeRoles = []codeRole{
 	{classes: "c ch cm c1 cs cp cpf", light: "#57606a", dark: "#8b949e"},
 	{classes: "gd", light: "#82071e", dark: "#ffa198", lightBack: "#ffebe9", darkBack: "#490202"},
 	{classes: "gi", light: "#116329", dark: "#56d364", lightBack: "#dafbe1", darkBack: "#0f5323"},
-	{classes: "err gr", errorColour: true},
+	{classes: "err gr", errorColor: true},
 }
 
-// roleOf maps each token type that is not drawn in the text colour to its
+// roleOf maps each token type that is not drawn in the text color to its
 // role.
 var roleOf = func() map[chroma.TokenType]*codeRole {
 	byClass := map[string]chroma.TokenType{}
@@ -70,29 +70,29 @@ var roleOf = func() map[chroma.TokenType]*codeRole {
 	return m
 }()
 
-// codeColours returns the colour and background of tokens of type tt, nil
-// for the text colour and no background.
-func codeColours(tt chroma.TokenType, dark bool, th fyne.Theme, v fyne.ThemeVariant) (fg, bg color.Color) {
+// codeColors returns the color and background of tokens of type tt, nil
+// for the text color and no background.
+func codeColors(tt chroma.TokenType, dark bool, th fyne.Theme, v fyne.ThemeVariant) (fg, bg color.Color) {
 	role := roleOf[tt]
 	switch {
 	case role == nil:
 		return nil, nil
-	case role.errorColour:
+	case role.errorColor:
 		return th.Color(theme.ColorNameError, v), nil
 	}
 	fgHex, bgHex := role.light, role.lightBack
 	if dark {
 		fgHex, bgHex = role.dark, role.darkBack
 	}
-	fg = hexColour(fgHex)
+	fg = hexColor(fgHex)
 	if bgHex != "" {
-		bg = hexColour(bgHex)
+		bg = hexColor(bgHex)
 	}
 	return fg, bg
 }
 
-// hexColour parses "#rrggbb".
-func hexColour(s string) color.Color {
+// hexColor parses "#rrggbb".
+func hexColor(s string) color.Color {
 	c := chroma.MustParseColour(s)
 	return color.NRGBA{R: c.Red(), G: c.Green(), B: c.Blue(), A: 0xff}
 }
@@ -112,7 +112,10 @@ func (c *codeBlock) Textual() string           { return c.Text }
 func (c *codeBlock) Visual() fyne.CanvasObject { return newCodeView(c) }
 func (c *codeBlock) Update(o fyne.CanvasObject) {
 	v := o.(*codeView)
-	v.seg = c
+	if v.seg != c {
+		v.seg = c
+		v.resetCopy()
+	}
 	v.Refresh()
 }
 func (c *codeBlock) Select(_, _ fyne.Position) {}
@@ -165,11 +168,14 @@ func withCodeBlocks(md string, segs []widget.RichTextSegment, copied func()) []w
 		for i, s := range segs {
 			switch s := s.(type) {
 			case *widget.CodeBlockSegment:
-				if len(found) > 0 && found[0].Text == s.Text {
-					segs[i] = found[0]
-					found = found[1:]
-				} else {
-					segs[i] = &codeBlock{Text: s.Text, copied: copied}
+				// A block the two parses disagree on stays plain
+				// without costing the ones after it their language.
+				segs[i] = &codeBlock{Text: s.Text, copied: copied}
+				for j, b := range found {
+					if b.Text == s.Text {
+						segs[i], found = b, found[j+1:]
+						break
+					}
 				}
 			case *widget.ListSegment:
 				replace(s.Items)
@@ -208,15 +214,20 @@ func (v *codeView) copyCode() {
 	if v.seg.copied != nil {
 		v.seg.copied()
 	}
+	v.resetCopy()
 	v.copy.SetText("Copied")
 	v.copy.SetIcon(theme.ConfirmIcon())
+	v.reset = afterFunc(copiedFor, v.resetCopy)
+}
+
+// resetCopy puts the Copy button back to Copy.
+func (v *codeView) resetCopy() {
 	if v.reset != nil {
 		v.reset()
+		v.reset = nil
 	}
-	v.reset = afterFunc(copiedFor, func() {
-		v.copy.SetText("Copy")
-		v.copy.SetIcon(theme.ContentCopyIcon())
-	})
+	v.copy.SetText("Copy")
+	v.copy.SetIcon(theme.ContentCopyIcon())
 }
 
 // indent is how far the panel is from the left of the view: as far as
@@ -297,11 +308,12 @@ func (r *codeViewRenderer) draw(th fyne.Theme, variant fyne.ThemeVariant) {
 
 	var objs []fyne.CanvasObject
 	width := float32(0)
-	for i, line := range highlight(r.v.seg.Text, r.v.seg.Lang) {
+	lines := highlight(r.v.seg.Text, r.v.seg.Lang)
+	for i, line := range lines {
 		y := pad + float32(i)*height
 		x := func(off int) float32 { return pad + fyne.MeasureText(line.text[:off], size, style).Width }
 		for _, tok := range line.tokens {
-			fg, bg := codeColours(tok.Type, dark, th, variant)
+			fg, bg := codeColors(tok.Type, dark, th, variant)
 			if fg == nil {
 				fg = text
 			}
@@ -330,7 +342,7 @@ func (r *codeViewRenderer) draw(th fyne.Theme, variant fyne.ThemeVariant) {
 	inset := th.Size(theme.SizeNamePadding)
 	r.lines.Objects = objs
 	r.lines.Layout.(*fixedLayout).size = fyne.NewSize(width+pad+r.v.copy.MinSize().Width+inset,
-		2*pad+float32(len(strings.Split(r.v.seg.Text, "\n")))*height)
+		2*pad+float32(len(lines))*height)
 	r.lines.Refresh()
 }
 

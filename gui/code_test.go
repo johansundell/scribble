@@ -1,6 +1,7 @@
 package gui_test
 
 import (
+	"fmt"
 	"image/color"
 	"strings"
 	"testing"
@@ -60,6 +61,7 @@ func TestCodeColorsMatchTheWeb(t *testing.T) {
 		{chroma.Keyword, "#cf222e", "#ff7b72"},
 		{chroma.KeywordType, "#cf222e", "#ff7b72"},
 		{chroma.LiteralNumberInteger, "#0550ae", "#79c0ff"},
+		{chroma.OperatorReserved, "#0550ae", "#79c0ff"},
 		{chroma.NameFunction, "#6639ba", "#d2a8ff"},
 		{chroma.LiteralStringDouble, "#0a3069", "#a5d6ff"},
 		{chroma.NameVariable, "#953800", "#79c0ff"},
@@ -79,7 +81,7 @@ func TestCodeColorsMatchTheWeb(t *testing.T) {
 				continue
 			}
 			r, g, b, _ := got.RGBA()
-			if hex := hexOf(r, g, b); hex != v.want {
+			if hex := fmt.Sprintf("#%02x%02x%02x", r>>8, g>>8, b>>8); hex != v.want {
 				t.Errorf("%v (dark %v) is %s, want %s", tc.tt, v.dark, hex, v.want)
 			}
 		}
@@ -87,15 +89,6 @@ func TestCodeColorsMatchTheWeb(t *testing.T) {
 	if _, ok := gui.CodeColorForTest(chroma.Punctuation, false); ok {
 		t.Error("punctuation should keep the text colour")
 	}
-}
-
-func hexOf(r, g, b uint32) string {
-	const digits = "0123456789abcdef"
-	out := []byte{'#'}
-	for _, c := range []uint32{r >> 8, g >> 8, b >> 8} {
-		out = append(out, digits[c>>4], digits[c&15])
-	}
-	return string(out)
 }
 
 func TestCodeBlockInAKnownLanguageIsHighlighted(t *testing.T) {

@@ -64,7 +64,7 @@ func SetRegisterHotkeyForTest(fn func([]hotkey.Modifier, hotkey.Key) (<-chan hot
 // CodeColorForTest is the colour of code tokens of type tt in GitHub Dark,
 // or GitHub Light if not dark; false if they keep the text colour.
 func CodeColorForTest(tt chroma.TokenType, dark bool) (color.Color, bool) {
-	fg, _ := codeColours(tt, dark, test.Theme(), fyne.CurrentApp().Settings().ThemeVariant())
+	fg, _ := codeColors(tt, dark, test.Theme(), fyne.CurrentApp().Settings().ThemeVariant())
 	return fg, fg != nil
 }
 

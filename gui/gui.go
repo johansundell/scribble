@@ -412,13 +412,14 @@ var parseMarkdown = widget.NewRichTextFromMarkdown
 
 // parseMarkdownSafe parses markdown content into RichText segments,
 // recovering from any panic in Fyne's renderer and returning an error.
-func parseMarkdownSafe(content string) (segs []widget.RichTextSegment, err error) {
+// Code blocks get their language and a Copy button that calls copied.
+func parseMarkdownSafe(content string, copied func()) (segs []widget.RichTextSegment, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("markdown parser: %v", r)
 		}
 	}()
-	return parseMarkdown(content).Segments, nil
+	return withCodeBlocks(content, parseMarkdown(content).Segments, copied), nil
 }
 
 // showView switches to view mode, rendering the editor's text with its
@@ -431,12 +432,10 @@ func (ui *UI) showView() {
 	// links before the viewer sees the segments: hyperlink and table
 	// visuals copy OnTapped when created.
 	md := notes.FlattenTaskItemsForView(notes.LinkifyProjectsForView(notes.LinkifyForView(ui.Editor.Text)))
-	segs, err := parseMarkdownSafe(md)
+	segs, err := parseMarkdownSafe(md, func() { ui.Status.SetText("Copied code to clipboard") })
 	if err != nil {
 		ui.Status.SetText("Failed to render note as Markdown; showing raw text.")
 		segs = []widget.RichTextSegment{&widget.TextSegment{Text: ui.Editor.Text}}
-	} else {
-		segs = withCodeBlocks(md, segs, func() { ui.Status.SetText("Copied code to clipboard") })
 	}
 	ui.hookLinks(segs)
 	ui.Viewer.Segments = segs

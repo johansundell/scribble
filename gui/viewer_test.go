@@ -30,9 +30,9 @@ type drawnText struct {
 	pos fyne.Position
 }
 
-// drawnTexts returns the texts o draws, looking inside its widgets but
-// not its buttons. The test
-// driver's AbsolutePositionForObject misses some of them.
+// drawnTexts returns the texts o draws, looking inside its widgets but not
+// its buttons. The test driver's AbsolutePositionForObject misses some of
+// them.
 func drawnTexts(o fyne.CanvasObject) []drawnText {
 	var out []drawnText
 	var walk func(o fyne.CanvasObject, pos fyne.Position)
