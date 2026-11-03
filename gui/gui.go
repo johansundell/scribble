@@ -662,11 +662,7 @@ func (ui *UI) write(id int64, body string, base int64) (notes.Note, error) {
 	ctx, cancel := requestContext()
 	defer cancel()
 	r, err := ui.store.Sync(ctx, ui.c)
-	key := n.ID
-	if id, ok := r.Moved[key]; ok {
-		key = id // the server's database was replaced (#167)
-	}
-	key = ui.store.ServerID(key)
+	key := ui.store.ServerID(n.ID)
 	if e, ok := ui.store.Pending(key); ok && e.Err != nil {
 		ui.report(ui.store.Drop(key))
 		return n, e.Err
@@ -835,8 +831,10 @@ func (ui *UI) synced(r offline.Report, err error) {
 	case wasOffline && ui.Status.Text == unreachable:
 		ui.Status.SetText("")
 	}
-	if r.Reset {
-		ui.followReset(r.Moved)
+	// The reset may have come with an earlier sync, whose report arrives
+	// after this one: ask the copy.
+	if moved, ok := ui.store.TakeReset(); ok {
+		ui.followReset(moved)
 		ui.Status.SetText(resetNotice)
 	}
 	// Opening a note may have taken its refused edit back into the

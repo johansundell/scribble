@@ -289,10 +289,7 @@ func (h *Handler) NoteChanges(c *gin.Context) error {
 	if err != nil {
 		return noteError(err)
 	}
-	resp := changesResponse{Notes: list, LatestSeq: int64(since)}
-	if di, ok := ns.(store.DatabaseIdentifier); ok {
-		resp.DatabaseID, _ = di.DatabaseID()
-	}
+	resp := changesResponse{Notes: list, LatestSeq: int64(since), DatabaseID: databaseID(ns)}
 	for _, n := range list {
 		resp.LatestSeq = max(resp.LatestSeq, n.Seq)
 	}

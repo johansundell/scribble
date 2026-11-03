@@ -51,13 +51,13 @@ type Report struct {
 	Failed []int64 // edits the server refused, see Edit.Err
 	// Reset is true when the server's database turned out to be a
 	// different one than the copy was made from (#167, ADR 2): the copy
-	// was replaced with the new database's notes.
+	// was replaced with the new database's notes. See TakeReset.
 	Reset bool
-	// Moved maps, after a Reset, the IDs of notes with unsent edits to the
-	// local IDs the edits now have as new notes, so the GUI can follow the
-	// open note. Note IDs from before a Reset mean nothing afterwards.
-	Moved map[int64]int64
 }
+
+// fromThisComputer goes after the title of a note made from an edit of a
+// replaced database when the new one has the title already (#167).
+const fromThisComputer = " (from this computer)"
 
 // Store is the local copy. It is safe for concurrent use.
 type Store struct {
@@ -78,6 +78,11 @@ type Store struct {
 	// note created offline is recorded as an edit from revision 0.
 	acked   map[int64]map[int64]int64
 	version int64
+	// moved is non-nil from a reset until TakeReset: it maps note IDs from
+	// before the reset to the local IDs of the new notes their edits
+	// became. Until then the GUI only knows IDs from before the reset, so
+	// Queue and ServerID take every positive ID as one of those.
+	moved map[int64]int64
 }
 
 // state is the file format.
@@ -221,6 +226,9 @@ func (s *Store) ServerID(id int64) int64 {
 }
 
 func (s *Store) serverID(id int64) int64 {
+	if nid, ok := s.moved[id]; ok && id > 0 {
+		id = nid
+	}
 	if sid, ok := s.sent[id]; ok {
 		return sid
 	}
@@ -238,6 +246,18 @@ func (s *Store) Queue(id int64, body string, baseRevision int64) (notes.Note, er
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	edits, localID := slices.Clone(s.edits), s.localID
+	fromReset, oldID, added := false, id, false
+	if s.moved != nil && id > 0 {
+		// An ID from before a reset the GUI has not taken yet: never the
+		// new database's note that has it now.
+		nid, ok := s.moved[id]
+		if !ok {
+			s.localID--
+			nid, added = s.localID, true
+			s.moved[id] = nid
+		}
+		id, baseRevision, fromReset = nid, 0, true
+	}
 	if sid, ok := s.sent[id]; ok {
 		// Created offline and sent meanwhile: the editor's revision 0 is
 		// the one we created it from.
@@ -250,8 +270,9 @@ func (s *Store) Queue(id int64, body string, baseRevision int64) (notes.Note, er
 		id = s.localID
 	}
 	s.version++
-	e := Edit{ID: id, Body: body, BaseRevision: baseRevision, Queued: time.Now(), version: s.version}
+	e := Edit{ID: id, Body: body, BaseRevision: baseRevision, Queued: time.Now(), FromReset: fromReset, version: s.version}
 	if i := s.editIndex(id); i >= 0 {
+		e.FromReset = e.FromReset || s.edits[i].FromReset
 		s.edits[i] = e
 	} else {
 		s.edits = append(s.edits, e)
@@ -260,6 +281,9 @@ func (s *Store) Queue(id int64, body string, baseRevision int64) (notes.Note, er
 	if err := s.save(); err != nil {
 		// Not on disk, so not queued: it must not be sent later.
 		s.edits, s.localID = edits, localID
+		if added {
+			delete(s.moved, oldID)
+		}
 		return notes.Note{}, err
 	}
 	return n, nil
@@ -474,30 +498,43 @@ func (s *Store) Sync(ctx context.Context, c *client.Client) (Report, error) {
 	s.syncing.Lock()
 	defer s.syncing.Unlock()
 	var r Report
-	// An update sent to a replaced database would land on whichever note
-	// now has its ID, so look first when there is one to send.
-	if s.hasUpdates() {
+	// An edit sent to a replaced database would land on whichever note now
+	// has its ID, and the reset would lose track of a note just created,
+	// so look first when there is one to send. Only edits queued before
+	// the look are sent; later ones wait for the next sync.
+	queue := s.queue()
+	if len(queue) > 0 {
 		if err := s.pull(ctx, c, &r); err != nil {
 			return r, err
 		}
+		queue = s.queue() // a reset gave the edits new IDs
 	}
-	if err := s.push(ctx, c, &r); err != nil {
+	if err := s.push(ctx, c, &r, queue); err != nil {
 		return r, err
 	}
 	return r, s.pull(ctx, c, &r)
 }
 
-// hasUpdates reports whether an edit of a note on the server is queued.
-func (s *Store) hasUpdates() bool {
+func (s *Store) queue() []Edit {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return slices.ContainsFunc(s.edits, func(e Edit) bool { return e.ID > 0 })
+	return slices.Clone(s.edits)
 }
 
-func (s *Store) push(ctx context.Context, c *client.Client, r *Report) error {
+// TakeReset returns, once, what the last reset not yet taken moved: the
+// note IDs from before it that had unsent edits, mapped to the local IDs of
+// the new notes those became. ok is false when there was no such reset.
+// Until it is called, Queue and ServerID take positive IDs as ones from
+// before the reset; the GUI calls it once it has let go of them.
+func (s *Store) TakeReset() (moved map[int64]int64, ok bool) {
 	s.mu.Lock()
-	queue := slices.Clone(s.edits)
-	s.mu.Unlock()
+	defer s.mu.Unlock()
+	moved, ok = s.moved, s.moved != nil
+	s.moved = nil
+	return moved, ok
+}
+
+func (s *Store) push(ctx context.Context, c *client.Client, r *Report, queue []Edit) error {
 	for _, e := range queue {
 		if e.Err != nil {
 			continue
@@ -507,7 +544,7 @@ func (s *Store) push(ctx context.Context, c *client.Client, r *Report) error {
 		if e.ID < 0 {
 			n, err = c.Create(ctx, e.Body)
 			if e.FromReset && client.IsTitleTaken(err) {
-				n, err = c.Create(ctx, notes.SetTitle(e.Body, notes.TitleOf(e.Body)+" (from this computer)"))
+				n, err = c.Create(ctx, notes.SetTitle(e.Body, notes.TitleOf(e.Body)+fromThisComputer))
 			}
 		} else {
 			n, err = c.Update(ctx, e.ID, e.Body, e.BaseRevision)
@@ -564,56 +601,57 @@ func (s *Store) pull(ctx context.Context, c *client.Client, r *Report) error {
 	}
 	s.mu.Lock()
 	replaced := cs.DatabaseID != "" && s.dbID != "" && cs.DatabaseID != s.dbID
-	if replaced {
-		err = s.reset(cs.DatabaseID, r)
-	}
 	s.mu.Unlock()
-	if err != nil {
-		return err
-	}
 	if replaced {
+		// Download the new database first, so that if this fails the copy
+		// still has the old notes to read, and the next sync tries again.
 		if cs, err = c.Changes(ctx, 0); err != nil {
 			return err
 		}
 	}
-	changed, latest := cs.Notes, cs.LatestSeq
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if replaced {
+		s.reset(r)
+	}
 	if cs.DatabaseID != "" {
 		s.dbID = cs.DatabaseID // a copy from before database IDs adopts it
 	}
-	for _, n := range changed {
+	for _, n := range cs.Notes {
 		if n.Deleted {
 			delete(s.notes, n.ID)
 		} else if old, ok := s.notes[n.ID]; !ok || old.Seq <= n.Seq {
 			s.notes[n.ID] = n
 		}
 	}
-	s.seq = max(s.seq, latest)
+	s.seq = max(s.seq, cs.LatestSeq)
 	return s.save()
 }
 
-// reset forgets the copy of a database that was replaced by the one with
-// ID dbID, and turns each unsent edit of its notes into a new note, so
-// nothing typed is lost and nothing is written over the new database's
-// note with the same ID. Callers hold s.mu and s.syncing.
-func (s *Store) reset(dbID string, r *Report) error {
-	moved := map[int64]int64{}
+// reset forgets the copy of a database that was replaced, and turns each
+// unsent edit into a new note to send again, so nothing typed is lost and
+// nothing is written over the new database's note with the same ID. An
+// edit the old database refused is tried again on the new one. Callers
+// hold s.mu and s.syncing, and save.
+func (s *Store) reset(r *Report) {
+	if s.moved == nil {
+		s.moved = map[int64]int64{}
+	}
 	for i, e := range s.edits {
-		if e.ID < 0 {
-			continue // a new note already
+		id := e.ID
+		if id > 0 {
+			s.localID--
+			id = s.localID
+			s.moved[e.ID] = id
 		}
-		s.localID--
-		moved[e.ID] = s.localID
-		s.edits[i] = Edit{ID: s.localID, Body: e.Body, Queued: e.Queued, FromReset: true, version: e.version}
+		s.edits[i] = Edit{ID: id, Body: e.Body, Queued: e.Queued, FromReset: true, version: e.version}
 	}
 	for local, server := range s.sent {
-		if id, ok := moved[server]; ok {
-			moved[local] = id
+		if id, ok := s.moved[server]; ok {
+			s.moved[local] = id
 		}
 	}
-	s.dbID, s.seq = dbID, 0
+	s.seq = 0
 	s.notes, s.sent, s.acked = map[int64]notes.Note{}, map[int64]int64{}, map[int64]map[int64]int64{}
-	r.Reset, r.Moved = true, moved
-	return s.save()
+	r.Reset = true
 }

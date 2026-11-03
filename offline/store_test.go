@@ -733,9 +733,10 @@ func TestUnsentEditsBecomeNewNotesAfterAReset(t *testing.T) {
 		t.Errorf("server has %q", got)
 	}
 	// The GUI follows the open note to where its edit went.
-	moved, ok := r.Moved[g.ID]
+	all, _ := s.TakeReset()
+	moved, ok := all[g.ID]
 	if !ok {
-		t.Fatalf("Moved = %v, want an entry for %d", r.Moved, g.ID)
+		t.Fatalf("moved = %v, want an entry for %d", all, g.ID)
 	}
 	if n, _ := s.Get(s.ServerID(moved)); n.Body != "# Groceries\nmilk and eggs" {
 		t.Errorf("moved edit reads %q", n.Body)
@@ -800,4 +801,97 @@ func TestCopyFromBeforeDatabaseIDsAdoptsTheServers(t *testing.T) {
 	if got := serverTitles(t, c); !slices.Equal(got, []string{"Groceries"}) {
 		t.Errorf("server has %q", got)
 	}
+}
+
+// A note created offline whose title the new database already has is kept
+// under another, like an edit of an old note.
+func TestNoteCreatedOfflineWithATakenTitleIsKeptAfterAReset(t *testing.T) {
+	c, _, reset := newResettableServer(t)
+	s := open(t, filepath.Join(t.TempDir(), "cache.json"))
+	syncNow(t, s, c)
+	local, err := s.Queue(0, "# Groceries\nmilk", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reset()
+	create(t, c, "# Groceries\nbread")
+
+	r := syncNow(t, s, c)
+	if len(r.Failed) != 0 {
+		t.Errorf("failed: %v", r.Failed)
+	}
+	if got := serverTitles(t, c); !slices.Equal(got, []string{"Groceries", "Groceries (from this computer)"}) {
+		t.Errorf("server has %q", got)
+	}
+	// The GUI still finds it by its local ID.
+	if n, ok := s.Get(s.ServerID(local.ID)); !ok || n.Title != "Groceries (from this computer)" {
+		t.Errorf("by its local ID: %+v, %v", n, ok)
+	}
+}
+
+// Until the GUI has seen the reset, an ID it queues an edit for is one
+// from before it, and must not reach the new database's note with that ID.
+func TestEditQueuedBeforeTheGUISawTheResetIsANewNote(t *testing.T) {
+	c, _, reset := newResettableServer(t)
+	g := create(t, c, "# Groceries\nmilk")
+	s := open(t, filepath.Join(t.TempDir(), "cache.json"))
+	syncNow(t, s, c)
+	reset()
+	other := create(t, c, "# Other")
+	if r := syncNow(t, s, c); !r.Reset {
+		t.Fatal("no reset")
+	}
+
+	// The GUI still shows Groceries under its old ID and saves it.
+	if _, err := s.Queue(g.ID, "# Groceries\nmilk and eggs", g.Revision); err != nil {
+		t.Fatal(err)
+	}
+	syncNow(t, s, c)
+	if got := get(t, c, other.ID); got.Body != "# Other" {
+		t.Errorf("the new database's note was overwritten: %q", got.Body)
+	}
+	if got := serverTitles(t, c); !slices.Equal(got, []string{"Groceries", "Other"}) {
+		t.Errorf("server has %q", got)
+	}
+
+	// Once it has, IDs are the new database's again.
+	s.TakeReset()
+	if _, err := s.Queue(other.ID, "# Other\nmore", get(t, c, other.ID).Revision); err != nil {
+		t.Fatal(err)
+	}
+	syncNow(t, s, c)
+	if got := get(t, c, other.ID); got.Body != "# Other\nmore" {
+		t.Errorf("edit after the reset was seen went to %q", got.Body)
+	}
+}
+
+// When the download after a reset fails, the copy still holds the notes it
+// had, for reading offline, and the next sync finds the reset again.
+func TestFailedDownloadAfterAResetKeepsTheCopy(t *testing.T) {
+	c, net, reset := newResettableServer(t)
+	create(t, c, "# Old")
+	s := open(t, filepath.Join(t.TempDir(), "cache.json"))
+	syncNow(t, s, c)
+	reset()
+	create(t, c, "# New")
+
+	calls := 0
+	net.onRequest = func(r *http.Request) {
+		if r.URL.Path == "/changes" {
+			if calls++; calls == 1 {
+				net.down.Store(true) // this one goes through, the download fails
+			}
+		}
+	}
+	if _, err := s.Sync(context.Background(), c); err == nil {
+		t.Fatal("sync did not fail")
+	}
+	assertTitles(t, s.List("", ""), "Old")
+
+	net.onRequest = nil
+	net.down.Store(false)
+	if r := syncNow(t, s, c); !r.Reset {
+		t.Error("the next sync did not find the reset")
+	}
+	assertTitles(t, s.List("", ""), "New")
 }

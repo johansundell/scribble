@@ -433,8 +433,6 @@ type Health struct {
 	API     int    `json:"api"`
 	// Schema is the database schema version; 0 when the server has none.
 	Schema int `json:"schema"`
-	// DatabaseID names the server's database; "" when it has none (#167).
-	DatabaseID string `json:"database_id"`
 }
 
 // Health asks the server for its version and API level. It needs no token,
