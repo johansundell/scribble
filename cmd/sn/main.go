@@ -2,6 +2,9 @@
 //
 //	SCRIBBLE_URL    server address (default https://notes.sudde.net)
 //	SCRIBBLE_TOKEN  the server's AUTH_TOKEN
+//
+// Settings not in the environment are read from ~/.scribble, or failing
+// that from scribble/.env in the user's config folder (see config.go).
 package main
 
 import (
@@ -79,6 +82,10 @@ Examples:
 Environment:
   SCRIBBLE_URL    server address (default https://notes.sudde.net)
   SCRIBBLE_TOKEN  the server's AUTH_TOKEN
+
+  Settings not in the environment are read from ~/.scribble, or else from
+  scribble/.env in your config folder, as KEY=VALUE lines (url=, token= also
+  work). sn version shows which file was used.
 `
 
 func main() {
@@ -112,17 +119,19 @@ func runWith(stdout io.Writer, args []string) error {
 	if args[0] == "completion" {
 		return cmdCompletion(stdout, args[1:])
 	}
-	baseURL := client.ServerURL()
-	token := os.Getenv("SCRIBBLE_TOKEN")
-	c := client.New(baseURL, token)
+	cfg, err := resolveConfig(os.Getenv, configFiles())
+	if err != nil {
+		return err
+	}
+	c := client.New(cfg.URL, cfg.Token)
 	c.Name, c.Version = "cli", Version
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	if args[0] == "version" {
-		return cmdVersion(ctx, c, stdout) // /healthz needs no token
+		return cmdVersion(ctx, c, stdout, cfg.Source) // /healthz needs no token
 	}
-	if token == "" {
-		return fmt.Errorf("SCRIBBLE_TOKEN is not set")
+	if cfg.Token == "" {
+		return fmt.Errorf("SCRIBBLE_TOKEN is not set (set it in the environment or in ~/.scribble)")
 	}
 
 	cmd, rest := args[0], args[1:]
@@ -205,9 +214,10 @@ func runWith(stdout io.Writer, args []string) error {
 }
 
 // cmdVersion prints the client's and the server's versions and API levels,
-// the server URL and token in use, and says when the server runs a newer release.
-// Only this command says so, so scripts using the others aren't affected.
-func cmdVersion(ctx context.Context, c *client.Client, w io.Writer) error {
+// the server URL and token in use and the config file they came from, and
+// says when the server runs a newer release. Only this command says so, so
+// scripts using the others aren't affected.
+func cmdVersion(ctx context.Context, c *client.Client, w io.Writer, source string) error {
 	fmt.Fprintf(w, "client %s (API level %d)\n", Version, client.APILevel)
 	tok := c.Token
 	if tok == "" {
@@ -215,7 +225,7 @@ func cmdVersion(ctx context.Context, c *client.Client, w io.Writer) error {
 	}
 	h, err := c.Health(ctx)
 	if err != nil {
-		fmt.Fprintf(w, "url: %s\ntoken: %s\n", c.BaseURL, tok)
+		fmt.Fprintf(w, "url: %s\ntoken: %s\nconfig: %s\n", c.BaseURL, tok, displayPath(source))
 		return fmt.Errorf("cannot ask the server for its version: %w", err)
 	}
 	schema := ""
@@ -223,7 +233,7 @@ func cmdVersion(ctx context.Context, c *client.Client, w io.Writer) error {
 		schema = fmt.Sprintf(", schema %d", h.Schema)
 	}
 	fmt.Fprintf(w, "server %s (API level %d%s)\n", h.Version, h.API, schema)
-	fmt.Fprintf(w, "url: %s\ntoken: %s\n", c.BaseURL, tok)
+	fmt.Fprintf(w, "url: %s\ntoken: %s\nconfig: %s\n", c.BaseURL, tok, displayPath(source))
 	if client.NewerRelease(Version, h.Version) {
 		fmt.Fprintf(w, "update available: %s\n", client.ReleasesURL)
 		if h := installHint(runtime.GOOS, "run: "); h != "" {
