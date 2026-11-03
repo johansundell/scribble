@@ -76,7 +76,8 @@ type UI struct {
 	// Settings… to say so.
 	Overridden Overridden
 
-	backlinkButtons *fyne.Container // inside Backlinks
+	backlinkButtons *fyne.Container   // inside Backlinks
+	viewScroll      *container.Scroll // scrolls Viewer
 
 	menu                                                    *fyne.MainMenu
 	saveItem, renameItem, deleteItem, toggleItem, shareItem *fyne.MenuItem // greyed out like their toolbar buttons
@@ -126,6 +127,7 @@ func New(w fyne.Window, c *client.Client, store *offline.Store) *UI {
 	ui.Search.SetPlaceHolder("Search")
 	ui.Search.OnChanged = func(string) { ui.refresh() }
 	ui.Viewer = newViewer(ui)
+	ui.viewScroll = container.NewVScroll(ui.Viewer)
 	ui.Editor = newTextField(ui)
 	ui.Editor.MultiLine = true
 	ui.Editor.Wrapping = fyne.TextWrapWord
@@ -152,7 +154,7 @@ func New(w fyne.Window, c *client.Client, store *offline.Store) *UI {
 	split := container.NewHSplit(
 		container.NewBorder(container.NewVBox(ui.Project, ui.Search), nil, nil, nil, ui.List),
 		container.NewBorder(toolbar, ui.Backlinks, nil, nil,
-			container.NewStack(container.NewVScroll(ui.Viewer), container.NewBorder(ui.Format, nil, nil, nil, ui.Editor))),
+			container.NewStack(ui.viewScroll, container.NewBorder(ui.Format, nil, nil, nil, ui.Editor))),
 	)
 	split.Offset = 0.3
 	statusBar := container.NewBorder(nil, nil, container.NewHBox(ui.Upgrade, ui.NewRelease), ui.ConnStatus, ui.Status)
@@ -412,13 +414,14 @@ var parseMarkdown = widget.NewRichTextFromMarkdown
 
 // parseMarkdownSafe parses markdown content into RichText segments,
 // recovering from any panic in Fyne's renderer and returning an error.
-func parseMarkdownSafe(content string) (segs []widget.RichTextSegment, err error) {
+// Code blocks get their language and a Copy button, and use hooks.
+func parseMarkdownSafe(content string, hooks *codeHooks) (segs []widget.RichTextSegment, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("markdown parser: %v", r)
 		}
 	}()
-	return parseMarkdown(content).Segments, nil
+	return withCodeBlocks(content, parseMarkdown(content).Segments, hooks), nil
 }
 
 // showView switches to view mode, rendering the editor's text with its
@@ -431,7 +434,10 @@ func (ui *UI) showView() {
 	// links before the viewer sees the segments: hyperlink and table
 	// visuals copy OnTapped when created.
 	md := notes.FlattenTaskItemsForView(notes.LinkifyProjectsForView(notes.LinkifyForView(ui.Editor.Text)))
-	segs, err := parseMarkdownSafe(md)
+	segs, err := parseMarkdownSafe(md, &codeHooks{
+		copied:   func() { ui.Status.SetText("Copied code to clipboard") },
+		scrolled: ui.viewScroll.Scrolled,
+	})
 	if err != nil {
 		ui.Status.SetText("Failed to render note as Markdown; showing raw text.")
 		segs = []widget.RichTextSegment{&widget.TextSegment{Text: ui.Editor.Text}}

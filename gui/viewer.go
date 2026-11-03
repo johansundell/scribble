@@ -498,6 +498,10 @@ func (c *runCollector) object(o fyne.CanvasObject) {
 			height: check.Size().Height, size: th.Size(theme.SizeNameText)})
 	case *widget.CodeBlockSegment:
 		c.codeRuns(seg.Text, o.Position(), sep)
+	case *codeBlock:
+		if view, ok := o.(*codeView); ok {
+			c.codeRuns(seg.Text, o.Position().Add(view.textOrigin()), sep)
+		}
 	case *widget.TableSegment:
 		c.tableRuns(o, seg, sep)
 	}
@@ -561,7 +565,7 @@ func (c *runCollector) codeRuns(text string, pos fyne.Position, sep string) {
 	pad := th.Size(theme.SizeNameInnerPadding)
 	size := th.Size(theme.SizeNameText)
 	style := fyne.TextStyle{Monospace: true}
-	height := fyne.MeasureText("M", size, style).Height
+	height := codeLineHeight(th)
 	for i, line := range strings.Split(strings.TrimSuffix(text, "\n"), "\n") {
 		if i > 0 {
 			sep = "\n"
