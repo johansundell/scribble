@@ -183,6 +183,7 @@ The application is configured via environment variables. You can set these in a 
 | `WEB_PIN` | string | - | The PIN for the web app at `/`: 6–12 digits. **Unset means the web app is off**: its paths answer 404 and `/` redirects to `/healthz`. The JSON API never accepts it. |
 | `SESSION_SECRET` | string | - | The key that signs the web app's session cookie: at least 32 characters, and not equal to `AUTH_TOKEN`. Required when `WEB_PIN` is set. Generate it with `openssl rand -base64 33`. Changing it ends every session. |
 | `WEB_SESSION_TIMEOUT` | duration | `168h` | How long a web login lasts (7 days). The expiry is fixed at login and never extended. |
+| `WEB_LOGIN_HINT` | string | empty | Plain text shown under the PIN field, such as a demo server's PIN (#168). Empty shows nothing. |
 | `TRUSTED_PROXIES` | string | none | Comma-separated IPs or CIDRs whose `X-Forwarded-For` is believed, for example `127.0.0.1` for nginx on the same host. With none, the client address is the TCP peer. It keys the web app's per-address PIN limit. |
 | `COOKIE_SECURE` | bool | `true` | Marks the session cookie `Secure` (HTTPS only). Set `false` only for local testing over plain HTTP. |
 | `MYSQL_USERNAME` | string | - | MySQL username (required when `STORAGE=mysql`, as are `MYSQL_HOST` and `MYSQL_DATABASE`). |

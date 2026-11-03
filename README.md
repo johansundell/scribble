@@ -250,6 +250,13 @@ The server refuses to start if the PIN isn't 6–12 digits, or if
 `COOKIE_SECURE`. For a whole new server, follow
 [`docs/install-vps.md`](docs/install-vps.md).
 
+`WEB_LOGIN_HINT` optionally shows a line of plain text under the PIN
+field, such as a demo server's PIN (#168):
+
+```sh
+WEB_LOGIN_HINT="Demo: the PIN is 123456. Notes are reset every night."
+```
+
 - **The PIN is for the browser only.** The API, the CLI and the desktop app
   keep using `AUTH_TOKEN`, and the API never accepts the PIN. The PIN opens
   every note for reading and writing, like the token.

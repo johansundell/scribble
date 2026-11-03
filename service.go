@@ -143,7 +143,7 @@ func (p *program) run(startup chan<- error) error {
 	// Stopped before the store is closed (defers run in reverse).
 	syncer, stopReplica := startReplica(st)
 	defer stopReplica()
-	handlerOpts := []handlers.Option{handlers.WithAuth(webAuth)}
+	handlerOpts := []handlers.Option{handlers.WithAuth(webAuth), handlers.WithLoginHint(settings.Web.LoginHint)}
 	if syncer != nil {
 		handlerOpts = append(handlerOpts, handlers.WithReplica(syncer))
 	}

@@ -72,9 +72,10 @@ type webPage struct {
 	Version  string
 	LoggedIn bool
 	Alert    *auth.PINAlert
-	// Login page only.
+	// Login page only. Hint is WEB_LOGIN_HINT (#168).
 	Error string
 	Next  string
+	Hint  string
 	// Notes pages only. Note is the open one, if any; Message replaces it
 	// when there is nothing to show.
 	Notes     []notes.Note
@@ -319,6 +320,7 @@ func (h *Handler) renderLogin(c *gin.Context, status int, msg string) error {
 		Version: h.versionOfService,
 		Error:   msg,
 		Next:    SafeNext(next),
+		Hint:    h.loginHint,
 	})
 }
 
