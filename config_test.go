@@ -308,7 +308,7 @@ func TestLoadSettings_Timeout(t *testing.T) {
 
 func TestLoadSettings_Web(t *testing.T) {
 	load := func(content string) types.AppSettings {
-		defer unsetEnv("WEB_PIN", "SESSION_SECRET", "WEB_SESSION_TIMEOUT", "TRUSTED_PROXIES", "COOKIE_SECURE")()
+		defer unsetEnv("WEB_PIN", "SESSION_SECRET", "WEB_SESSION_TIMEOUT", "TRUSTED_PROXIES", "COOKIE_SECURE", "WEB_LOGIN_HINT")()
 		tmpEnv, err := os.CreateTemp("", ".env.*")
 		if err != nil {
 			t.Fatalf("Failed to create temp env file: %v", err)
@@ -340,23 +340,10 @@ func TestLoadSettings_Web(t *testing.T) {
 	if got := load("COOKIE_SECURE=nope\n"); !got.Web.CookieSecure {
 		t.Error("expected an invalid COOKIE_SECURE to keep the safe default true")
 	}
-}
-
-func TestLoadSettings_WebLoginHint(t *testing.T) {
-	defer unsetEnv("WEB_LOGIN_HINT")()
-	tmpEnv, err := os.CreateTemp("", ".env.*")
-	if err != nil {
-		t.Fatal(err)
+	if got := load("WEB_LOGIN_HINT=\"  Demo: the PIN is 123456.  \"\n"); got.Web.LoginHint != "Demo: the PIN is 123456." {
+		t.Errorf("WEB_LOGIN_HINT: LoginHint = %q, want it trimmed", got.Web.LoginHint)
 	}
-	defer os.Remove(tmpEnv.Name())
-	if _, err := tmpEnv.WriteString("WEB_LOGIN_HINT=\"Demo: the PIN is 123456.\"\n"); err != nil {
-		t.Fatal(err)
-	}
-	tmpEnv.Close()
-
-	loadSettings(tmpEnv.Name())
-	defer loadSettings()
-	if got := settings.Web.LoginHint; got != "Demo: the PIN is 123456." {
-		t.Errorf("LoginHint = %q", got)
+	if got := load("WEB_LOGIN_HINT=\"   \"\n"); got.Web.LoginHint != "" {
+		t.Errorf("a blank WEB_LOGIN_HINT: LoginHint = %q, want none", got.Web.LoginHint)
 	}
 }
