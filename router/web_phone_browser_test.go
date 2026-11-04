@@ -174,6 +174,7 @@ func newBrowserServer(t *testing.T, bodies ...string) (string, []*notes.Note) {
 	gin.SetMode(gin.TestMode)
 	a, err := auth.New(auth.Config{
 		TOTPKey:    webKey,
+		SetupToken: "secret-token",
 		Secret:     []byte("0123456789abcdef0123456789abcdef"),
 		SessionTTL: time.Hour,
 		// Plain HTTP: a browser drops Secure cookies from a host such as
