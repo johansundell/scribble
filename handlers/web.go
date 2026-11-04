@@ -179,7 +179,8 @@ func (h *Handler) Login(c *gin.Context) error {
 }
 
 // postedCode is the posted authenticator code without its whitespace, so a
-// code pasted as "123 456" works.
+// code pasted as "123 456" works. It is laxer than the field's pattern, which
+// allows one space in the middle: a request from outside the page may pad it.
 func postedCode(c *gin.Context) string {
 	return strings.Join(strings.Fields(c.PostForm("code")), "")
 }

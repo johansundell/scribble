@@ -99,6 +99,9 @@ func TestTOTPSetup_TestsACodeWithoutUsingItUp(t *testing.T) {
 	if len(w.Result().Cookies()) != 0 {
 		t.Errorf("testing a code started a session: %v", w.Result().Cookies())
 	}
+	// A code pasted as "123 456" is tested the same.
+	w = e.do(postSetup(url.Values{"token": {"secret-token"}, "code": {code[:3] + " " + code[3:]}}))
+	wantBody(t, w, http.StatusOK, "The code is right")
 	// The same code still logs in.
 	wantRedirect(t, e.do(postLogin("10.0.0.1", code, "")), "/")
 

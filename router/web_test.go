@@ -224,7 +224,7 @@ func TestWeb_LoginPage(t *testing.T) {
 	w := e.do(get("/login?next=/note/1"))
 	wantBody(t, w, http.StatusOK,
 		`action="/login"`, `method="post"`, `name="code"`,
-		`inputmode="numeric"`, `autocomplete="one-time-code"`, `pattern="[0-9 ]{6,7}"`, `maxlength="7"`,
+		`inputmode="numeric"`, `autocomplete="one-time-code"`, `pattern="[0-9]{3} ?[0-9]{3}"`, `maxlength="7"`,
 		`href="/totp-setup"`, "Set up authenticator",
 		`name="next" value="/note/1"`,
 		"Scribble v9.8.7",
