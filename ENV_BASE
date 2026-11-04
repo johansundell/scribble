@@ -19,6 +19,10 @@ SESSION_SECRET=""
 WEB_SESSION_TIMEOUT="168h"
 # optional plain text under the login code field, e.g. how to log in to a demo
 WEB_LOGIN_HINT=""
+# true only on a public demo: the login screen shows the authenticator secret
+# (QR code and text) to everyone, and wrong codes never lock web login for
+# everyone (the per-address limit stays)
+PUBLIC_DEMO=false
 # proxies whose X-Forwarded-For is believed, e.g. 127.0.0.1 for nginx on this host
 TRUSTED_PROXIES=""
 # false only for local testing over plain HTTP

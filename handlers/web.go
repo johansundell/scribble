@@ -77,7 +77,8 @@ type webPage struct {
 	Error string
 	Next  string
 	Hint  string
-	// Setup page only: the secret, once the token is right.
+	// Setup page only: the secret, once the token is right. The login
+	// screen of a public demo (#175) shows it too.
 	Setup *totpSetup
 	// Notes pages only. Note is the open one, if any; Message replaces it
 	// when there is nothing to show.
@@ -318,13 +319,20 @@ func (h *Handler) renderLogin(c *gin.Context, status int, msg string) error {
 	if next == "" {
 		next = c.Query("next")
 	}
-	return h.renderWeb(c, status, "login.html", webPage{
+	p := webPage{
 		Title:   "Log in",
 		Version: h.versionOfService,
 		Error:   msg,
 		Next:    SafeNext(next),
 		Hint:    h.loginHint,
-	})
+	}
+	if h.publicDemo {
+		var err error
+		if p.Setup, err = h.totpKey(c); err != nil {
+			return err
+		}
+	}
+	return h.renderWeb(c, status, "login.html", p)
 }
 
 // webFuncs are the functions web templates may call.

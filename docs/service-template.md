@@ -184,6 +184,7 @@ The application is configured via environment variables. You can set these in a 
 | `SESSION_SECRET` | string | - | The key that signs the web app's session cookie: at least 32 characters, and not equal to `AUTH_TOKEN`. Required when `WEB_TOTP_SECRET` is set. Generate it with `openssl rand -base64 33`. Changing it ends every session. |
 | `WEB_SESSION_TIMEOUT` | duration | `168h` | How long a web login lasts (7 days). The expiry is fixed at login and never extended. |
 | `WEB_LOGIN_HINT` | string | empty | Plain text shown under the login code field, such as how to log in to a demo server (#168). Empty shows nothing. |
+| `PUBLIC_DEMO` | bool | `false` | Only for a public demo (#175): the login screen shows the authenticator secret, as a QR code, a link and text, so visitors need no `AUTH_TOKEN`, and wrong codes never lock web login for everyone or raise the Login Alert. The per-address limit stays. |
 | `TRUSTED_PROXIES` | string | none | Comma-separated IPs or CIDRs whose `X-Forwarded-For` is believed, for example `127.0.0.1` for nginx on the same host. With none, the client address is the TCP peer. It keys the web app's per-address limit on wrong codes. |
 | `COOKIE_SECURE` | bool | `true` | Marks the session cookie `Secure` (HTTPS only). Set `false` only for local testing over plain HTTP. |
 | `MYSQL_USERNAME` | string | - | MySQL username (required when `STORAGE=mysql`, as are `MYSQL_HOST` and `MYSQL_DATABASE`). |

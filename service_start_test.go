@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -51,6 +52,25 @@ func TestNewWebAuth(t *testing.T) {
 	}
 	if err := a.Setup("127.0.0.1", "token"); err != nil {
 		t.Errorf("AUTH_TOKEN doesn't open the setup page: %v", err)
+	}
+}
+
+// PUBLIC_DEMO turns off the lock for everyone (#175): many wrong codes, each
+// from its own address, never lock web login.
+func TestNewWebAuth_PublicDemoNeverLocks(t *testing.T) {
+	w := types.WebSettings{TOTPSecret: "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", SessionSecret: "0123456789abcdef0123456789abcdef", SessionTimeout: time.Hour}
+	for _, demo := range []bool{false, true} {
+		w.PublicDemo = demo
+		a, err := newWebAuth(w, "token")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := 0; i < auth.DefaultAlertFailures; i++ {
+			_ = a.Login(fmt.Sprintf("10.1.0.%d", i), "000000")
+		}
+		if a.Locked() == demo {
+			t.Errorf("PUBLIC_DEMO=%v: Locked() = %v after %d wrong codes", demo, a.Locked(), auth.DefaultAlertFailures)
+		}
 	}
 }
 

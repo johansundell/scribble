@@ -308,7 +308,7 @@ func TestLoadSettings_Timeout(t *testing.T) {
 
 func TestLoadSettings_Web(t *testing.T) {
 	load := func(content string) types.AppSettings {
-		defer unsetEnv("WEB_PIN", "WEB_TOTP_SECRET", "SESSION_SECRET", "WEB_SESSION_TIMEOUT", "TRUSTED_PROXIES", "COOKIE_SECURE", "WEB_LOGIN_HINT")()
+		defer unsetEnv("WEB_PIN", "WEB_TOTP_SECRET", "SESSION_SECRET", "WEB_SESSION_TIMEOUT", "TRUSTED_PROXIES", "COOKIE_SECURE", "WEB_LOGIN_HINT", "PUBLIC_DEMO")()
 		tmpEnv, err := os.CreateTemp("", ".env.*")
 		if err != nil {
 			t.Fatalf("Failed to create temp env file: %v", err)
@@ -350,5 +350,14 @@ func TestLoadSettings_Web(t *testing.T) {
 	}
 	if got := load("WEB_LOGIN_HINT=\"   \"\n"); got.Web.LoginHint != "" {
 		t.Errorf("a blank WEB_LOGIN_HINT: LoginHint = %q, want none", got.Web.LoginHint)
+	}
+	if got.Web.PublicDemo {
+		t.Error("PUBLIC_DEMO defaults to true")
+	}
+	if got := load("PUBLIC_DEMO=true\n"); !got.Web.PublicDemo {
+		t.Error("PUBLIC_DEMO=true: PublicDemo = false")
+	}
+	if got := load("PUBLIC_DEMO=nope\n"); got.Web.PublicDemo {
+		t.Error("an invalid PUBLIC_DEMO turned the public demo on")
 	}
 }

@@ -1228,6 +1228,50 @@ body.web:has(.app-main) {
 	white-space: pre-wrap;
 }
 
+/* The login screen of a public demo (#175): the authenticator secret beside
+   the form, or below it on a phone. */
+.login-panes {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2rem;
+	width: 100%;
+}
+
+@media (width >= 700px) {
+	.login-panes:has(.demo-setup) {
+		flex-direction: row;
+		align-items: flex-start;
+		justify-content: center;
+	}
+}
+
+.demo-setup {
+	padding-top: 1.5rem;
+	border-top: 1px solid var(--border);
+}
+
+@media (width >= 700px) {
+	.demo-setup {
+		padding: 0 0 0 2rem;
+		border-top: 0;
+		border-left: 1px solid var(--border);
+	}
+}
+
+.demo-setup h2 {
+	margin: 0 0 0.5rem;
+	font-size: 1.125rem;
+}
+
+.demo-setup p {
+	color: var(--muted);
+}
+
+.demo-setup a {
+	color: var(--accent);
+}
+
 .code-ok {
 	margin: 0;
 	color: var(--accent);

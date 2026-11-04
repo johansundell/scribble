@@ -23,6 +23,7 @@ ADR 5 chose a static PIN (`WEB_PIN`) for web login. A static PIN is convenient o
     - **Per-address limit**: 5 wrong codes from one address within 15 minutes returns 429.
     - **Global Lockout**: 20 wrong codes across all addresses within 24 hours locks out web login for everyone until 24 hours pass or the service restarts.
     - **Login Alert**: A warning banner on active sessions and a service log alert after 20 failed attempts.
+- **Public demo** (#175): `PUBLIC_DEMO=true` shows the QR code and the secret on `/login` itself, without `AUTH_TOKEN`, and turns off the global lockout and the Login Alert, so one visitor can't lock everyone out of a demo whose secret is public anyway. The per-address limit stays. It is off by default and is never for a server with private notes.
 - **Session Cookies**:
   - Successfully entering a valid TOTP code sets the signed, fixed-expiry session cookie (HMAC-SHA256 under `SESSION_SECRET`, 7-day lifetime), identical to ADR 5.
 

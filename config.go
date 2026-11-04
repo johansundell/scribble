@@ -107,6 +107,7 @@ func loadSettings(filenames ...string) {
 	settings.Web.LegacyPIN = os.Getenv("WEB_PIN") != ""
 	settings.Web.SessionSecret = os.Getenv("SESSION_SECRET")
 	settings.Web.LoginHint = strings.TrimSpace(os.Getenv("WEB_LOGIN_HINT"))
+	settings.Web.PublicDemo, _ = strconv.ParseBool(os.Getenv("PUBLIC_DEMO"))
 	settings.Web.SessionTimeout = 168 * time.Hour
 	if v := os.Getenv("WEB_SESSION_TIMEOUT"); v != "" {
 		// An invalid value becomes 0, which Validate rejects.

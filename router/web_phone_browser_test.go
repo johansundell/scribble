@@ -197,14 +197,21 @@ func newBrowserServer(t *testing.T, bodies ...string) (string, []*notes.Note) {
 		}
 		ns = append(ns, n)
 	}
-	srv := httptest.NewServer(newWebRouter(t, s, a, &testLogger{}, nil))
+	return serveToBrowser(t, newWebRouter(t, s, a, &testLogger{}, nil)), ns
+}
+
+// serveToBrowser serves h and returns its URL as the browser reaches it:
+// at SCRIBBLE_WEBDRIVER_HOST when the browser runs in a container.
+func serveToBrowser(t *testing.T, h http.Handler) string {
+	t.Helper()
+	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
 	host := os.Getenv("SCRIBBLE_WEBDRIVER_HOST")
 	if host == "" {
-		return srv.URL, ns
+		return srv.URL
 	}
 	_, port, _ := net.SplitHostPort(strings.TrimPrefix(srv.URL, "http://"))
-	return "http://" + net.JoinHostPort(host, port), ns
+	return "http://" + net.JoinHostPort(host, port)
 }
 
 // webDriver is a WebDriver session, driven over its HTTP protocol.

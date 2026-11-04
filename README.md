@@ -18,10 +18,10 @@ create and update notes over an HTTP API.
 
 ## Try the demo
 
-A public demo runs at **<https://demo1.sudde.net>**. Open it in a browser,
-choose **Set up authenticator**, enter the token **demo**, and add the demo
-to Google Authenticator or another authenticator app. Then log in with the
-6-digit code the app shows. Anyone can read and change what is
+A public demo runs at **<https://demo1.sudde.net>**. Open it in a browser
+and scan the QR code beside the login form with Google Authenticator or
+another authenticator app (on a phone, tap **open it in the app**). Then log
+in with the 6-digit code the app shows. Anyone can read and change what is
 there, and **every note is reset every night** at 04:00 (Stockholm time), so
 don't put anything private in it.
 
@@ -292,6 +292,12 @@ field, such as how to log in to a demo server (#168):
 WEB_LOGIN_HINT="Demo: set up an authenticator with the token demo. Notes are reset every night."
 ```
 
+`PUBLIC_DEMO=true` is for a public demo only (#175). The login screen then
+shows the secret itself, as on the setup page, beside the code field (below
+it on a phone), and has no link to `/totp-setup`. Wrong codes never lock web
+login for everyone, so one visitor can't lock out the rest; the per-address
+limit stays. Never set it on a server with notes of your own.
+
 - **Codes are for the browser only.** The API, the CLI and the desktop app
   keep using `AUTH_TOKEN`, and the API never accepts a code. Whoever has the
   authenticator can read and change every note, like the token.
@@ -308,7 +314,8 @@ WEB_LOGIN_HINT="Demo: set up an authenticator with the token demo. Notes are res
   addresses, the service logs a warning, every logged-in page shows "N wrong
   login codes since …", and web login is locked for everyone with 429.
   Sessions that already exist keep working. The lock lifts after 24 hours or
-  when the service restarts; the alert stays until the restart.
+  when the service restarts; the alert stays until the restart. With
+  `PUBLIC_DEMO=true` there is no alert and no lock.
 - **Behind nginx**, set `TRUSTED_PROXIES=127.0.0.1` so the per-address limit
   sees the visitor's address from `X-Forwarded-For`. Without it, every
   visitor shares nginx's address. The header is believed only from the listed
