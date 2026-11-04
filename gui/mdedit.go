@@ -51,6 +51,32 @@ func wrapSelection(start, end int, marker string) mdEdit {
 	}
 }
 
+// insertCodeBlock puts the selection [start, end) in a fenced code block
+// and keeps it selected, or, with none, puts an empty block at the cursor
+// with the cursor on its blank line. The fences go on lines of their own:
+// a newline goes before the block when it starts mid line and after it
+// when text follows on the line. A selection that ends at the start of a
+// line leaves that newline out of the block.
+func insertCodeBlock(text string, start, end int) mdEdit {
+	r := []rune(text)
+	if end > start && r[end-1] == '\n' {
+		end--
+	}
+	open := "```\n"
+	if start > 0 && r[start-1] != '\n' {
+		open = "\n" + open
+	}
+	closing := "\n```"
+	if end < len(r) && r[end] != '\n' {
+		closing += "\n"
+	}
+	at := start + runeLen(open)
+	return mdEdit{
+		ops:      []mdOp{{at: end, s: closing}, {at: start, s: open}},
+		selStart: at, selEnd: at + end - start,
+	}
+}
+
 // insertLink makes the selection [start, end) the text of a link and
 // selects its "url" to type over. With no selection the cursor goes
 // between the brackets.
