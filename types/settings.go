@@ -65,7 +65,6 @@ type WebSettings struct {
 	CookieSecure   bool          `json:"cookieSecure"`   // COOKIE_SECURE
 	// LoginHint is plain text shown under the PIN field, such as a demo
 	// server's PIN (#168); "" shows nothing.
-	// TODO: Rename this as DemoLoginHint to make it clear it's for demo servers.
 	LoginHint string `json:"loginHint"` // WEB_LOGIN_HINT
 }
 
