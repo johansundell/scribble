@@ -245,8 +245,8 @@ var addressRe = regexp.MustCompile(`(?i)\b(?:[a-z][a-z0-9+.-]*://|www\.)\S+|[\w.
 // how many it added. A link keeps the mention's spelling unless that would
 // not resolve (see mention.target). Matching is case-insensitive and on
 // word boundaries; where mentions overlap, the longest wins. The title line, the note's own title, existing [[links]],
-// bracketed text, URLs, email addresses, #project tags, code, Markdown links
-// and task-list items are left alone.
+// bracketed text, URLs, email addresses, #project tags, code and Markdown
+// links are left alone.
 func AutoLink(body string, titles []string) (string, int) {
 	self := TitleOf(body)
 	var candidates []string
