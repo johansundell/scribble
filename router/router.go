@@ -34,18 +34,18 @@ type Route struct {
 	UseLogger   bool
 	UseAuth     bool
 	// Web marks a web app route: one of its pages, or a share link's public
-	// page (#83). It is registered only when WEB_PIN is set, is never
+	// page (#83). It is registered only when WEB_TOTP_SECRET is set, is never
 	// request-logged, is sent with Cache-Control: no-store, and a POST (any
 	// method but GET and HEAD) must come from the same origin unless
 	// AllowCrossOrigin is set.
 	Web bool
-	// UseSession requires a web app session; anyone else is sent to the PIN
-	// screen. Web routes only.
+	// UseSession requires a web app session; anyone else is sent to the
+	// login screen. Web routes only.
 	UseSession bool
 	// AllowCrossOrigin skips the same-origin check. Only login and logout
 	// set it (#47). Web routes only.
 	AllowCrossOrigin bool
-	// WebOff marks a route registered only when WEB_PIN is unset, in place
+	// WebOff marks a route registered only when WEB_TOTP_SECRET is unset, in place
 	// of the web app on the same path.
 	WebOff bool
 	// CheckClient refuses clients below the minimum API level with 426
@@ -95,7 +95,7 @@ func NewRouter(cfg Config) (*gin.Engine, error) {
 	router := gin.New()
 	router.Use(gin.Recovery())
 
-	// ClientIP keys the PIN rate limiter, so forwarding headers are only
+	// ClientIP keys the login rate limiter, so forwarding headers are only
 	// believed from configured proxies; otherwise anyone could pick their
 	// own address with X-Forwarded-For. gin trusts every sender by default.
 	if err := router.SetTrustedProxies(cfg.Settings.TrustedProxies); err != nil {
@@ -143,7 +143,7 @@ func NewRouter(cfg Config) (*gin.Engine, error) {
 			return nil, fmt.Errorf("route %q is both Web and WebOff", route.Name)
 		}
 		if route.Web && cfg.Auth == nil {
-			continue // WEB_PIN is unset: the web app is off and its paths 404
+			continue // WEB_TOTP_SECRET is unset: the web app is off and its paths 404
 		}
 		if route.WebOff && cfg.Auth != nil {
 			continue // the web app is on and has the path

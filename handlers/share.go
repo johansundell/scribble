@@ -11,12 +11,12 @@ import (
 )
 
 // Share links over the API (#142, ADR 11), for the desktop app. They are
-// served by the web app, so while it is off (WEB_PIN unset) no note reads as
+// served by the web app, so while it is off (WEB_TOTP_SECRET unset) no note reads as
 // shared and none can be.
 
 // errShareOff is why the API won't share a note while the web app is off:
 // the link would answer 404.
-var errShareOff = errors.New("share links need the web app (WEB_PIN)")
+var errShareOff = errors.New("share links need the web app (WEB_TOTP_SECRET)")
 
 // webOn reports whether the web app, which serves share links, is on.
 func (h *Handler) webOn() bool { return h.auth != nil }

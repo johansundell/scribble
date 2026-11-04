@@ -123,9 +123,10 @@ func TestAppSettingsValidate_Replica(t *testing.T) {
 
 func TestAppSettingsValidate_Web(t *testing.T) {
 	const secret = "0123456789abcdef0123456789abcdef"
+	const totp = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
 	valid := func() AppSettings {
 		return AppSettings{Port: ":8080", Timeout: 10 * time.Second, Storage: StorageSQLite, AuthToken: "token",
-			Web: WebSettings{PIN: "123456", SessionSecret: secret, SessionTimeout: 168 * time.Hour}}
+			Web: WebSettings{TOTPSecret: totp, SessionSecret: secret, SessionTimeout: 168 * time.Hour}}
 	}
 	tests := []struct {
 		name    string
@@ -133,12 +134,10 @@ func TestAppSettingsValidate_Web(t *testing.T) {
 		wantErr string
 	}{
 		{"valid", func(*AppSettings) {}, ""},
-		{"12 digits", func(s *AppSettings) { s.Web.PIN = "123456789012" }, ""},
+		{"lower case and spaces", func(s *AppSettings) { s.Web.TOTPSecret = "gezd gnbv gy3t qojq gezd gnbv gy3t qojq" }, ""},
 		{"web off ignores the rest", func(s *AppSettings) { s.Web = WebSettings{SessionSecret: "short"} }, ""},
-		{"4 digits", func(s *AppSettings) { s.Web.PIN = "1234" }, "WEB_PIN"},
-		{"13 digits", func(s *AppSettings) { s.Web.PIN = "1234567890123" }, "WEB_PIN"},
-		{"not digits", func(s *AppSettings) { s.Web.PIN = "12345a" }, "WEB_PIN"},
-		{"non-ASCII digits", func(s *AppSettings) { s.Web.PIN = "١٢٣٤٥٦" }, "WEB_PIN"},
+		{"not base32", func(s *AppSettings) { s.Web.TOTPSecret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJ1" }, "WEB_TOTP_SECRET"},
+		{"80 bits", func(s *AppSettings) { s.Web.TOTPSecret = totp[:16] }, "WEB_TOTP_SECRET"},
 		{"missing secret", func(s *AppSettings) { s.Web.SessionSecret = "" }, "SESSION_SECRET"},
 		{"short secret", func(s *AppSettings) { s.Web.SessionSecret = secret[:31] }, "SESSION_SECRET"},
 		{"secret equals token", func(s *AppSettings) { s.AuthToken = secret }, "SESSION_SECRET"},
@@ -158,8 +157,8 @@ func TestAppSettingsValidate_Web(t *testing.T) {
 			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 				t.Fatalf("expected an error mentioning %q, got %v", tc.wantErr, err)
 			}
-			if strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), s.Web.PIN) {
-				t.Errorf("error message leaks the PIN or the secret: %v", err)
+			if strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), s.Web.TOTPSecret) {
+				t.Errorf("error message leaks a secret: %v", err)
 			}
 		})
 	}

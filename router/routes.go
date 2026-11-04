@@ -66,11 +66,14 @@ func GetRoutes(handler *handlers.Handler) Routes {
 		// Export and import as a ZIP of Markdown files (#117).
 		Route{Name: "ExportNotes", Method: "GET", Pattern: "/export", HandlerFunc: handler.ExportNotes, UseAuth: true, CheckClient: true},
 		Route{Name: "ImportNotes", Method: "POST", Pattern: "/import", HandlerFunc: handler.ImportNotes, UseAuth: true, CheckClient: true},
-		// The web app (Web: registered only when WEB_PIN is set). It logs in
-		// with the PIN, not AUTH_TOKEN, and is never request-logged: the log
-		// would copy PINs and note bodies.
+		// The web app (Web: registered only when WEB_TOTP_SECRET is set). It
+		// logs in with an authenticator code, not AUTH_TOKEN, and is never
+		// request-logged: the log would copy codes, tokens and note bodies.
 		Route{Name: "LoginPage", Method: "GET", Pattern: handlers.LoginPath, HandlerFunc: handler.LoginPage, Web: true},
 		Route{Name: "Login", Method: "POST", Pattern: handlers.LoginPath, HandlerFunc: handler.Login, Web: true, AllowCrossOrigin: true},
+		// Authenticator setup (#172): AUTH_TOKEN shows the TOTP secret.
+		Route{Name: "TOTPSetupPage", Method: "GET", Pattern: handlers.SetupPath, HandlerFunc: handler.TOTPSetup, Web: true},
+		Route{Name: "TOTPSetup", Method: "POST", Pattern: handlers.SetupPath, HandlerFunc: handler.TOTPSetup, Web: true},
 		Route{Name: "Logout", Method: "POST", Pattern: handlers.LogoutPath, HandlerFunc: handler.Logout, Web: true, AllowCrossOrigin: true},
 		// No session: phones fetch the manifest and icons before login (#65).
 		Route{Name: "AppManifest", Method: "GET", Pattern: handlers.ManifestPath, HandlerFunc: handler.AppManifest, Web: true},

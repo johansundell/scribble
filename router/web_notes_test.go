@@ -235,7 +235,7 @@ func TestWeb_BesideAPI(t *testing.T) {
 		if ct := w.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
 			t.Errorf("%s: Content-Type = %q", path, ct)
 		}
-		// Without the token it is refused, not sent to the PIN screen.
+		// Without the token it is refused, not sent to the login screen.
 		if w := e.do(get(path, c)); w.Code != http.StatusUnauthorized {
 			t.Errorf("%s with only a session = %d, want 401", path, w.Code)
 		}

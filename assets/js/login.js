@@ -1,7 +1,7 @@
-// The on-screen keypad on the PIN screen. Without JavaScript it stays hidden
+// The on-screen keypad on the login and authenticator setup screens. Without JavaScript it stays hidden
 // and the field works on its own.
 (function () {
-	var field = document.getElementById("pin");
+	var field = document.getElementById("code");
 	var keypad = document.querySelector(".keypad");
 	if (!field || !keypad) return;
 	keypad.hidden = false;

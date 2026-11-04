@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// limiter counts wrong PINs per client address in a fixed window that starts
+// limiter counts wrong codes and setup tokens per client address in a fixed window that starts
 // at the first one. An address with max failures is refused until its
 // window ends.
 type limiter struct {
@@ -27,7 +27,7 @@ func newLimiter(max int, window time.Duration) *limiter {
 // reserve counts an attempt from addr as a failure up front and reports
 // whether it may go ahead. Checking and counting under one lock means a
 // burst of parallel requests can't all slip in before the first failure is
-// recorded; a right PIN calls reset.
+// recorded; a right code or token calls reset.
 func (l *limiter) reserve(addr string, now time.Time) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()

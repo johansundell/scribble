@@ -42,7 +42,7 @@ func TestWebCode_UnknownLanguageIsPlain(t *testing.T) {
 	}
 }
 
-// The note and shared pages load copy.js; the PIN screen doesn't.
+// The note and shared pages load copy.js; the login screen doesn't.
 func TestWebCode_PagesLoadCopyButton(t *testing.T) {
 	e := newWebEnv(t)
 	c := e.login(t)

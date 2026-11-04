@@ -16,25 +16,25 @@ func newHintEnv(t *testing.T, hint string) *webEnv {
 	return e
 }
 
-func TestLoginHintIsShownUnderThePINField(t *testing.T) {
-	e := newHintEnv(t, "Demo: the PIN is 123456. <b>Reset</b> nightly.")
-	want := `<p class="login-hint" id="login-hint">Demo: the PIN is 123456. &lt;b&gt;Reset&lt;/b&gt; nightly.</p>`
+func TestLoginHintIsShownUnderTheCodeField(t *testing.T) {
+	e := newHintEnv(t, "Demo: use the code on the welcome page. <b>Reset</b> nightly.")
+	want := `<p class="login-hint" id="login-hint">Demo: use the code on the welcome page. &lt;b&gt;Reset&lt;/b&gt; nightly.</p>`
 
 	w := e.do(get("/login"))
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), want) {
 		t.Fatalf("GET /login = %d, want the escaped hint %s in:\n%s", w.Code, want, w.Body.String())
 	}
 	body := w.Body.String()
-	if field, hint := strings.Index(body, `id="pin"`), strings.Index(body, want); hint < field {
-		t.Error("the hint comes before the PIN field")
+	if field, hint := strings.Index(body, `id="code"`), strings.Index(body, want); hint < field {
+		t.Error("the hint comes before the code field")
 	}
 	// Screen readers announce it with the field.
 	if !strings.Contains(body, `aria-describedby="login-hint"`) {
-		t.Error("the PIN field does not point at the hint")
+		t.Error("the code field does not point at the hint")
 	}
-	// Still there after a wrong PIN.
-	if w := e.do(postLogin("10.0.0.1", "000000", "")); !strings.Contains(w.Body.String(), want) {
-		t.Errorf("wrong PIN = %d, hint missing:\n%s", w.Code, w.Body.String())
+	// Still there after a wrong code.
+	if w := e.do(postLogin("10.0.0.1", webWrongCode, "")); !strings.Contains(w.Body.String(), want) {
+		t.Errorf("wrong code = %d, hint missing:\n%s", w.Code, w.Body.String())
 	}
 }
 

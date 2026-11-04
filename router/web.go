@@ -12,7 +12,7 @@ import (
 )
 
 // RequireSession lets the request through only with a valid web app
-// session. Anyone else is sent to the PIN screen, which returns them to the
+// session. Anyone else is sent to the login screen, which returns them to the
 // page they asked for. NewRouter only adds web routes when a is set.
 func RequireSession(a *auth.Authenticator) func(HandlerFuncWithError) HandlerFuncWithError {
 	return func(inner HandlerFuncWithError) HandlerFuncWithError {
@@ -26,7 +26,7 @@ func RequireSession(a *auth.Authenticator) func(HandlerFuncWithError) HandlerFun
 	}
 }
 
-// loginURL is the PIN screen, with next set to r's page when r is a page
+// loginURL is the login screen, with next set to r's page when r is a page
 // view.
 func loginURL(r *http.Request) string {
 	if !isSafeMethod(r.Method) {

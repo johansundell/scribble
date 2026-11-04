@@ -31,7 +31,7 @@ func newClient(t *testing.T) *client.Client {
 // links.
 func newSharingClient(t *testing.T) *client.Client {
 	t.Helper()
-	a, err := auth.New(auth.Config{PIN: "246813", Secret: []byte("0123456789abcdef0123456789abcdef"), SessionTTL: time.Hour})
+	a, err := auth.New(auth.Config{TOTPKey: []byte("abcdefghij0123456789"), Secret: []byte("0123456789abcdef0123456789abcdef"), SessionTTL: time.Hour})
 	if err != nil {
 		t.Fatal(err)
 	}

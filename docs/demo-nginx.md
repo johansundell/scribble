@@ -112,13 +112,13 @@ curl -s -o /dev/null -w '%{http_code}\n' -H 'Authorization: Bearer demo' https:/
 
 Both servers report `"name":"scribble-server"` in `/healthz`, so use the token to tell them apart, not the name.
 
-Then open `https://demo1.sudde.net/` in a browser. The PIN screen shows the demo hint, and `123456` logs in. `https://notes.sudde.net/` still shows the real server's PIN screen, without the hint.
+Then open `https://demo1.sudde.net/` in a browser. The login screen shows the demo hint, and a code from an authenticator set up with the token `demo` logs in. `https://notes.sudde.net/` still shows the real server's login screen, without the hint.
 
 ## 5. Keep unknown names away from the real site
 
-When a request has a name that no site has, nginx sends it to the port's `default_server`, or else to the first site it loaded. That is usually the real site. So a visitor who uses the VPS address, or a name that is not set up, gets the real server's PIN screen.
+When a request has a name that no site has, nginx sends it to the port's `default_server`, or else to the first site it loaded. That is usually the real site. So a visitor who uses the VPS address, or a name that is not set up, gets the real server's login screen.
 
-This is not a leak, because the PIN and the token still protect the notes. But it is better to close it. If step 1 showed no `default_server` for port 443, add a site that drops such requests:
+This is not a leak, because the login codes and the token still protect the notes. But it is better to close it. If step 1 showed no `default_server` for port 443, add a site that drops such requests:
 
 ```bash
 sudo tee /etc/nginx/sites-available/000-default >/dev/null <<'EOF'
@@ -147,5 +147,5 @@ sudo nginx -t && sudo systemctl reload nginx
 - **`502 Bad Gateway` on the demo.** nginx works, but nothing answers on `127.0.0.1:8083`. Check `systemctl status scribble-demo` and `PORT` in `/opt/scribble-demo/.env`. Between 04:00 and a few seconds after, the nightly reset restarts the demo, so a short 502 then is normal.
 - **The demo shows the real server's notes, or the real site takes the token `demo`.** Both names reach the same upstream. Check that the demo's file has `proxy_pass http://scribble_demo;`, and that `upstream scribble_demo` has port `8083`.
 - **The browser warns about the certificate on the demo.** nginx sent another site's certificate, usually because the demo's site is not enabled. Run `sudo nginx -T | grep -A3 'server_name demo1'`.
-- **The PIN login answers `403` (`cross-origin request refused`).** The server compares the form's `Origin` with the `Host` it gets. Check that the site has `proxy_set_header Host $host;`.
+- **The web login answers `403` (`cross-origin request refused`).** The server compares the form's `Origin` with the `Host` it gets. Check that the site has `proxy_set_header Host $host;`.
 - **Errors for the demo only.** Look in `/var/log/nginx/demo1.sudde.net.error.log`. The real site logs to its own files.

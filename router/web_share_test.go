@@ -131,7 +131,7 @@ func TestWebShare_PublicPage(t *testing.T) {
 		"<h1>Shared Note</h1>", `<a href="https://example.org">site</a>`,
 		"&lt;script&gt;alert(1)&lt;/script&gt;",
 		"Updated 2",
-		// [[links]] and #project tags go through the PIN screen, and a link
+		// [[links]] and #project tags go through the login screen, and a link
 		// to a note that doesn't exist looks like any other.
 		`<a href="/login?next=/title/Other">Other</a>`,
 		`<a href="/login?next=/title/Private%2520Plans">Private Plans</a>`,

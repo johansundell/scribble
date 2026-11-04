@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -172,7 +173,7 @@ func newBrowserServer(t *testing.T, bodies ...string) (string, []*notes.Note) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	a, err := auth.New(auth.Config{
-		PIN:        webPIN,
+		TOTPKey:    webKey,
 		Secret:     []byte("0123456789abcdef0123456789abcdef"),
 		SessionTTL: time.Hour,
 		// Plain HTTP: a browser drops Secure cookies from a host such as
@@ -337,10 +338,36 @@ func (d *webDriver) waitPath(want string) {
 	d.t.Fatalf("at %q, want %q", got, want)
 }
 
+// browserSteps hands out TOTP steps for browser logins, which run on the
+// real clock. A server takes each step's code only once, and one step
+// ahead of now too, so two logins fit in a step: now's and the next one's.
+var browserSteps struct {
+	sync.Mutex
+	last int64
+}
+
+// browserCode is a right code for a browser login that no earlier one
+// used, waiting for the next step when it must.
+func browserCode() string {
+	browserSteps.Lock()
+	defer browserSteps.Unlock()
+	for {
+		now := time.Now().Unix() / 30
+		step := max(now, browserSteps.last+1)
+		if step <= now+1 {
+			browserSteps.last = step
+			return auth.Code(webKey, time.Unix(step*30, 0))
+		}
+		time.Sleep(time.Second)
+	}
+}
+
 func (d *webDriver) login(srv string) {
 	d.t.Helper()
 	d.open(srv + "/login")
-	d.exec(`document.getElementById("pin").value = arguments[0]; document.querySelector(".pin-form").requestSubmit()`, webPIN)
+	// Each login in a test is a new browser session on the same server, and
+	// a code logs in only once: wait for the next one if it was used.
+	d.exec(`document.getElementById("code").value = arguments[0]; document.querySelector(".login-form").requestSubmit()`, browserCode())
 	d.waitPath("/")
 }
 

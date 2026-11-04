@@ -20,7 +20,11 @@ import (
 	"github.com/johansundell/scribble/types"
 )
 
-const webPIN = "246813"
+// webKey is the TOTP key of the test web app.
+var webKey = []byte("abcdefghij0123456789")
+
+// webWrongCode is never the right code at the tests' clock times.
+const webWrongCode = "000000"
 
 type webClock struct {
 	mu sync.Mutex
@@ -55,7 +59,8 @@ func newWebEnv(t *testing.T, trustedProxies ...string) *webEnv {
 	clk := &webClock{t: time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC)}
 	tl := &testLogger{}
 	a, err := auth.New(auth.Config{
-		PIN:          webPIN,
+		TOTPKey:      webKey,
+		SetupToken:   "secret-token",
 		Secret:       []byte("0123456789abcdef0123456789abcdef"),
 		SessionTTL:   168 * time.Hour,
 		SecureCookie: true,
@@ -109,9 +114,16 @@ func get(path string, cookies ...*http.Cookie) *http.Request {
 	return req
 }
 
-// postLogin posts pin (and next, when set) from remoteAddr.
-func postLogin(remoteAddr, pin, next string) *http.Request {
-	form := url.Values{"pin": {pin}}
+// code moves the clock on one TOTP step, so no two logins share a code
+// (a used code is refused), and returns the right code at the new time.
+func (e *webEnv) code() string {
+	e.clock.Add(30 * time.Second)
+	return auth.Code(webKey, e.clock.Now())
+}
+
+// postLogin posts code (and next, when set) from remoteAddr.
+func postLogin(remoteAddr, code, next string) *http.Request {
+	form := url.Values{"code": {code}}
 	if next != "" {
 		form.Set("next", next)
 	}
@@ -134,7 +146,7 @@ func sessionCookie(t *testing.T, w *httptest.ResponseRecorder) *http.Cookie {
 
 func (e *webEnv) login(t *testing.T) *http.Cookie {
 	t.Helper()
-	w := e.do(postLogin("10.0.0.1", webPIN, ""))
+	w := e.do(postLogin("10.0.0.1", e.code(), ""))
 	if w.Code != http.StatusSeeOther {
 		t.Fatalf("login: %d %s", w.Code, w.Body.String())
 	}
@@ -160,7 +172,7 @@ func wantBody(t *testing.T, w *httptest.ResponseRecorder, status int, parts ...s
 	}
 }
 
-func TestWeb_OffWithoutPIN(t *testing.T) {
+func TestWeb_OffWithoutTOTPSecret(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	h := mustNewHandler(t, nopStore{}, false, os.DirFS(".."), "test", "dev")
 	r, err := router.NewRouter(router.Config{
@@ -178,7 +190,8 @@ func TestWeb_OffWithoutPIN(t *testing.T) {
 	wantRedirect(t, w, "/healthz")
 	for _, req := range []*http.Request{
 		get("/login"), get("/note/1"), get("/new"), get("/manifest.webmanifest"),
-		postLogin("10.0.0.1", webPIN, ""),
+		get("/totp-setup"), get("/totp-setup?token=secret-token"),
+		postLogin("10.0.0.1", "123456", ""),
 		httptest.NewRequest("POST", "/logout", nil),
 	} {
 		w := httptest.NewRecorder()
@@ -210,8 +223,9 @@ func TestWeb_LoginPage(t *testing.T) {
 	e := newWebEnv(t)
 	w := e.do(get("/login?next=/note/1"))
 	wantBody(t, w, http.StatusOK,
-		`action="/login"`, `method="post"`, `name="pin"`,
-		`inputmode="numeric"`, `autocomplete="current-password"`,
+		`action="/login"`, `method="post"`, `name="code"`,
+		`inputmode="numeric"`, `autocomplete="one-time-code"`, `maxlength="6"`,
+		`href="/totp-setup"`, "Set up authenticator",
 		`name="next" value="/note/1"`,
 		`data-digit="0"`, `data-digit="9"`, // the on-screen keypad
 		"Scribble v9.8.7",
@@ -242,7 +256,7 @@ func TestWeb_LoginPage(t *testing.T) {
 func TestWeb_Login(t *testing.T) {
 	e := newWebEnv(t)
 
-	w := e.do(postLogin("10.0.0.1", webPIN, ""))
+	w := e.do(postLogin("10.0.0.1", e.code(), ""))
 	wantRedirect(t, w, "/")
 	c := sessionCookie(t, w)
 	if c.Path != "/" || !c.HttpOnly || !c.Secure || c.SameSite != http.SameSiteLaxMode {
@@ -275,19 +289,32 @@ func TestWeb_Login(t *testing.T) {
 		"/note/1/edit":        "/note/1/edit",
 		"/title/x":            "/title/x",
 	} {
-		w := e.do(postLogin("10.0.0.2", webPIN, next))
+		w := e.do(postLogin("10.0.0.2", e.code(), next))
 		if got := w.Header().Get("Location"); got != want {
 			t.Errorf("next %q: redirected to %q, want %q", next, got, want)
 		}
 	}
 }
 
-func TestWeb_WrongPIN(t *testing.T) {
+func TestWeb_WrongCode(t *testing.T) {
 	e := newWebEnv(t)
-	w := e.do(postLogin("10.0.0.1", "000000", "/note/1"))
-	wantBody(t, w, http.StatusUnauthorized, "Wrong PIN", `name="next" value="/note/1"`)
+	w := e.do(postLogin("10.0.0.1", webWrongCode, "/note/1"))
+	wantBody(t, w, http.StatusUnauthorized, "Wrong code", `name="next" value="/note/1"`)
 	if len(w.Result().Cookies()) != 0 {
-		t.Errorf("wrong PIN set cookies: %v", w.Result().Cookies())
+		t.Errorf("wrong code set cookies: %v", w.Result().Cookies())
+	}
+}
+
+func TestWeb_UsedCodeIsRefused(t *testing.T) {
+	e := newWebEnv(t)
+	code := e.code()
+	wantRedirect(t, e.do(postLogin("10.0.0.1", code, "")), "/")
+	// The same code again, from another device, within its 30 seconds.
+	e.clock.Add(10 * time.Second)
+	w := e.do(postLogin("10.0.0.2", code, ""))
+	wantBody(t, w, http.StatusUnauthorized, "Wrong code")
+	if len(w.Result().Cookies()) != 0 {
+		t.Errorf("a used code started a session: %v", w.Result().Cookies())
 	}
 }
 
@@ -303,8 +330,8 @@ func TestWeb_AppPage(t *testing.T) {
 	if got := w.Header().Get("Cache-Control"); got != "no-store" {
 		t.Errorf("Cache-Control = %q", got)
 	}
-	if strings.Contains(w.Body.String(), "wrong PINs") {
-		t.Error("PIN Alert shown without wrong PINs")
+	if strings.Contains(w.Body.String(), "wrong codes") {
+		t.Error("Login Alert shown without wrong codes")
 	}
 
 	// No external fonts or scripts.
@@ -335,7 +362,7 @@ func TestWeb_ForgedCookies(t *testing.T) {
 	e := newWebEnv(t)
 	good := e.login(t)
 
-	other, err := auth.New(auth.Config{PIN: webPIN, Secret: []byte(strings.Repeat("z", 32)), SessionTTL: time.Hour, Now: e.clock.Now})
+	other, err := auth.New(auth.Config{TOTPKey: webKey, Secret: []byte(strings.Repeat("z", 32)), SessionTTL: time.Hour, Now: e.clock.Now})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -370,24 +397,24 @@ func TestWeb_Logout(t *testing.T) {
 func TestWeb_PerAddressLimit(t *testing.T) {
 	e := newWebEnv(t)
 	for i := 0; i < auth.DefaultMaxFailures; i++ {
-		if w := e.do(postLogin("10.0.0.1", "000000", "")); w.Code != http.StatusUnauthorized {
+		if w := e.do(postLogin("10.0.0.1", webWrongCode, "")); w.Code != http.StatusUnauthorized {
 			t.Fatalf("attempt %d: %d", i+1, w.Code)
 		}
 	}
-	w := e.do(postLogin("10.0.0.1", webPIN, ""))
-	wantBody(t, w, http.StatusTooManyRequests, "Too many wrong PINs")
+	w := e.do(postLogin("10.0.0.1", e.code(), ""))
+	wantBody(t, w, http.StatusTooManyRequests, "Too many wrong codes")
 	if len(w.Result().Cookies()) != 0 {
 		t.Error("a refused attempt started a session")
 	}
-	wantRedirect(t, e.do(postLogin("10.0.0.2", webPIN, "")), "/")
+	wantRedirect(t, e.do(postLogin("10.0.0.2", e.code(), "")), "/")
 
 	e.clock.Add(auth.DefaultFailureWindow)
-	wantRedirect(t, e.do(postLogin("10.0.0.1", webPIN, "")), "/")
+	wantRedirect(t, e.do(postLogin("10.0.0.1", e.code(), "")), "/")
 }
 
 func burnAddress(e *webEnv, remoteAddr, forwardedFor string) {
 	for i := 0; i < auth.DefaultMaxFailures; i++ {
-		req := postLogin(remoteAddr, "000000", "")
+		req := postLogin(remoteAddr, webWrongCode, "")
 		if forwardedFor != "" {
 			req.Header.Set("X-Forwarded-For", forwardedFor)
 		}
@@ -397,7 +424,7 @@ func burnAddress(e *webEnv, remoteAddr, forwardedFor string) {
 
 func TestWeb_TrustedProxies(t *testing.T) {
 	loginVia := func(e *webEnv, remoteAddr, forwardedFor string) int {
-		req := postLogin(remoteAddr, webPIN, "")
+		req := postLogin(remoteAddr, e.code(), "")
 		req.Header.Set("X-Forwarded-For", forwardedFor)
 		return e.do(req).Code
 	}
@@ -455,30 +482,30 @@ func TestWeb_AlertAndLockout(t *testing.T) {
 
 	var warned bool
 	for _, entry := range e.log.entries {
-		if entry.level == "WARN" && strings.Contains(entry.message, "20 wrong PINs") {
+		if entry.level == "WARN" && strings.Contains(entry.message, "20 wrong codes") {
 			warned = true
 		}
 	}
 	if !warned {
-		t.Errorf("no PIN Alert warning in %v", e.log.messages)
+		t.Errorf("no Login Alert warning in %v", e.log.messages)
 	}
 
-	// Locked for everyone, with the right PIN too.
-	wantBody(t, e.do(postLogin("10.2.0.1", webPIN, "")), http.StatusTooManyRequests,
-		"Web login is locked after too many wrong PINs. Restart the service (or wait 24 hours) to unlock it.")
+	// Locked for everyone, with the right code too.
+	wantBody(t, e.do(postLogin("10.2.0.1", e.code(), "")), http.StatusTooManyRequests,
+		"Web login is locked after too many wrong codes. Restart the service (or wait 24 hours) to unlock it.")
 
 	// Existing sessions keep working, and see the alert.
 	wantBody(t, e.do(get("/", session)), http.StatusOK,
-		"20 wrong PINs since "+first.Local().Format("2006-01-02 15:04"), "change WEB_PIN")
+		"20 wrong login codes since "+first.Local().Format("2006-01-02 15:04"))
 
 	// A restart (a new Authenticator) clears the lock and the alert.
 	restarted := newWebEnv(t)
-	wantRedirect(t, restarted.do(postLogin("10.2.0.1", webPIN, "")), "/")
+	wantRedirect(t, restarted.do(postLogin("10.2.0.1", restarted.code(), "")), "/")
 }
 
 func TestWeb_NotRequestLogged(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	a, err := auth.New(auth.Config{PIN: webPIN, Secret: []byte("0123456789abcdef0123456789abcdef"), SessionTTL: time.Hour})
+	a, err := auth.New(auth.Config{TOTPKey: webKey, Secret: []byte("0123456789abcdef0123456789abcdef"), SessionTTL: time.Hour})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -494,7 +521,7 @@ func TestWeb_NotRequestLogged(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, req := range []*http.Request{get("/login"), postLogin("10.0.0.1", "000000", ""), postLogin("10.0.0.1", webPIN, ""), get("/"), httptest.NewRequest("POST", "/logout", nil)} {
+	for _, req := range []*http.Request{get("/login"), postLogin("10.0.0.1", webWrongCode, ""), postLogin("10.0.0.1", auth.Code(webKey, time.Now()), ""), get("/"), get("/totp-setup?token=secret-token"), httptest.NewRequest("POST", "/logout", nil)} {
 		r.ServeHTTP(httptest.NewRecorder(), req)
 	}
 	if len(sink.entries) != 0 {
@@ -513,7 +540,7 @@ func TestWeb_NotRequestLogged(t *testing.T) {
 // requests (only login and logout do).
 func TestNewRouter_WebOriginCheck(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	a, err := auth.New(auth.Config{PIN: webPIN, Secret: []byte("0123456789abcdef0123456789abcdef"), SessionTTL: time.Hour})
+	a, err := auth.New(auth.Config{TOTPKey: webKey, Secret: []byte("0123456789abcdef0123456789abcdef"), SessionTTL: time.Hour})
 	if err != nil {
 		t.Fatal(err)
 	}

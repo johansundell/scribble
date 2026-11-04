@@ -42,6 +42,7 @@ The server reads `.env` from the folder its binary is in. Create the secrets fir
 ```bash
 openssl rand -base64 33   # AUTH_TOKEN: the CLI and the desktop app use this
 openssl rand -base64 33   # SESSION_SECRET: only if you want the web app
+head -c 20 /dev/urandom | base32   # WEB_TOTP_SECRET: only if you want the web app
 ```
 
 Then create `/opt/scribble/.env` and paste the values in:
@@ -58,15 +59,15 @@ AUTH_TOKEN=<the first value>
 # nginx runs on this host: believe its X-Forwarded-For, and nobody else's.
 TRUSTED_PROXIES=127.0.0.1
 
-# The web app at /. Leave WEB_PIN out to keep it off.
-WEB_PIN=<6-12 digits>
+# The web app at /. Leave WEB_TOTP_SECRET out to keep it off.
+WEB_TOTP_SECRET=<the third value>
 SESSION_SECRET=<the second value>
 ```
 
-- `.env` holds the token and the PIN, so only root may read it (`0600`).
+- `.env` holds the token and the secrets, so only root may read it (`0600`).
 - Without `AUTH_TOKEN`, the server makes up a new token at every start and writes it to the log. Always set it.
-- `TRUSTED_PROXIES=127.0.0.1` is needed behind nginx: without it, every visitor gets nginx's address, and the web app's limit of 5 wrong PINs per address applies to everyone at once.
-- `WEB_PIN` must be 6–12 digits. `SESSION_SECRET` must be at least 32 characters and not the same as `AUTH_TOKEN`. If either is wrong, the server won't start, and says why in the log.
+- `TRUSTED_PROXIES=127.0.0.1` is needed behind nginx: without it, every visitor gets nginx's address, and the web app's limit of 5 wrong codes per address applies to everyone at once.
+- `WEB_TOTP_SECRET` must be base32 of at least 16 bytes (the command above makes 20). `SESSION_SECRET` must be at least 32 characters and not the same as `AUTH_TOKEN`. If either is wrong, the server won't start, and says why in the log.
 
 All settings are listed in [`service-template.md`](service-template.md#configuration). The web app is described in the [README](../README.md#web-app).
 
@@ -89,7 +90,7 @@ systemctl status scribble-server --no-pager
 curl -s -H 'Accept: application/json' http://127.0.0.1:8082/healthz
 ```
 
-The service is `active (running)`, and `curl` prints JSON with `"dbStatus":"OK"`. If the web app is on, `journalctl -u scribble-server -n 20` shows `web app is on at /`. If the service doesn't start, that log tells you why, for example a wrong `WEB_PIN`.
+The service is `active (running)`, and `curl` prints JSON with `"dbStatus":"OK"`. If the web app is on, `journalctl -u scribble-server -n 20` shows `web app is on at /`. If the service doesn't start, that log tells you why, for example a wrong `WEB_TOTP_SECRET`.
 
 ## 4. Put nginx in front
 
@@ -128,12 +129,12 @@ The first prints the same JSON as in step 3. The second prints `[]` (no notes ye
 ## 5. Try the clients
 
 - **CLI and desktop app:** set `SCRIBBLE_URL=https://notes.example.com` and `SCRIBBLE_TOKEN=<AUTH_TOKEN>` (see the [README](../README.md#quick-start)).
-- **Web app:** open `https://notes.example.com/` in a browser or on your phone, and enter the PIN.
+- **Web app:** open `https://notes.example.com/` in a browser or on your phone. Choose **Set up authenticator**, enter `AUTH_TOKEN`, and scan the QR code with Google Authenticator or another authenticator app. Test a code on that page, then log in with a code from the app.
 
-**Check:** `sn new "Hello" "first note"` works, and the web app shows the page with "Log out" after the PIN.
+**Check:** `sn new "Hello" "first note"` works, and the web app shows the page with "Log out" after the code.
 
 ## Next
 
 - Turn on automatic deploys of new releases: [`deploy-vps.md`](deploy-vps.md).
 - Schedule daily backups of the notes: [`deploy-vps.md`, step 9](deploy-vps.md#9-schedule-daily-backups), and copy them off the server (see [Backups](../README.md#backups) in the README).
-- To change a setting, edit `/opt/scribble/.env` and run `sudo systemctl restart scribble-server`. Changing `WEB_PIN` or `SESSION_SECRET` this way also clears a web login lockout. Changing `SESSION_SECRET` logs every browser out.
+- To change a setting, edit `/opt/scribble/.env` and run `sudo systemctl restart scribble-server`. Changing any setting this way also clears a web login lockout. A new `WEB_TOTP_SECRET` means adding the server to the authenticator app again. Changing `SESSION_SECRET` logs every browser out.

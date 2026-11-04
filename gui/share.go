@@ -119,7 +119,7 @@ func (s *shareDialog) revoke(sh notes.Share) {
 func (s *shareDialog) failed(err error) string {
 	switch {
 	case client.IsSharingOff(err):
-		return "The server has share links turned off. They are part of its web app, which runs once WEB_PIN is set on the server."
+		return "The server has share links turned off. They are part of its web app, which runs once WEB_TOTP_SECRET is set on the server."
 	case client.IsNotFound(err):
 		return "The note is no longer on the server."
 	}

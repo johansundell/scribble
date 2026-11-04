@@ -20,7 +20,7 @@ type Handler struct {
 	versionOfService string
 	auth             *auth.Authenticator // nil: the web app pages fail closed
 	replica          ReplicaReporter     // nil: no replica, so /healthz omits it
-	loginHint        string              // WEB_LOGIN_HINT, shown on the PIN screen
+	loginHint        string              // WEB_LOGIN_HINT, shown on the login screen
 }
 
 // ReplicaReporter reports the FileMaker replica's state (#66);
@@ -32,12 +32,12 @@ type ReplicaReporter interface {
 // Option configures optional Handler dependencies.
 type Option func(*Handler)
 
-// WithAuth turns on the web app's PIN login.
+// WithAuth turns on the web app's login with authenticator codes.
 func WithAuth(a *auth.Authenticator) Option {
 	return func(h *Handler) { h.auth = a }
 }
 
-// WithLoginHint shows hint, as plain text, under the PIN field (#168).
+// WithLoginHint shows hint, as plain text, under the code field (#168).
 func WithLoginHint(hint string) Option {
 	return func(h *Handler) { h.loginHint = hint }
 }

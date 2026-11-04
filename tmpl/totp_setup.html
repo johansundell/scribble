@@ -1,0 +1,43 @@
+{{define "content"}}
+<main class="login">
+	<h1>Set up authenticator</h1>
+	{{- with .Setup}}
+	<div class="totp-setup">
+		<ol>
+			<li>Scan the QR code with Google Authenticator or another authenticator app, or on this phone <a href="{{.KeyURI}}">open it in the app</a>.</li>
+			<li>Or type the secret into the app by hand.</li>
+			<li>Test a code from the app below, then log in with the next one.</li>
+		</ol>
+		<img class="totp-qr" src="{{.QR}}" width="256" height="256" alt="QR code of the authenticator secret" />
+		<pre class="totp-secret" data-copy><code>{{.Secret}}</code></pre>
+		{{/* The test form keeps the token, so it needs no second entry. */}}
+		<form method="post" action="/totp-setup" class="login-form">
+			<input type="hidden" name="token" value="{{.Token}}" />
+			<input type="text" name="code" id="code" class="code-field" inputmode="numeric" pattern="[0-9]{6}"
+				minlength="6" maxlength="6" autocomplete="one-time-code" aria-label="Authenticator code" required />
+			{{- if .Tested}}
+			{{- if .CodeOK}}
+			<p class="code-ok" role="status">✓ The code is right. Log in with the next one, or this one if it hasn't changed.</p>
+			{{- else}}
+			<p class="login-error" role="alert">The code is wrong. Check the phone's clock, or add the secret again.</p>
+			{{- end}}
+			{{- end}}
+			<button type="submit" class="button login-submit">Test code</button>
+		</form>
+		<p class="setup-link"><a href="/login">Log in</a></p>
+	</div>
+	<script src="/assets/js/copy.js" defer></script>
+	{{- else}}
+	<form method="post" action="/totp-setup" class="login-form">
+		<p class="login-hint">The setup page shows the authenticator secret. Enter the server's AUTH_TOKEN to see it.</p>
+		<input type="password" name="token" id="token" class="code-field token-field" autocomplete="off"
+			aria-label="AUTH_TOKEN" required autofocus />
+		{{- with .Error}}
+		<p class="login-error" role="alert">{{.}}</p>
+		{{- end}}
+		<button type="submit" class="button login-submit">Show secret</button>
+	</form>
+	<p class="setup-link"><a href="/login">Log in</a></p>
+	{{- end}}
+</main>
+{{end}}

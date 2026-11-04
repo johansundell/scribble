@@ -180,11 +180,11 @@ The application is configured via environment variables. You can set these in a 
 | `BACKUP_DIR` | string | `backups` beside the database | Where `scribble-server backup` stores its `scribble_<timestamp>.db.gz` archives. The `-dir` flag overrides it. |
 | `RETENTION_DAYS` | int | `7` | After each backup, `scribble-server backup` deletes archives older than this many days. The newest archive is always kept, however old. The `-retention-days` flag overrides it. |
 | `AUTH_TOKEN` | string | random per start | Token required for protected endpoints. When unset, a temporary token is generated and logged (see [Authentication token](#authentication-token)). |
-| `WEB_PIN` | string | - | The PIN for the web app at `/`: 6–12 digits. **Unset means the web app is off**: its paths answer 404 and `/` redirects to `/healthz`. The JSON API never accepts it. |
-| `SESSION_SECRET` | string | - | The key that signs the web app's session cookie: at least 32 characters, and not equal to `AUTH_TOKEN`. Required when `WEB_PIN` is set. Generate it with `openssl rand -base64 33`. Changing it ends every session. |
+| `WEB_TOTP_SECRET` | string | - | The base32 secret authenticator apps make the web app's 6-digit login codes from (TOTP, RFC 6238; [ADR 13](adr/0013-web-totp-authenticator-login.md)): at least 16 bytes (26 characters); case, spaces and `=` padding are ignored. Generate it with `head -c 20 /dev/urandom \| base32`. `/totp-setup` shows it as a QR code to whoever enters `AUTH_TOKEN`. **Unset means the web app is off**: its paths answer 404 and `/` redirects to `/healthz`. The JSON API never accepts a code. Replaces `WEB_PIN` (#172), which is ignored. |
+| `SESSION_SECRET` | string | - | The key that signs the web app's session cookie: at least 32 characters, and not equal to `AUTH_TOKEN`. Required when `WEB_TOTP_SECRET` is set. Generate it with `openssl rand -base64 33`. Changing it ends every session. |
 | `WEB_SESSION_TIMEOUT` | duration | `168h` | How long a web login lasts (7 days). The expiry is fixed at login and never extended. |
-| `WEB_LOGIN_HINT` | string | empty | Plain text shown under the PIN field, such as a demo server's PIN (#168). Empty shows nothing. |
-| `TRUSTED_PROXIES` | string | none | Comma-separated IPs or CIDRs whose `X-Forwarded-For` is believed, for example `127.0.0.1` for nginx on the same host. With none, the client address is the TCP peer. It keys the web app's per-address PIN limit. |
+| `WEB_LOGIN_HINT` | string | empty | Plain text shown under the login code field, such as how to log in to a demo server (#168). Empty shows nothing. |
+| `TRUSTED_PROXIES` | string | none | Comma-separated IPs or CIDRs whose `X-Forwarded-For` is believed, for example `127.0.0.1` for nginx on the same host. With none, the client address is the TCP peer. It keys the web app's per-address limit on wrong codes. |
 | `COOKIE_SECURE` | bool | `true` | Marks the session cookie `Secure` (HTTPS only). Set `false` only for local testing over plain HTTP. |
 | `MYSQL_USERNAME` | string | - | MySQL username (required when `STORAGE=mysql`, as are `MYSQL_HOST` and `MYSQL_DATABASE`). |
 | `MYSQL_PASSWORD` | string | - | MySQL password. |

@@ -177,12 +177,12 @@ a.button {
 
 .button:focus-visible,
 .keypad button:focus-visible,
-.pin-field:focus-visible {
+.code-field:focus-visible {
 	outline: 3px solid var(--accent);
 	outline-offset: 2px;
 }
 
-.pin-alert {
+.login-alert {
 	margin: 0;
 	padding: 0.75rem 1rem;
 	background: var(--alert-bg);
@@ -533,11 +533,13 @@ body.web:has(.app-main) {
 
 /* The Copy button on a code block (#160). copy.js wraps each block in
    .code-block, so the button stays put when the code scrolls sideways. */
-.note-body .code-block {
+.note-body .code-block,
+.totp-setup .code-block {
 	position: relative;
 }
 
-.note-body .code-block pre {
+.note-body .code-block pre,
+.totp-setup .code-block pre {
 	padding-right: 5.5rem;
 }
 
@@ -1101,7 +1103,7 @@ body.web:has(.app-main) {
 	}
 }
 
-/* PIN screen */
+/* Login screen, and the authenticator setup page (#172) */
 .login {
 	flex: 1;
 	display: flex;
@@ -1115,7 +1117,7 @@ body.web:has(.app-main) {
 	font-size: 1.5rem;
 }
 
-.pin-form {
+.login-form {
 	display: flex;
 	flex-direction: column;
 	gap: 1rem;
@@ -1123,7 +1125,7 @@ body.web:has(.app-main) {
 	max-width: 20rem;
 }
 
-.pin-field {
+.code-field {
 	width: 100%;
 	min-height: 56px;
 	padding: 0 1rem;
@@ -1142,7 +1144,7 @@ body.web:has(.app-main) {
 	text-align: center;
 }
 
-.pin-error {
+.login-error {
 	margin: 0;
 	color: var(--error);
 	font-weight: 600;
@@ -1175,12 +1177,62 @@ body.web:has(.app-main) {
 	background: var(--border);
 }
 
-.pin-submit {
+.login-submit {
 	min-height: 56px;
 	border-color: var(--accent);
 	background: var(--accent);
 	color: var(--accent-text);
 	font-weight: 600;
+}
+
+.setup-link {
+	margin: 1.5rem 0 0;
+}
+
+.setup-link a {
+	display: inline-block;
+	padding: 0.75rem 0.5rem;
+	color: var(--accent);
+}
+
+.totp-setup {
+	max-width: 24rem;
+	width: 100%;
+	text-align: center;
+}
+
+.totp-setup ol {
+	text-align: left;
+	padding-left: 1.25rem;
+}
+
+.totp-qr {
+	display: block;
+	width: 100%;
+	max-width: 256px;
+	height: auto;
+	margin: 0 auto;
+	/* A QR code needs its light border on a dark theme too. */
+	background: #fff;
+	image-rendering: pixelated;
+}
+
+.totp-secret {
+	margin: 0;
+	padding: 0.75rem 1rem;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: var(--surface);
+	font-size: 1.125rem;
+	overflow-wrap: anywhere;
+	white-space: pre-wrap;
+}
+
+.code-ok {
+	margin: 0;
+	color: var(--accent);
+	font-weight: 600;
+	text-align: center;
 }
 
 /* Pin note and Unpin note are forms (#140); their button sits among the
@@ -1195,4 +1247,10 @@ body.web:has(.app-main) {
 	margin-left: auto;
 	padding-left: 0.5rem;
 	font-size: 0.875em;
+}
+
+/* AUTH_TOKEN is long: smaller type than a 6-digit code. */
+.token-field {
+	font-size: 1rem;
+	letter-spacing: normal;
 }
