@@ -65,21 +65,31 @@ func (h *Handler) TOTPSetup(c *gin.Context) error {
 	case err != nil:
 		return httperror.ReturnWithHTTPStatus(err, http.StatusInternalServerError)
 	}
-	uri := h.auth.KeyURI(c.Request.Host)
-	png, err := qrcode.Encode(uri, qrcode.Medium, qrSize)
+	s, err := h.totpKey(c)
 	if err != nil {
-		return httperror.ReturnWithHTTPStatus(err, http.StatusInternalServerError)
+		return err
 	}
-	s := &totpSetup{
-		Secret: h.auth.Secret(),
-		KeyURI: template.URL(uri),
-		QR:     template.URL("data:image/png;base64," + base64.StdEncoding.EncodeToString(png)),
-		Token:  token,
-	}
+	s.Token = token
 	if code := c.PostForm("code"); code != "" {
 		s.Tested, s.CodeOK = true, h.auth.CheckCode(code)
 	}
 	return h.renderSetup(c, http.StatusOK, "", s)
+}
+
+// totpKey is the TOTP secret as text, as a link that opens an
+// authenticator app and as a QR code, naming this server by the request's
+// host.
+func (h *Handler) totpKey(c *gin.Context) (*totpSetup, error) {
+	uri := h.auth.KeyURI(c.Request.Host)
+	png, err := qrcode.Encode(uri, qrcode.Medium, qrSize)
+	if err != nil {
+		return nil, httperror.ReturnWithHTTPStatus(err, http.StatusInternalServerError)
+	}
+	return &totpSetup{
+		Secret: h.auth.Secret(),
+		KeyURI: template.URL(uri),
+		QR:     template.URL("data:image/png;base64," + base64.StdEncoding.EncodeToString(png)),
+	}, nil
 }
 
 func (h *Handler) renderSetup(c *gin.Context, status int, msg string, s *totpSetup) error {

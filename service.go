@@ -136,16 +136,19 @@ func (p *program) run(startup chan<- error) error {
 		startup <- err
 		return err
 	}
-	if webAuth != nil {
+	switch {
+	case webAuth != nil && settings.Web.PublicDemo:
+		logWarning("PUBLIC_DEMO is on: the login screen shows the authenticator secret to everyone, and many wrong codes no longer lock web login")
+	case webAuth != nil:
 		logInfo("web app is on at /; set up an authenticator app at /totp-setup")
-	} else if settings.Web.LegacyPIN {
+	case settings.Web.LegacyPIN:
 		logWarning("WEB_PIN is no longer used, so the web app is off; set WEB_TOTP_SECRET instead (generate one with: head -c 20 /dev/urandom | base32)")
 	}
 
 	// Stopped before the store is closed (defers run in reverse).
 	syncer, stopReplica := startReplica(st)
 	defer stopReplica()
-	handlerOpts := []handlers.Option{handlers.WithAuth(webAuth), handlers.WithLoginHint(settings.Web.LoginHint)}
+	handlerOpts := []handlers.Option{handlers.WithAuth(webAuth), handlers.WithLoginHint(settings.Web.LoginHint), handlers.WithPublicDemo(settings.Web.PublicDemo)}
 	if syncer != nil {
 		handlerOpts = append(handlerOpts, handlers.WithReplica(syncer))
 	}
@@ -314,8 +317,8 @@ func (p *program) Stop(s service.Service) error {
 }
 
 // newWebAuth sets up the web app's authenticator code login, with
-// authToken (AUTH_TOKEN) opening its setup page, or returns nil when
-// WEB_TOTP_SECRET is unset and the web app is off.
+// authToken (AUTH_TOKEN) opening its setup page and no Lockout on a public
+// demo, or returns nil when WEB_TOTP_SECRET is unset and the web app is off.
 func newWebAuth(w types.WebSettings, authToken string) (*auth.Authenticator, error) {
 	if !w.Enabled() {
 		return nil, nil
@@ -330,6 +333,7 @@ func newWebAuth(w types.WebSettings, authToken string) (*auth.Authenticator, err
 		Secret:       []byte(w.SessionSecret),
 		SessionTTL:   w.SessionTimeout,
 		SecureCookie: w.CookieSecure,
+		NoLockout:    w.PublicDemo,
 		Logger:       appLogger(),
 	})
 }

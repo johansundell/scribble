@@ -75,6 +75,10 @@ type Config struct {
 	FailureWindow time.Duration
 	AlertFailures int
 	AlertWindow   time.Duration
+	// NoLockout turns off the Login Alert and the lock of web login for
+	// everyone, for a public demo (PUBLIC_DEMO, #175) where one visitor
+	// mustn't lock out the rest. The per-address limit still holds.
+	NoLockout bool
 	// Now defaults to time.Now.
 	Now func() time.Time
 	// Logger receives the warning when the Login Alert triggers; the
@@ -92,7 +96,7 @@ type Authenticator struct {
 	secure  bool
 	now     func() time.Time
 	limiter *limiter
-	alerter *loginAlerter
+	alerter *loginAlerter // nil with NoLockout
 }
 
 // New validates cfg and returns an Authenticator.
@@ -121,7 +125,7 @@ func New(cfg Config) (*Authenticator, error) {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
-	return &Authenticator{
+	a := &Authenticator{
 		totp:    newTOTP(cfg.TOTPKey),
 		token:   []byte(cfg.SetupToken),
 		secret:  append([]byte(nil), cfg.Secret...),
@@ -129,8 +133,11 @@ func New(cfg Config) (*Authenticator, error) {
 		secure:  cfg.SecureCookie,
 		now:     cfg.Now,
 		limiter: newLimiter(cfg.MaxFailures, cfg.FailureWindow),
-		alerter: newLoginAlerter(cfg.AlertFailures, cfg.AlertWindow, cfg.Logger),
-	}, nil
+	}
+	if !cfg.NoLockout {
+		a.alerter = newLoginAlerter(cfg.AlertFailures, cfg.AlertWindow, cfg.Logger)
+	}
+	return a, nil
 }
 
 // Login checks code, a TOTP code, for a request from clientAddr. While web
@@ -140,7 +147,7 @@ func New(cfg Config) (*Authenticator, error) {
 // towards the block, the Login Alert and the lock.
 func (a *Authenticator) Login(clientAddr, code string) error {
 	now := a.now()
-	if a.alerter.locked(now) {
+	if a.alerter != nil && a.alerter.locked(now) {
 		return ErrLocked
 	}
 	if !a.limiter.reserve(clientAddr, now) {
@@ -150,7 +157,9 @@ func (a *Authenticator) Login(clientAddr, code string) error {
 		a.limiter.reset(clientAddr)
 		return nil
 	}
-	a.alerter.record(now)
+	if a.alerter != nil {
+		a.alerter.record(now)
+	}
 	return ErrInvalidCode
 }
 
@@ -191,12 +200,15 @@ func (a *Authenticator) KeyURI(host string) string {
 
 // Locked reports whether web login is locked after too many wrong codes.
 func (a *Authenticator) Locked() bool {
-	return a.alerter.locked(a.now())
+	return a.alerter != nil && a.alerter.locked(a.now())
 }
 
 // LoginAlert returns the Login Alert, once it has triggered. It stays until
 // the service restarts.
 func (a *Authenticator) LoginAlert() (LoginAlert, bool) {
+	if a.alerter == nil {
+		return LoginAlert{}, false
+	}
 	return a.alerter.current()
 }
 

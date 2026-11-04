@@ -308,7 +308,7 @@ func TestLoadSettings_Timeout(t *testing.T) {
 
 func TestLoadSettings_Web(t *testing.T) {
 	load := func(content string) types.AppSettings {
-		defer unsetEnv("WEB_PIN", "WEB_TOTP_SECRET", "SESSION_SECRET", "WEB_SESSION_TIMEOUT", "TRUSTED_PROXIES", "COOKIE_SECURE", "WEB_LOGIN_HINT")()
+		defer unsetEnv("WEB_PIN", "WEB_TOTP_SECRET", "SESSION_SECRET", "WEB_SESSION_TIMEOUT", "TRUSTED_PROXIES", "COOKIE_SECURE", "WEB_LOGIN_HINT", "PUBLIC_DEMO")()
 		tmpEnv, err := os.CreateTemp("", ".env.*")
 		if err != nil {
 			t.Fatalf("Failed to create temp env file: %v", err)
@@ -324,6 +324,9 @@ func TestLoadSettings_Web(t *testing.T) {
 	got := load("PORT=:9999\n")
 	if got.Web.TOTPSecret != "" || got.Web.LegacyPIN || got.Web.SessionTimeout != 168*time.Hour || !got.Web.CookieSecure || len(got.TrustedProxies) != 0 {
 		t.Errorf("defaults: Web = %+v, TrustedProxies = %q", got.Web, got.TrustedProxies)
+	}
+	if got.Web.PublicDemo {
+		t.Error("PUBLIC_DEMO defaults to true")
 	}
 
 	got = load("WEB_TOTP_SECRET=GEZDGNBVGY3TQOJQ\nSESSION_SECRET=s3cret\nWEB_SESSION_TIMEOUT=12h\nTRUSTED_PROXIES= 127.0.0.1, 10.0.0.0/8 ,\nCOOKIE_SECURE=false\n")
@@ -350,5 +353,11 @@ func TestLoadSettings_Web(t *testing.T) {
 	}
 	if got := load("WEB_LOGIN_HINT=\"   \"\n"); got.Web.LoginHint != "" {
 		t.Errorf("a blank WEB_LOGIN_HINT: LoginHint = %q, want none", got.Web.LoginHint)
+	}
+	if got := load("PUBLIC_DEMO=true\n"); !got.Web.PublicDemo {
+		t.Error("PUBLIC_DEMO=true: PublicDemo = false")
+	}
+	if got := load("PUBLIC_DEMO=nope\n"); got.Web.PublicDemo {
+		t.Error("an invalid PUBLIC_DEMO turned the public demo on")
 	}
 }

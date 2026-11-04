@@ -71,6 +71,9 @@ type WebSettings struct {
 	// LoginHint is plain text shown under the code field (#168); "" shows
 	// nothing.
 	LoginHint string `json:"loginHint"` // WEB_LOGIN_HINT
+	// PublicDemo shows the TOTP secret on the login screen and turns off
+	// the lock of web login for everyone, for a public demo (#175).
+	PublicDemo bool `json:"publicDemo"` // PUBLIC_DEMO
 	// LegacyPIN reports that WEB_PIN, which #172 replaced, is still set.
 	LegacyPIN bool `json:"-"`
 }

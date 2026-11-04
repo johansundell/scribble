@@ -316,6 +316,42 @@ func TestLogin_AlertAndLockout(t *testing.T) {
 	}
 }
 
+// A public demo (#175) keeps the per-address limit but has no global lock,
+// so one visitor can't lock everyone out, and no Login Alert.
+func TestLogin_NoLockout(t *testing.T) {
+	l := &recLogger{}
+	a, clk := newAuth(t, func(c *auth.Config) {
+		c.MaxFailures = 3
+		c.AlertFailures = 4
+		c.NoLockout = true
+		c.Logger = l
+	})
+	for i := 0; i < 20; i++ {
+		if err := a.Login(fmt.Sprintf("6.6.6.%d", i), "000000"); !errors.Is(err, auth.ErrInvalidCode) {
+			t.Fatalf("wrong code %d: got %v, want ErrInvalidCode", i+1, err)
+		}
+	}
+	if a.Locked() {
+		t.Error("locked without the global lockout")
+	}
+	if _, ok := a.LoginAlert(); ok {
+		t.Error("Login Alert without the global lockout")
+	}
+	if len(l.warnings) != 0 {
+		t.Errorf("warnings = %q", l.warnings)
+	}
+	if err := a.Login("7.7.7.7", code(clk)); err != nil {
+		t.Errorf("right code after many wrong ones: %v", err)
+	}
+	// The per-address limit still holds.
+	for i := 0; i < 3; i++ {
+		_ = a.Login("8.8.8.8", "000000")
+	}
+	if err := a.Login("8.8.8.8", "000000"); !errors.Is(err, auth.ErrRateLimited) {
+		t.Errorf("4th wrong code from one address: got %v, want ErrRateLimited", err)
+	}
+}
+
 func TestLogin_AlertWindowSlides(t *testing.T) {
 	a, clk := newAuth(t, func(c *auth.Config) {
 		c.MaxFailures = 100

@@ -21,6 +21,7 @@ type Handler struct {
 	auth             *auth.Authenticator // nil: the web app pages fail closed
 	replica          ReplicaReporter     // nil: no replica, so /healthz omits it
 	loginHint        string              // WEB_LOGIN_HINT, shown on the login screen
+	publicDemo       bool                // PUBLIC_DEMO: the login screen shows the TOTP secret
 }
 
 // ReplicaReporter reports the FileMaker replica's state (#66);
@@ -40,6 +41,12 @@ func WithAuth(a *auth.Authenticator) Option {
 // WithLoginHint shows hint, as plain text, under the code field (#168).
 func WithLoginHint(hint string) Option {
 	return func(h *Handler) { h.loginHint = hint }
+}
+
+// WithPublicDemo shows the TOTP secret, as a QR code and as text, on the
+// login screen, so visitors of a public demo need no AUTH_TOKEN (#175).
+func WithPublicDemo(on bool) Option {
+	return func(h *Handler) { h.publicDemo = on }
 }
 
 // WithReplica adds the FileMaker replica's state to /healthz.
