@@ -9,9 +9,7 @@ import (
 	"github.com/kardianos/service"
 )
 
-const (
-	nameOfService = "scribble-server"
-)
+var nameOfService = "scribble-server"
 
 var Version = "dev"
 
@@ -36,6 +34,9 @@ func main() {
 	svcFlag := flag.String("service", "", "Control the system service.")
 	flag.Parse()
 
+	if settings.Web.LoginHint != "" {
+		nameOfService = nameOfService + "-" + "demo"
+	}
 	svcConfig := &service.Config{
 		Name:        nameOfService,
 		DisplayName: nameOfService,
