@@ -18,6 +18,7 @@ import (
 const (
 	totpStep   = 30 * time.Second
 	totpDigits = 6
+	totpModulo = 1_000_000 // 10^totpDigits
 	// totpDrift is how many steps either side of now a code may be from,
 	// for a phone whose clock is a little off.
 	totpDrift = 1
@@ -26,6 +27,7 @@ const (
 	MinSecretBytes = 16
 )
 
+// secretEncoding is base32 without padding, as authenticator apps use it.
 var secretEncoding = base32.StdEncoding.WithPadding(base32.NoPadding)
 
 // DecodeSecret decodes a base32 TOTP secret, ignoring case, spaces and
@@ -54,6 +56,7 @@ func Code(key []byte, t time.Time) string {
 	return codeAt(key, stepOf(t))
 }
 
+// stepOf is the number of the 30-second step holding t.
 func stepOf(t time.Time) int64 {
 	return t.Unix() / int64(totpStep/time.Second)
 }
@@ -67,7 +70,7 @@ func codeAt(key []byte, step int64) string {
 	sum := m.Sum(nil)
 	off := sum[len(sum)-1] & 0x0f
 	n := binary.BigEndian.Uint32(sum[off:]) & 0x7fffffff
-	return fmt.Sprintf("%0*d", totpDigits, n%1_000_000)
+	return fmt.Sprintf("%0*d", totpDigits, n%totpModulo)
 }
 
 // totp checks codes for one key and remembers the latest step a login used,
