@@ -325,6 +325,9 @@ func TestLoadSettings_Web(t *testing.T) {
 	if got.Web.TOTPSecret != "" || got.Web.LegacyPIN || got.Web.SessionTimeout != 168*time.Hour || !got.Web.CookieSecure || len(got.TrustedProxies) != 0 {
 		t.Errorf("defaults: Web = %+v, TrustedProxies = %q", got.Web, got.TrustedProxies)
 	}
+	if got.Web.PublicDemo {
+		t.Error("PUBLIC_DEMO defaults to true")
+	}
 
 	got = load("WEB_TOTP_SECRET=GEZDGNBVGY3TQOJQ\nSESSION_SECRET=s3cret\nWEB_SESSION_TIMEOUT=12h\nTRUSTED_PROXIES= 127.0.0.1, 10.0.0.0/8 ,\nCOOKIE_SECURE=false\n")
 	if got.Web.TOTPSecret != "GEZDGNBVGY3TQOJQ" || got.Web.SessionSecret != "s3cret" || got.Web.SessionTimeout != 12*time.Hour || got.Web.CookieSecure {
@@ -350,9 +353,6 @@ func TestLoadSettings_Web(t *testing.T) {
 	}
 	if got := load("WEB_LOGIN_HINT=\"   \"\n"); got.Web.LoginHint != "" {
 		t.Errorf("a blank WEB_LOGIN_HINT: LoginHint = %q, want none", got.Web.LoginHint)
-	}
-	if got.Web.PublicDemo {
-		t.Error("PUBLIC_DEMO defaults to true")
 	}
 	if got := load("PUBLIC_DEMO=true\n"); !got.Web.PublicDemo {
 		t.Error("PUBLIC_DEMO=true: PublicDemo = false")

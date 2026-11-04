@@ -317,9 +317,8 @@ func (p *program) Stop(s service.Service) error {
 }
 
 // newWebAuth sets up the web app's authenticator code login, with
-// authToken (AUTH_TOKEN) opening its setup page and no lock for everyone on
-// a public demo, or returns nil when
-// WEB_TOTP_SECRET is unset and the web app is off.
+// authToken (AUTH_TOKEN) opening its setup page and no Lockout on a public
+// demo, or returns nil when WEB_TOTP_SECRET is unset and the web app is off.
 func newWebAuth(w types.WebSettings, authToken string) (*auth.Authenticator, error) {
 	if !w.Enabled() {
 		return nil, nil

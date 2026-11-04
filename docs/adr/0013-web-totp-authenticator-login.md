@@ -1,7 +1,7 @@
 # 13. Web login with TOTP authenticator codes
 
 - **Status:** Accepted (supersedes web PIN login in [ADR 5](0005-web-pin-login-and-shared-api-token.md))
-- **Tickets:** #172
+- **Tickets:** #172, #175 (public demo)
 
 ## Context
 
@@ -13,7 +13,7 @@ ADR 5 chose a static PIN (`WEB_PIN`) for web login. A static PIN is convenient o
 - **RFC 6238 Standard**: Uses standard TOTP (HMAC-SHA1, 6 digits, 30-second time steps).
 - **Setup & Device Enrollment**:
   - The setup page at `/totp-setup` displays the QR code and the plaintext base32 secret with a copy button.
-  - To prevent unauthorized access to the secret, viewing `/totp-setup` requires entering the server's `AUTH_TOKEN`.
+  - To prevent unauthorized access to the secret, viewing `/totp-setup` requires entering the server's `AUTH_TOKEN`. A public demo (below) is the one exception: it shows the secret on `/login`.
   - The QR code encodes standard URI parameters: `otpauth://totp/Scribble:<host>?secret=<SECRET>&issuer=Scribble`.
 - **Clock Drift & Replay Protection**:
   - Validates codes within $\pm 1$ time step (a 90-second acceptable window) to tolerate minor device clock drift.
@@ -23,7 +23,7 @@ ADR 5 chose a static PIN (`WEB_PIN`) for web login. A static PIN is convenient o
     - **Per-address limit**: 5 wrong codes from one address within 15 minutes returns 429.
     - **Global Lockout**: 20 wrong codes across all addresses within 24 hours locks out web login for everyone until 24 hours pass or the service restarts.
     - **Login Alert**: A warning banner on active sessions and a service log alert after 20 failed attempts.
-- **Public demo** (#175): `PUBLIC_DEMO=true` shows the QR code and the secret on `/login` itself, without `AUTH_TOKEN`, and turns off the global lockout and the Login Alert, so one visitor can't lock everyone out of a demo whose secret is public anyway. The per-address limit stays. It is off by default and is never for a server with private notes.
+- **Public demo** (#175): `PUBLIC_DEMO=true` shows the QR code and the secret on `/login` itself, without `AUTH_TOKEN`, and turns off the Lockout and the Login Alert, so one visitor can't lock everyone out of a demo whose secret is public anyway. The per-address limit stays. It is off by default and is never for a server with private notes.
 - **Session Cookies**:
   - Successfully entering a valid TOTP code sets the signed, fixed-expiry session cookie (HMAC-SHA256 under `SESSION_SECRET`, 7-day lifetime), identical to ADR 5.
 

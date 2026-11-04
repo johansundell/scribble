@@ -147,7 +147,7 @@ func New(cfg Config) (*Authenticator, error) {
 // towards the block, the Login Alert and the lock.
 func (a *Authenticator) Login(clientAddr, code string) error {
 	now := a.now()
-	if a.Locked() {
+	if a.alerter != nil && a.alerter.locked(now) {
 		return ErrLocked
 	}
 	if !a.limiter.reserve(clientAddr, now) {

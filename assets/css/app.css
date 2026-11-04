@@ -1238,20 +1238,18 @@ body.web:has(.app-main) {
 	width: 100%;
 }
 
-@media (width >= 700px) {
-	.login-panes:has(.demo-setup) {
-		flex-direction: row;
-		align-items: flex-start;
-		justify-content: center;
-	}
-}
-
 .demo-setup {
 	padding-top: 1.5rem;
 	border-top: 1px solid var(--border);
 }
 
 @media (width >= 700px) {
+	.login-panes:has(.demo-setup) {
+		flex-direction: row;
+		align-items: flex-start;
+		justify-content: center;
+	}
+
 	.demo-setup {
 		padding: 0 0 0 2rem;
 		border-top: 0;

@@ -17,15 +17,16 @@ import (
 // A public demo (PUBLIC_DEMO=true, #175) shows the authenticator secret on
 // the login screen, so visitors need no AUTH_TOKEN to set up an app.
 
-func newPublicDemoEnv(t *testing.T) *webEnv {
+// newPublicDemoEnv is newWebEnv with PUBLIC_DEMO set to on.
+func newPublicDemoEnv(t *testing.T, on bool) *webEnv {
 	t.Helper()
 	e := newWebEnv(t)
-	e.r = newWebRouter(t, e.store, e.auth, e.log, nil, handlers.WithPublicDemo(true))
+	e.r = newWebRouter(t, e.store, e.auth, e.log, nil, handlers.WithPublicDemo(on))
 	return e
 }
 
 func TestPublicDemo_LoginShowsTheSecretAndQRCode(t *testing.T) {
-	e := newPublicDemoEnv(t)
+	e := newPublicDemoEnv(t, true)
 	secret := auth.EncodeSecret(webKey)
 	uri := "otpauth://totp/Scribble:example.com?secret=" + secret + "&issuer=Scribble"
 
@@ -63,12 +64,21 @@ func TestPublicDemo_LoginShowsTheSecretAndQRCode(t *testing.T) {
 	}
 }
 
+// The per-address limit still holds: 5 wrong codes from one address, then
+// 429, with the secret still shown. (No Lockout is auth.Config.NoLockout,
+// which service.go sets from PUBLIC_DEMO: TestNewWebAuth_PublicDemoNeverLocks.)
+func TestPublicDemo_KeepsThePerAddressLimit(t *testing.T) {
+	e := newPublicDemoEnv(t, true)
+	for i := 0; i < auth.DefaultMaxFailures; i++ {
+		if w := e.do(postLogin("10.0.0.1", webWrongCode, "")); w.Code != http.StatusUnauthorized {
+			t.Fatalf("wrong code %d: %d, want 401", i+1, w.Code)
+		}
+	}
+	wantBody(t, e.do(postLogin("10.0.0.1", e.code(), "")), http.StatusTooManyRequests, "Too many wrong codes", `class="demo-setup`)
+}
+
 func TestPublicDemo_OffByDefault(t *testing.T) {
-	for _, e := range []*webEnv{newWebEnv(t), func() *webEnv {
-		e := newWebEnv(t)
-		e.r = newWebRouter(t, e.store, e.auth, e.log, nil, handlers.WithPublicDemo(false))
-		return e
-	}()} {
+	for _, e := range []*webEnv{newWebEnv(t), newPublicDemoEnv(t, false)} {
 		w := e.do(get("/login"))
 		body := w.Body.String()
 		if strings.Contains(body, auth.EncodeSecret(webKey)) || strings.Contains(body, "otpauth:") || strings.Contains(body, "demo-setup") {
