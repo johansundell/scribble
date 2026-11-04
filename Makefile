@@ -7,7 +7,7 @@ GHACCOUNT := johansundell
 # binary and Docker image.
 GHREPO := scribble
 NAME := scribble-server
-VERSION := v2.0.1
+VERSION := v2.1.0
 
 build:
 	go build -ldflags "-X 'main.Version=$(VERSION)'"
