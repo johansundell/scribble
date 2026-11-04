@@ -6,8 +6,8 @@
 	<div class="login-panes">
 	<form method="post" action="/login" class="login-form">
 		<input type="hidden" name="next" value="{{.Next}}" />
-		<input type="text" name="code" id="code" class="code-field" inputmode="numeric" pattern="[0-9]{6}"
-			minlength="6" maxlength="6" autocomplete="one-time-code" aria-label="Authenticator code"
+		<input type="text" name="code" id="code" class="code-field" inputmode="numeric" pattern="[0-9]{3} ?[0-9]{3}"
+			minlength="6" maxlength="7" autocomplete="one-time-code" aria-label="Authenticator code"
 			{{- with .Hint}} aria-describedby="login-hint"{{end}} required autofocus />
 		{{- with .Hint}}
 		<p class="login-hint" id="login-hint">{{.}}</p>
@@ -15,22 +15,6 @@
 		{{- with .Error}}
 		<p class="login-error" role="alert">{{.}}</p>
 		{{- end}}
-		{{/* The keypad needs JavaScript (login.js shows it); without it the
-		field and the button still work. */}}
-		<div class="keypad" hidden>
-			<button type="button" data-digit="1">1</button>
-			<button type="button" data-digit="2">2</button>
-			<button type="button" data-digit="3">3</button>
-			<button type="button" data-digit="4">4</button>
-			<button type="button" data-digit="5">5</button>
-			<button type="button" data-digit="6">6</button>
-			<button type="button" data-digit="7">7</button>
-			<button type="button" data-digit="8">8</button>
-			<button type="button" data-digit="9">9</button>
-			<button type="button" data-key="clear" aria-label="Clear">C</button>
-			<button type="button" data-digit="0">0</button>
-			<button type="button" data-key="back" aria-label="Delete last digit">⌫</button>
-		</div>
 		<button type="submit" class="button login-submit">Log in</button>
 	</form>
 	{{- with .Setup}}
@@ -47,7 +31,6 @@
 	<p class="setup-link"><a href="/totp-setup">Set up authenticator</a></p>
 	{{- end}}
 </main>
-<script src="/assets/js/login.js" defer></script>
 {{- if .Setup}}
 <script src="/assets/js/copy.js" defer></script>
 {{- end}}

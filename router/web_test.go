@@ -224,10 +224,9 @@ func TestWeb_LoginPage(t *testing.T) {
 	w := e.do(get("/login?next=/note/1"))
 	wantBody(t, w, http.StatusOK,
 		`action="/login"`, `method="post"`, `name="code"`,
-		`inputmode="numeric"`, `autocomplete="one-time-code"`, `maxlength="6"`,
+		`inputmode="numeric"`, `autocomplete="one-time-code"`, `pattern="[0-9]{3} ?[0-9]{3}"`, `maxlength="7"`,
 		`href="/totp-setup"`, "Set up authenticator",
 		`name="next" value="/note/1"`,
-		`data-digit="0"`, `data-digit="9"`, // the on-screen keypad
 		"Scribble v9.8.7",
 	)
 	if strings.Contains(w.Body.String(), "Log out") {
@@ -293,6 +292,21 @@ func TestWeb_Login(t *testing.T) {
 		if got := w.Header().Get("Location"); got != want {
 			t.Errorf("next %q: redirected to %q, want %q", next, got, want)
 		}
+	}
+}
+
+// A code pasted as "123 456", or with spaces around it, still logs in.
+func TestWeb_LoginCodeWithSpaces(t *testing.T) {
+	e := newWebEnv(t)
+	for _, format := range []func(string) string{
+		func(c string) string { return c[:3] + " " + c[3:] },
+		func(c string) string { return "  " + c + " \t" },
+		func(c string) string { return " " + c[:3] + " " + c[3:] + " " },
+	} {
+		code := format(e.code())
+		w := e.do(postLogin("10.0.0.3", code, ""))
+		wantRedirect(t, w, "/")
+		sessionCookie(t, w)
 	}
 }
 

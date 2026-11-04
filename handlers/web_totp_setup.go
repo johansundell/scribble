@@ -70,7 +70,7 @@ func (h *Handler) TOTPSetup(c *gin.Context) error {
 		return err
 	}
 	s.Token = token
-	if code := c.PostForm("code"); code != "" {
+	if code := postedCode(c); code != "" {
 		s.Tested, s.CodeOK = true, h.auth.CheckCode(code)
 	}
 	return h.renderSetup(c, http.StatusOK, "", s)

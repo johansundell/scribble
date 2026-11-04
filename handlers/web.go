@@ -162,7 +162,7 @@ func (h *Handler) Login(c *gin.Context) error {
 	if h.auth == nil {
 		return httperror.ReturnWithHTTPStatus(errWebNotConfigured, http.StatusInternalServerError)
 	}
-	err := h.auth.Login(c.ClientIP(), c.PostForm("code"))
+	err := h.auth.Login(c.ClientIP(), postedCode(c))
 	switch {
 	case errors.Is(err, auth.ErrLocked):
 		return h.renderLogin(c, http.StatusTooManyRequests, msgLocked)
@@ -176,6 +176,13 @@ func (h *Handler) Login(c *gin.Context) error {
 	h.auth.StartSession(c.Writer)
 	c.Redirect(http.StatusSeeOther, SafeNext(c.PostForm("next")))
 	return nil
+}
+
+// postedCode is the posted authenticator code without its whitespace, so a
+// code pasted as "123 456" works. It is laxer than the field's pattern, which
+// allows one space in the middle: a request from outside the page may pad it.
+func postedCode(c *gin.Context) string {
+	return strings.Join(strings.Fields(c.PostForm("code")), "")
 }
 
 // Logout ends the session on this device. It needs no session: logging out
