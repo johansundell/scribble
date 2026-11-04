@@ -158,11 +158,11 @@ function codeBlock(text) {
 	var end = text.selectionEnd;
 	if (end > start && v.charAt(end - 1) === "\n") end--;
 	var open = (start > 0 && v.charAt(start - 1) !== "\n" ? "\n" : "") + "```\n";
-	var close = "\n```" + (end < v.length && v.charAt(end) !== "\n" ? "\n" : "");
+	var closing = "\n```" + (end < v.length && v.charAt(end) !== "\n" ? "\n" : "");
 	var sel = v.slice(start, end);
 	text.focus();
 	text.setSelectionRange(start, end);
-	insert(text, open + sel + close);
+	insert(text, open + sel + closing);
 	var at = start + open.length;
 	text.setSelectionRange(at, at + sel.length);
 }
