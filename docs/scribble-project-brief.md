@@ -39,7 +39,7 @@ Tomboy-NG (cross-platform rewrite, runs on Windows), Gnote, Joplin (has a CLI, R
 
 ### Fyne
 - Fyne's `Entry` widget is plain text only. `RichText` renders Markdown but is **display-only**. Live rich-text editing would need a custom widget, which is a lot of work, and it isn't needed here.
-- **UI:** an edit/view toggle. Edit raw Markdown in an `Entry`; view in a `RichText` made with `widget.NewRichTextFromMarkdown`, where `[[links]]` become taps. `notes.LinkifyForView` rewrites `[[Title]]` to `[Title](note:///Title%20…)` (the title is path-escaped; `note://Title` would put it in the URL host, where Go rejects `%20`), and `notes.LinkTitle` reads it back. A tap opens the target note, or **creates it if missing** (Tomboy behavior). Links in task-list items stay plain text, because Fyne v2.8 can't render a link there (see #11).
+- **UI:** an edit/view toggle. Edit raw Markdown in an `Entry`; view in a `RichText` made with `widget.NewRichTextFromMarkdown`, where `[[links]]` become taps. `notes.LinkifyForView` rewrites `[[Title]]` to `[Title](note:///Title%20…)` (the title is path-escaped; `note://Title` would put it in the URL host, where Go rejects `%20`), and `notes.LinkTitle` reads it back. A tap opens the target note, or **creates it if missing** (Tomboy behavior). In the desktop app, links in task-list items show as plain text, because Fyne v2.8 can't render a link there (see #11). The web app links them (#181).
 - A "Linked from" backlinks panel needs no custom widgets.
 - Windows builds need CGO and a C compiler (MinGW or Zig), or cross-compile from Linux with `fyne-cross`. Binaries are about 20-30 MB, and the look is non-native.
 - Tray icon is supported. A global "instant new note" hotkey needs an extra library such as `golang-design/hotkey`.

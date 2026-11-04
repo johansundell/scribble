@@ -198,12 +198,6 @@ func plainTextSpans(body string) [][2]int {
 		switch n := n.(type) {
 		case *ast.Link, *ast.Image, *ast.AutoLink, *ast.CodeSpan, *ast.RawHTML:
 			return ast.WalkSkipChildren, nil
-		case *ast.TextBlock, *ast.Paragraph:
-			// Fyne (v2.8) renders a task item from the single text node
-			// after its checkbox: a link there panics it or drops the rest.
-			if _, ok := n.FirstChild().(*east.TaskCheckBox); ok {
-				return ast.WalkSkipChildren, nil
-			}
 		case *ast.Text:
 			spans = append(spans, [2]int{n.Segment.Start, n.Segment.Stop})
 		}
@@ -251,8 +245,8 @@ var addressRe = regexp.MustCompile(`(?i)\b(?:[a-z][a-z0-9+.-]*://|www\.)\S+|[\w.
 // how many it added. A link keeps the mention's spelling unless that would
 // not resolve (see mention.target). Matching is case-insensitive and on
 // word boundaries; where mentions overlap, the longest wins. The title line, the note's own title, existing [[links]],
-// bracketed text, URLs, email addresses, #project tags, code, Markdown links
-// and task-list items are left alone.
+// bracketed text, URLs, email addresses, #project tags, code and Markdown
+// links are left alone.
 func AutoLink(body string, titles []string) (string, int) {
 	self := TitleOf(body)
 	var candidates []string

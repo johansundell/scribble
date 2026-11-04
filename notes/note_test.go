@@ -53,6 +53,7 @@ func TestLinkifyForView(t *testing.T) {
 		"T\n*see [[ Plan ]]*": "T\n*see [Plan](note:///Plan)*",
 		"T\n| [[a/b (c)]] |":  "T\n| [a/b (c)](note:///a%2Fb%20%28c%29) |",
 		"T\n[[*a* `b`]]":      "T\n[&#42;a&#42; &#96;b&#96;](note:///%2Aa%2A%20%60b%60)",
+		"T\n- [ ] [[task]]":   "T\n- [ ] [task](note:///task)",
 	}
 	for in, want := range cases {
 		if got := LinkifyForView(in); got != want {
@@ -67,7 +68,6 @@ func TestLinkifyForViewLeavesMarkdownIntact(t *testing.T) {
 		"``` go\n[[fenced]]\n```",
 		"    [[indented]]",
 		"[see [[x]]](https://example.com)",
-		"- [ ] [[task]]", // see TestLinkifyProjectsForViewLeavesMarkdownIntact
 	}
 	for _, md := range unchanged {
 		body := "T\n\n" + md + "\n\n[[b]]"
@@ -171,10 +171,6 @@ func TestLinkifyProjectsForViewLeavesMarkdownIntact(t *testing.T) {
 		"    #indented code",
 		`<span title=" #x">hi</span>`,
 		"_see #home_", // the regex would take the closing '_' too
-		// Fyne renders a task item from the one text node after its
-		// checkbox; a link there panics it or drops the rest.
-		"- [ ] #home",
-		"- [x] do #home more",
 	}
 	for _, md := range unchanged {
 		// Blank lines: definitions and indented code cannot interrupt a
@@ -194,6 +190,8 @@ func TestLinkifyProjectsForViewLinksTagsInPlainText(t *testing.T) {
 		"T\n*see #home*":          "T\n*see [#home](project://home)*",
 		"T\n## Part #home":        "T\n## Part [#home](project://home)",
 		"T\n| a |\n| - |\n| #x |": "T\n| a |\n| - |\n| [#x](project://x) |",
+		"T\n- [ ] #home":          "T\n- [ ] [#home](project://home)",
+		"T\n- [x] do #home more":  "T\n- [x] do [#home](project://home) more",
 	}
 	for in, want := range cases {
 		if got := LinkifyProjectsForView(in); got != want {
@@ -220,15 +218,14 @@ func TestAutoLink(t *testing.T) {
 		"code":                {"# T\n`Go` and\n\n```\nGo\n```\n", "# T\n`Go` and\n\n```\nGo\n```\n"},
 		"markdown links":      {"# T\n[Go](http://x) and <http://go>", "# T\n[Go](http://x) and <http://go>"},
 		"emphasis":            {"# T\n*Go* and **Shopping**", "# T\n*[[Go]]* and **[[Shopping]]**"},
-		// Fyne cannot render a link in a task item (see plainTextSpans).
-		"task item":       {"# T\n- [ ] Shopping\n- Shopping", "# T\n- [ ] Shopping\n- [[Shopping]]"},
-		"project tag":     {"# T\n#go and #shopping-list", "# T\n#go and #shopping-list"},
-		"email":           {"# T\nmail go@example.com or me@go.dev", "# T\nmail go@example.com or me@go.dev"},
-		"bracketed":       {"# T\n[Go] and [Shopping]: x", "# T\n[Go] and [Shopping]: x"},
-		"inside brackets": {"# T\n[Learn Go today] then Go", "# T\n[Learn Go today] then [[Go]]"},
-		"combining mark":  {"# T\nGöteborg", "# T\nGöteborg"},
-		"html text":       {"# T\n<b>Go</b>", "# T\n<b>[[Go]]</b>"},
-		"heading & table": {"# T\n## Go\n| Go |\n| - |", "# T\n## [[Go]]\n| [[Go]] |\n| - |"},
+		"task item":           {"# T\n- [ ] Shopping\n- [x] Go", "# T\n- [ ] [[Shopping]]\n- [x] [[Go]]"},
+		"project tag":         {"# T\n#go and #shopping-list", "# T\n#go and #shopping-list"},
+		"email":               {"# T\nmail go@example.com or me@go.dev", "# T\nmail go@example.com or me@go.dev"},
+		"bracketed":           {"# T\n[Go] and [Shopping]: x", "# T\n[Go] and [Shopping]: x"},
+		"inside brackets":     {"# T\n[Learn Go today] then Go", "# T\n[Learn Go today] then [[Go]]"},
+		"combining mark":      {"# T\nGöteborg", "# T\nGöteborg"},
+		"html text":           {"# T\n<b>Go</b>", "# T\n<b>[[Go]]</b>"},
+		"heading & table":     {"# T\n## Go\n| Go |\n| - |", "# T\n## [[Go]]\n| [[Go]] |\n| - |"},
 	}
 	for name, tc := range cases {
 		if got, _ := AutoLink(tc.in, titles); got != tc.want {
@@ -325,9 +322,10 @@ func TestFlattenTaskItemsForView(t *testing.T) {
 		})
 	}
 
-	// Verify the exact text extracted on checkboxes
-	body := "# Notes\n\n- [ ] **bold** item\n- [ ] [a link](https://example.com) item\n- [ ] ``  code  `` item\n- [ ] plain then **bold**\n"
-	rewritten := FlattenTaskItemsForView(body)
+	// Verify the exact text extracted on checkboxes, including links the
+	// GUI pipeline adds before flattening (#181).
+	body := "# Notes\n\n- [ ] **bold** item\n- [ ] [a link](https://example.com) item\n- [ ] ``  code  `` item\n- [ ] plain then **bold**\n- [ ] see [[Brim]] #home\n"
+	rewritten := FlattenTaskItemsForView(LinkifyProjectsForView(LinkifyForView(body)))
 	rt := widget.NewRichTextFromMarkdown(rewritten)
 	list, ok := rt.Segments[2].(*widget.ListSegment)
 	if !ok {
@@ -338,6 +336,7 @@ func TestFlattenTaskItemsForView(t *testing.T) {
 		"a link item",
 		"code item",
 		"plain then bold",
+		"see Brim #home",
 	}
 	for i, want := range wants {
 		p := list.Items[i].(*widget.ParagraphSegment)

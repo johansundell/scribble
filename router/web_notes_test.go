@@ -171,6 +171,23 @@ func TestWebNotes_Links(t *testing.T) {
 	// A missing note opens the new-note editor: TestWebEdit_MissingLinkPrefill.
 }
 
+// Links and project tags in task items render like anywhere else (#181).
+func TestWebNotes_TaskItemLinks(t *testing.T) {
+	e := newWebEnv(t)
+	c := e.login(t)
+	e.note(t, "# Brim")
+	n := e.note(t, "# Tasks\n- [ ] [[Brim]]\n- [x] call [[Nobody]] about #work")
+
+	w := e.do(get(fmt.Sprintf("/note/%d", n.ID), c))
+	wantBody(t, w, http.StatusOK,
+		`disabled="" type="checkbox"`,
+		`<a href="/title/Brim">Brim</a>`,
+		`<a href="/title/Nobody" class="missing">Nobody</a>`,
+		`href="/?project=work"`,
+	)
+	wantNot(t, w.Body.String(), "[[Brim]]", "[[Nobody]]", "note:")
+}
+
 func TestWebNotes_Backlinks(t *testing.T) {
 	e := newWebEnv(t)
 	c := e.login(t)
