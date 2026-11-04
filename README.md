@@ -515,7 +515,7 @@ router/, handlers/, store/       routes, handlers, storage (notes: handlers/note
 auth/                            the web app's TOTP login, session cookie and guessing limits
 replica/                         the FileMaker replica's sync (push, pull, conflicts)
 docs/filemaker/                  the FileMaker tables for the replica
-tmpl/, assets/                   page templates (web app: app.html), CSS and the code keypad script
+tmpl/, assets/                   page templates (web app: app.html), CSS and scripts
 notes/                           Note type, [[link]] and #project helpers (no server deps)
 client/                          Go API client
 offline/                         the GUI's local copy of the notes and its sync

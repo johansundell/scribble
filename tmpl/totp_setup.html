@@ -13,8 +13,8 @@
 		{{/* The test form keeps the token, so it needs no second entry. */}}
 		<form method="post" action="/totp-setup" class="login-form">
 			<input type="hidden" name="token" value="{{.Token}}" />
-			<input type="text" name="code" id="code" class="code-field" inputmode="numeric" pattern="[0-9]{6}"
-				minlength="6" maxlength="6" autocomplete="one-time-code" aria-label="Authenticator code" required />
+			<input type="text" name="code" id="code" class="code-field" inputmode="numeric" pattern="[0-9 ]{6,7}"
+				minlength="6" maxlength="7" autocomplete="one-time-code" aria-label="Authenticator code" required />
 			{{- if .Tested}}
 			{{- if .CodeOK}}
 			<p class="code-ok" role="status">✓ The code is right. Log in with the next one, or this one if it hasn't changed.</p>
