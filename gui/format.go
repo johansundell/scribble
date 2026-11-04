@@ -66,7 +66,7 @@ func (ui *UI) newFormatBar() *widget.Toolbar {
 		button("italic", italic),
 		widget.NewToolbarSeparator(),
 		button("quote", prefixWith(quotePrefix)),
-		button("code", wrapWith("`")),
+		button("code", insertCodeBlock),
 		button("link", link),
 		widget.NewToolbarSeparator(),
 		button("list-unordered", prefixWith(bulletPrefix)),

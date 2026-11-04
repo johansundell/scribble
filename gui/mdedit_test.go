@@ -55,13 +55,32 @@ func TestWrapSelection(t *testing.T) {
 		{"bold no selection", "**", "say ‸", "say **‸**"},
 		{"italic selection", "_", "«a b»", "_«a b»_"},
 		{"italic no selection", "_", "a‸b", "a_‸_b"},
-		{"code selection", "`", "run «go test» now", "run `«go test»` now"},
-		{"code no selection", "`", "‸", "`‸`"},
 		{"multibyte", "**", "å«ä»ö", "å**«ä»**ö"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			text, start, end := parseState(t, c.in)
 			if got := after(text, wrapSelection(start, end, c.marker)); got != c.want {
+				t.Fatalf("got %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestInsertCodeBlock(t *testing.T) {
+	for _, c := range []struct{ name, in, want string }{
+		{"empty text", "‸", "```\n‸\n```"},
+		{"cursor on an empty line", "a\n‸\nb", "a\n```\n‸\n```\nb"},
+		{"cursor mid line", "ab‸cd", "ab\n```\n‸\n```\ncd"},
+		{"cursor at line end", "ab‸", "ab\n```\n‸\n```"},
+		{"single line selection", "run «go test» now", "run \n```\n«go test»\n```\n now"},
+		{"whole line selected", "a\n«go test»\nb", "a\n```\n«go test»\n```\nb"},
+		{"multiline selection", "«a\nb»", "```\n«a\nb»\n```"},
+		{"selection ending at a line start", "«a\nb\n»c", "```\n«a\nb»\n```\nc"},
+		{"multibyte", "å«ä»ö", "å\n```\n«ä»\n```\nö"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			text, start, end := parseState(t, c.in)
+			if got := after(text, insertCodeBlock(text, start, end)); got != c.want {
 				t.Fatalf("got %q, want %q", got, c.want)
 			}
 		})

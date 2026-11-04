@@ -147,6 +147,26 @@ function insert(text, s) {
 	}
 }
 
+// codeBlock puts the selection in a fenced code block and keeps it
+// selected, or, with none, puts an empty block at the cursor with the
+// cursor on its blank line (#176), as the desktop app's insertCodeBlock
+// does. The fences go on lines of their own. A selection that ends at the
+// start of a line leaves that newline out of the block.
+function codeBlock(text) {
+	var v = text.value;
+	var start = text.selectionStart;
+	var end = text.selectionEnd;
+	if (end > start && v.charAt(end - 1) === "\n") end--;
+	var open = (start > 0 && v.charAt(start - 1) !== "\n" ? "\n" : "") + "```\n";
+	var closing = "\n```" + (end < v.length && v.charAt(end) !== "\n" ? "\n" : "");
+	var sel = v.slice(start, end);
+	text.focus();
+	text.setSelectionRange(start, end);
+	insert(text, open + sel + closing);
+	var at = start + open.length;
+	text.setSelectionRange(at, at + sel.length);
+}
+
 // Link to note (#149): a picker over the other notes' titles that puts a
 // [[link]] to the chosen one in place of the selection, as one undo step.
 // picker holds the open picker's state: the textarea it links into, the
@@ -287,6 +307,8 @@ document.addEventListener("input", function (e) {
 document.addEventListener("click", function (e) {
 	var tab = e.target.closest("form.editor [data-tab]");
 	if (tab) showTab(tab.form, tab.dataset.tab);
+	var code = e.target.closest("form.editor [data-code-block]");
+	if (code) codeBlock(editorText(code.form));
 	var link = e.target.closest("form.editor [data-note-link]");
 	if (link) openPicker(link.form);
 	var option = e.target.closest("#note-link-list [role=option]");

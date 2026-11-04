@@ -29,3 +29,18 @@ func TestWebNoteLink_Markup(t *testing.T) {
 	wantNot(t, e.do(get(fmt.Sprintf("/note/%d", n.ID), c)).Body.String(), "data-note-link ")
 	wantNot(t, e.do(get("/login")).Body.String(), "note-link-dialog")
 }
+
+// TestWebCodeBlock_Markup checks #176's toolbar button: a Code block button
+// for app.js in place of the toolbar element's inline-code <md-code>.
+func TestWebCodeBlock_Markup(t *testing.T) {
+	e := newWebEnv(t)
+	c := e.login(t)
+	n := e.note(t, "# Alpha")
+	for _, path := range []string{editPath(n), "/new"} {
+		w := e.do(get(path, c))
+		wantBody(t, w, http.StatusOK,
+			`<button type="button" class="md-button" data-md-button="code-block" data-code-block aria-label="Code block" title="Code block">`,
+		)
+		wantNot(t, w.Body.String(), "<md-code")
+	}
+}

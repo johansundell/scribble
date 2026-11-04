@@ -121,7 +121,7 @@ The window has a menu bar (on macOS, the system menu bar; there Ctrl is Cmd):
 | (editor) | Bold / Italic / Link | `Ctrl+B` / `Ctrl+I` / `Ctrl+K` |
 
 In edit mode a GitHub-style formatting toolbar sits above the editor:
-heading, bold, italic, quote, code, link, and bulleted, numbered and task
+heading, bold, italic, quote, code block, link, and bulleted, numbered and task
 lists, with GitHub's Octicons. Lists continue on Enter (Enter on an empty
 item ends the list, Shift+Enter is a plain newline), a URL pasted over
 selected text makes a link, and cells pasted from a spreadsheet make a
