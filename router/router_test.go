@@ -175,11 +175,13 @@ func TestGetRoutes(t *testing.T) {
 		checkClient bool
 		webOff      bool
 	}{
-		// The web app: on only with WEB_PIN, never request-logged. Login and
+		// The web app: on only with WEB_TOTP_SECRET, never request-logged. Login and
 		// logout take posts from anywhere; every other web POST is origin-checked.
 		"LoginPage":     {method: "GET", pattern: "/login", web: true},
 		"Login":         {method: "POST", pattern: "/login", web: true, allowCross: true},
 		"Logout":        {method: "POST", pattern: "/logout", web: true, allowCross: true},
+		"TOTPSetupPage": {method: "GET", pattern: "/totp-setup", web: true},
+		"TOTPSetup":     {method: "POST", pattern: "/totp-setup", web: true},
 		"AppManifest":   {method: "GET", pattern: "/manifest.webmanifest", web: true},
 		"App":           {method: "GET", pattern: "/", web: true, useSession: true},
 		"AppNote":       {method: "GET", pattern: "/note/:id", web: true, useSession: true},
@@ -703,7 +705,7 @@ func TestNewRouter_Debug(t *testing.T) {
 				routes++
 			}
 		}
-		// Web routes are skipped without an authenticator (WEB_PIN unset).
+		// Web routes are skipped without an authenticator (WEB_TOTP_SECRET unset).
 		want := 0
 		for _, route := range router.GetRoutes(mustNewHandler(t, nopStore{}, false, fstest.MapFS{}, "test", "dev")) {
 			if !route.Web {

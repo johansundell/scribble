@@ -38,7 +38,7 @@ func renderNote(body string, exists func(title string) bool) (template.HTML, err
 }
 
 // renderSharedNote renders body for a share link's public page (#83).
-// [[links]] and #project tags go through the PIN screen, and a [[link]] is
+// [[links]] and #project tags go through the login screen, and a [[link]] is
 // never marked missing: that would tell the reader which notes exist.
 func renderSharedNote(body string) (template.HTML, error) {
 	return renderMarkdown(body, func(string) bool { return true }, LoginTo)

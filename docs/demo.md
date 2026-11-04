@@ -1,6 +1,6 @@
 # The public demo at demo1.sudde.net
 
-This guide sets up the public demo (#161) as a second instance on the VPS that already runs `notes.sudde.net` ([`install-vps.md`](install-vps.md), [`deploy-vps.md`](deploy-vps.md)). Anyone can open the web app with a published PIN, or point `sn` or `scribble-gui` at it with a published token. Every night a timer replaces its database and loads the sample notes from [`demo/notes`](../demo/notes) again.
+This guide sets up the public demo (#161) as a second instance on the VPS that already runs `notes.sudde.net` ([`install-vps.md`](install-vps.md), [`deploy-vps.md`](deploy-vps.md)). Anyone can open the web app with an authenticator app set up from the published token, or point `sn` or `scribble-gui` at it with a published token. Every night a timer replaces its database and loads the sample notes from [`demo/notes`](../demo/notes) again.
 
 The result:
 
@@ -10,7 +10,7 @@ The result:
 - A timer that runs [`scripts/demo-reset.sh`](../scripts/demo-reset.sh) at 04:00 Europe/Stockholm.
 - `deploy.sh` updating both instances on every release.
 
-The public PIN, token and session secret are only in the demo's `.env`. Nothing about the demo is built into the binaries, so a real server that misses a setting never runs with them.
+The public token, the TOTP secret and the session secret are only in the demo's `.env`. Nothing about the demo is built into the binaries, so a real server that misses a setting never runs with them.
 
 You need a DNS `A` record for `demo1.sudde.net` that points to the VPS, and `sudo`. Do the steps in order. Each one ends with a check.
 
@@ -56,15 +56,16 @@ sudo nano /opt/scribble-demo/.env
 ```sh
 PORT=127.0.0.1:8083
 AUTH_TOKEN=demo
-WEB_PIN=123456
+WEB_TOTP_SECRET=<the output of: head -c 20 /dev/urandom | base32>
 SESSION_SECRET=<the value from openssl>
-WEB_LOGIN_HINT="Demo: the PIN is 123456. Notes are reset every night."
+WEB_LOGIN_HINT="Demo: set up an authenticator with the token demo. Notes are reset every night."
 TRUSTED_PROXIES=127.0.0.1
 ```
 
-- `AUTH_TOKEN=demo` is the token that the README tells people to put in their clients. They must be the same.
+- `AUTH_TOKEN=demo` is the token that the README tells people to put in their clients, and to enter on the web app's **Set up authenticator** page. They must be the same. So the TOTP secret is public in effect, like the token.
+- A code logs in only once (#172), and every visitor's app makes the same codes, so two visitors who log in within the same 30 seconds may need to wait for the next code.
 - The session secret stays on the VPS. It is not in the repo, because anyone who knows it can make a login cookie.
-- `TRUSTED_PROXIES=127.0.0.1` gives each visitor their own limit of 5 wrong PINs in 15 minutes. 20 wrong PINs in 24 hours, from anyone, lock the web login for everyone. The nightly restart clears the lock.
+- `TRUSTED_PROXIES=127.0.0.1` gives each visitor their own limit of 5 wrong codes in 15 minutes. 20 wrong codes in 24 hours, from anyone, lock the web login for everyone. The nightly restart clears the lock.
 
 **Check:** `ls -l /opt/scribble-demo/.env` shows `-rw-------`.
 
@@ -141,7 +142,7 @@ sudo /opt/scribble-demo/demo-reset.sh
 
 The script stops `scribble-demo`, removes its database, starts it, waits for `/healthz`, creates one note for each `notes/*.md` file, pins "Welcome to the demo", and edits "Work log" and "Shell snippets" so that they have a history.
 
-**Check:** it ends with `demo reset: 6 notes loaded` (one per file). Open `https://demo1.sudde.net/`: the PIN screen shows the hint, PIN `123456` logs in, and "Welcome to the demo" is at the top.
+**Check:** it ends with `demo reset: 6 notes loaded` (one per file). Open `https://demo1.sudde.net/`: the login screen shows the hint, **Set up authenticator** with the token `demo` shows the QR code, a code from the app logs in, and "Welcome to the demo" is at the top.
 
 > The VPS runs its own copies. If `scripts/demo-reset.sh` or `demo/notes` changes in the repo, repeat this step.
 
@@ -204,4 +205,4 @@ It prints `deployed <tag> to scribble-server`, then `deployed <tag> to scribble-
 - **`sn: the server rejected SCRIBBLE_TOKEN` in the reset.** `AUTH_TOKEN` in `/opt/scribble-demo/.env` is not `demo`.
 - **`no sample notes in /opt/scribble-demo/notes`.** Repeat step 5.
 - **`sn: a note titled "…" already exists` in the reset.** Two files in `demo/notes` have the same title (the first line), or the database was not removed. Check that `SQLITE_PATH` is not set in the demo's `.env`: the script removes `scribble-server.db` beside the binary.
-- **Visitors are locked out of the web app.** 20 wrong PINs in 24 hours lock web login until a restart: `sudo systemctl restart scribble-demo`, or wait for the nightly reset.
+- **Visitors are locked out of the web app.** 20 wrong codes in 24 hours lock web login until a restart: `sudo systemctl restart scribble-demo`, or wait for the nightly reset.

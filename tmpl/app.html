@@ -54,7 +54,7 @@
 		</div>
 	</header>
 	{{- with .Alert}}
-	<p class="pin-alert" role="alert">{{.Count}} wrong PINs since {{.First.Local.Format "2006-01-02 15:04"}}. If that wasn't you, change WEB_PIN.</p>
+	<p class="login-alert" role="alert">{{.Count}} wrong login codes since {{.First.Local.Format "2006-01-02 15:04"}}. If that wasn't you, someone is guessing codes.</p>
 	{{- end}}
 	{{template "content" .}}
 	<footer class="app-footer">

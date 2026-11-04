@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// The theme switcher (#87) is on every app page, the PIN screen too.
+// The theme switcher (#87) is on every app page, the login screen too.
 func TestWebTheme_Button(t *testing.T) {
 	e := newWebEnv(t)
 	c := e.login(t)

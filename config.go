@@ -103,7 +103,8 @@ func loadSettings(filenames ...string) {
 		settings.Replica.Interval, _ = time.ParseDuration(v)
 	}
 
-	settings.Web.PIN = os.Getenv("WEB_PIN")
+	settings.Web.TOTPSecret = strings.TrimSpace(os.Getenv("WEB_TOTP_SECRET"))
+	settings.Web.LegacyPIN = os.Getenv("WEB_PIN") != ""
 	settings.Web.SessionSecret = os.Getenv("SESSION_SECRET")
 	settings.Web.LoginHint = strings.TrimSpace(os.Getenv("WEB_LOGIN_HINT"))
 	settings.Web.SessionTimeout = 168 * time.Hour

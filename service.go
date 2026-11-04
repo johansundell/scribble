@@ -130,14 +130,16 @@ func (p *program) run(startup chan<- error) error {
 		logQueue.Close(ctx)
 	}()
 
-	webAuth, err := newWebAuth(settings.Web)
+	webAuth, err := newWebAuth(settings.Web, settings.AuthToken)
 	if err != nil {
 		logError("failed to set up web login: %v", err)
 		startup <- err
 		return err
 	}
 	if webAuth != nil {
-		logInfo("web app is on at /")
+		logInfo("web app is on at /; set up an authenticator app at /totp-setup")
+	} else if settings.Web.LegacyPIN {
+		logWarning("WEB_PIN is no longer used, so the web app is off; set WEB_TOTP_SECRET instead (generate one with: head -c 20 /dev/urandom | base32)")
 	}
 
 	// Stopped before the store is closed (defers run in reverse).
@@ -311,14 +313,20 @@ func (p *program) Stop(s service.Service) error {
 	return p.runErr
 }
 
-// newWebAuth sets up the web app's PIN login, or returns nil when WEB_PIN is
-// unset and the web app is off. Validate has checked the settings already.
-func newWebAuth(w types.WebSettings) (*auth.Authenticator, error) {
+// newWebAuth sets up the web app's authenticator code login, with
+// authToken (AUTH_TOKEN) opening its setup page, or returns nil when
+// WEB_TOTP_SECRET is unset and the web app is off.
+func newWebAuth(w types.WebSettings, authToken string) (*auth.Authenticator, error) {
 	if !w.Enabled() {
 		return nil, nil
 	}
+	key, err := auth.DecodeSecret(w.TOTPSecret)
+	if err != nil {
+		return nil, fmt.Errorf("WEB_TOTP_SECRET is %w", err)
+	}
 	return auth.New(auth.Config{
-		PIN:          w.PIN,
+		TOTPKey:      key,
+		SetupToken:   authToken,
 		Secret:       []byte(w.SessionSecret),
 		SessionTTL:   w.SessionTimeout,
 		SecureCookie: w.CookieSecure,

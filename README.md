@@ -18,8 +18,10 @@ create and update notes over an HTTP API.
 
 ## Try the demo
 
-A public demo runs at **<https://demo1.sudde.net>**. Open it in a browser
-and log in with the PIN **123456**. Anyone can read and change what is
+A public demo runs at **<https://demo1.sudde.net>**. Open it in a browser,
+choose **Set up authenticator**, enter the token **demo**, and add the demo
+to Google Authenticator or another authenticator app. Then log in with the
+6-digit code the app shows. Anyone can read and change what is
 there, and **every note is reset every night** at 04:00 (Stockholm time), so
 don't put anything private in it.
 
@@ -233,7 +235,7 @@ available".
 | POST | `/notes/:id/rename` | `{"title": "New"}`; rewrites `[[links]]` in other notes in one transaction |
 | POST | `/notes/:id/pin` | `{"pinned": true}` pins the note, `false` unpins it, and no body toggles; returns the note, with `"pinned": true` while pinned. Takes a new seq, so it reaches `/changes`, but keeps the revision, `updated_at` and history |
 | GET | `/notes/:id/share` | the note's live [share link](#web-app): `{"token": "…", "url": "https://…/s/<token>", "expires_at": "…"}` (`expires_at`, set in the web app, left out for never); empty `token` and `url` while the note is private or the web app is off |
-| POST | `/notes/:id/share` | shares the note with a link that never expires, keeping a live link's token, and returns the link as for `GET`. **501** while the web app is off (`WEB_PIN` unset), since it serves the links |
+| POST | `/notes/:id/share` | shares the note with a link that never expires, keeping a live link's token, and returns the link as for `GET`. **501** while the web app is off (`WEB_TOTP_SECRET` unset), since it serves the links |
 | DELETE | `/notes/:id/share` | 204; revokes the link, which answers 404 at once |
 | GET | `/changes?since=N` | everything changed after seq N (deleted ones flagged) plus `latest_seq` to use next time, and `database_id`, which changes when the database is replaced (#167) |
 | GET | `/notes/:id/versions` | the note's kept versions, newest first, without bodies: `revision, title, reason, deleted, created_at, updated_at`. Works for deleted notes too |
@@ -253,47 +255,60 @@ startup create the log table when it is missing
 ## Web app
 
 The server can also serve a web app at its root, `/`, for a browser or a
-phone. It logs in with a PIN instead of the token. Its note pages are at
-`/note/<id>`, apart from the JSON API at `/notes/<id>`. With the web app off,
-`/` redirects to `/healthz`. So far it has the PIN screen, logout
-and the page layout; the notes come next (#46).
+phone. It logs in with a 6-digit code from an authenticator app (TOTP,
+RFC 6238: Google Authenticator, Aegis, 1Password and others) instead of the
+token ([ADR 13](docs/adr/0013-web-totp-authenticator-login.md)). Its note
+pages are at `/note/<id>`, apart from the JSON API at `/notes/<id>`. With the
+web app off, `/` redirects to `/healthz`.
 
-It is off until `WEB_PIN` is set. To turn it on, add to the server's `.env`:
+It is off until `WEB_TOTP_SECRET` is set. To turn it on, add to the server's
+`.env`:
 
 ```sh
-WEB_PIN=<6-12 digits>
+WEB_TOTP_SECRET=<the output of: head -c 20 /dev/urandom | base32>
 SESSION_SECRET=<the output of: openssl rand -base64 33>
 TRUSTED_PROXIES=127.0.0.1   # behind nginx on the same host
 ```
 
-The server refuses to start if the PIN isn't 6–12 digits, or if
-`SESSION_SECRET` is missing, shorter than 32 characters or the same as
-`AUTH_TOKEN`. See `docs/service-template.md` for `WEB_SESSION_TIMEOUT` and
+The server refuses to start if `WEB_TOTP_SECRET` isn't base32 of at least
+16 bytes (26 characters), or if `SESSION_SECRET` is missing, shorter than 32
+characters or the same as `AUTH_TOKEN`. `WEB_PIN`, which this replaced, is
+ignored: with only `WEB_PIN` set the web app is off, and the log says so.
+See `docs/service-template.md` for `WEB_SESSION_TIMEOUT` and
 `COOKIE_SECURE`. For a whole new server, follow
 [`docs/install-vps.md`](docs/install-vps.md).
 
-`WEB_LOGIN_HINT` optionally shows a line of plain text under the PIN
-field, such as a demo server's PIN (#168):
+To add the server to an authenticator app, open **Set up authenticator**
+under the login form (`/totp-setup`) and enter `AUTH_TOKEN`. The page shows
+a QR code to scan, a link that opens the app on a phone, and the secret as
+text with a Copy button. Test a code from the app there before logging in.
+`/totp-setup?token=<AUTH_TOKEN>` opens it directly. Wrong tokens count
+towards the per-address limit below.
+
+`WEB_LOGIN_HINT` optionally shows a line of plain text under the code
+field, such as how to log in to a demo server (#168):
 
 ```sh
-WEB_LOGIN_HINT="Demo: the PIN is 123456. Notes are reset every night."
+WEB_LOGIN_HINT="Demo: set up an authenticator with the token demo. Notes are reset every night."
 ```
 
-- **The PIN is for the browser only.** The API, the CLI and the desktop app
-  keep using `AUTH_TOKEN`, and the API never accepts the PIN. The PIN opens
-  every note for reading and writing, like the token.
+- **Codes are for the browser only.** The API, the CLI and the desktop app
+  keep using `AUTH_TOKEN`, and the API never accepts a code. Whoever has the
+  authenticator can read and change every note, like the token.
+- **Codes** change every 30 seconds. The server also takes the code before
+  and after the current one, for a phone whose clock is a little off. A code
+  logs in once: the same code, or an older one, is refused after a login.
 - **Sessions** last 7 days from login (`WEB_SESSION_TIMEOUT`) and are never
   extended. Logging out ends the session on that device only. Changing
   `SESSION_SECRET` ends every session.
-- **Per-address limit:** after 5 wrong PINs from one address within 15
-  minutes, that address gets 429, without the PIN being checked, until 15
-  minutes after its first wrong PIN.
-- **PIN Alert and lockout:** after 20 wrong PINs within 24 hours from any
+- **Per-address limit:** after 5 wrong codes (or setup tokens) from one
+  address within 15 minutes, that address gets 429, without the code being
+  checked, until 15 minutes after its first wrong one.
+- **Login Alert and lockout:** after 20 wrong codes within 24 hours from any
   addresses, the service logs a warning, every logged-in page shows "N wrong
-  PINs since …", and PIN login is locked for everyone with 429. Sessions that
-  already exist keep working. The lock lifts after 24 hours or when the
-  service restarts; the alert stays until the restart. If the wrong PINs
-  weren't yours, change `WEB_PIN` and restart.
+  login codes since …", and web login is locked for everyone with 429.
+  Sessions that already exist keep working. The lock lifts after 24 hours or
+  when the service restarts; the alert stays until the restart.
 - **Behind nginx**, set `TRUSTED_PROXIES=127.0.0.1` so the per-address limit
   sees the visitor's address from `X-Forwarded-For`. Without it, every
   visitor shares nginx's address. The header is believed only from the listed
@@ -338,13 +353,13 @@ WEB_LOGIN_HINT="Demo: the PIN is 123456. Notes are reset every night."
 - **Share links:** Share on a note creates a public, read-only link
   (`/s/<token>`, 128 random bits) and shows it with a Copy link button and a
   QR code, drawn on the server as inline SVG (`rsc.io/qr`), so a phone can
-  open the note without the PIN. Anyone with the link can read the note, and
+  open the note without logging in. Anyone with the link can read the note, and
   nothing else: no list, search or editing, and its `[[links]]` and
-  `#project` tags lead to the PIN screen. Revoke link clears the token, and
+  `#project` tags lead to the login screen. Revoke link clears the token, and
   the old link answers 404 at once; sharing again makes a new one. Notes are
   private until shared. The page is sent with `Referrer-Policy: no-referrer`,
   so the link doesn't leak to sites the note links to. Share links are part
-  of the web app: with `WEB_PIN` unset they answer 404. Deleting a note
+  of the web app: with `WEB_TOTP_SECRET` unset they answer 404. Deleting a note
   revokes its link. (#83) A link can expire in 1 hour, 1 day, 7 days or 30
   days, or never (the default); the pane and the public page show when, and
   an expired link answers 404 like a revoked one. (#145) The desktop app
@@ -490,10 +505,10 @@ Turn it on with `NOTES_REPLICA=filemaker`, `STORAGE=sqlite` and the `FMS_HOST`, 
 ```
 main.go, service.go, config.go   service lifecycle (from the template)
 router/, handlers/, store/       routes, handlers, storage (notes: handlers/notes.go, store/notes.go)
-auth/                            the web app's PIN login, session cookie and guessing limits
+auth/                            the web app's TOTP login, session cookie and guessing limits
 replica/                         the FileMaker replica's sync (push, pull, conflicts)
 docs/filemaker/                  the FileMaker tables for the replica
-tmpl/, assets/                   page templates (web app: app.html), CSS and the PIN keypad script
+tmpl/, assets/                   page templates (web app: app.html), CSS and the code keypad script
 notes/                           Note type, [[link]] and #project helpers (no server deps)
 client/                          Go API client
 offline/                         the GUI's local copy of the notes and its sync
@@ -563,7 +578,7 @@ librsvg imagemagick`). Older distributions ship ImageMagick 6, which has
 - [x] Note history: every change keeps the old text, with restore and
       undelete on the server (#55) and `sn history / diff / restore /
       undelete` in the CLI (#56)
-- [ ] Web app at `/`: log in with a PIN, then browse, search, read,
+- [ ] Web app at `/`: log in with an authenticator code, then browse, search, read,
       edit, rename and delete notes like in the desktop app (#46), on
       phones too, with "Add to Home Screen" (#65)
 - [x] GitHub-style Markdown editing (toolbar, `Ctrl+B` / `Ctrl+I` /

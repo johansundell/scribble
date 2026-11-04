@@ -115,7 +115,7 @@ a note, the list otherwise. */}}
 		<div class="note-form share">
 			<h1>Share</h1>
 			{{- if .URL}}
-			<p class="muted">Anyone with this link can read the note, without the PIN. Revoke it to stop that.</p>
+			<p class="muted">Anyone with this link can read the note, without logging in. Revoke it to stop that.</p>
 			<label for="share-url">Public link</label>
 			<input type="text" id="share-url" value="{{.URL}}" class="text-field" readonly />
 			<p class="muted">{{with .Expires}}Expires on {{timeTag .}}{{else}}Never expires{{end}}</p>
@@ -132,7 +132,7 @@ a note, the list otherwise. */}}
 			</form>
 			<script src="/assets/js/share.js" defer></script>
 			{{- else}}
-			<p class="muted">This note is private. A public link lets anyone who has it read the note, without the PIN, until it expires or you revoke it.</p>
+			<p class="muted">This note is private. A public link lets anyone who has it read the note, without logging in, until it expires or you revoke it.</p>
 			<form method="post" action="{{.Action}}" data-filtered="share-form">
 				<label for="share-ttl">Expires</label>
 				<select name="ttl" id="share-ttl" class="share-ttl">

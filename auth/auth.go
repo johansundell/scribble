@@ -1,11 +1,11 @@
-// Package auth turns the web app's PIN into a signed session cookie
-// (ADR 5).
+// Package auth turns an authenticator app's TOTP code into a signed session
+// cookie for the web app (ADR 5, ADR 13).
 //
 // Sessions are stateless: the cookie carries its expiry, signed with
 // HMAC-SHA256, so nothing is stored server side and changing the secret logs
-// everyone out. Wrong PINs are rate limited per client address, and many
-// wrong PINs from any addresses raise the PIN Alert and lock PIN login for
-// everyone. The JSON API never accepts the PIN.
+// everyone out. Wrong codes are rate limited per client address, and many
+// wrong codes from any addresses raise the Login Alert and lock web login
+// for everyone. The JSON API never accepts a code.
 package auth
 
 import (
@@ -14,7 +14,9 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -28,11 +30,11 @@ const CookieName = "scribble_session"
 // cookiePath keeps the session cookie to the web app; the API never sees it.
 const cookiePath = "/"
 
-// Guessing limits (ADR 5). After DefaultMaxFailures wrong PINs from one
-// address within DefaultFailureWindow, that address is refused until the
-// window has passed. After DefaultAlertFailures checked wrong PINs from any
-// addresses within DefaultAlertWindow, the PIN Alert triggers and PIN login
-// is locked for DefaultAlertWindow.
+// Guessing limits (ADR 5). After DefaultMaxFailures wrong codes (or setup
+// tokens) from one address within DefaultFailureWindow, that address is
+// refused until the window has passed. After DefaultAlertFailures checked
+// wrong codes from any addresses within DefaultAlertWindow, the Login Alert
+// triggers and web login is locked for DefaultAlertWindow.
 const (
 	DefaultMaxFailures   = 5
 	DefaultFailureWindow = 15 * time.Minute
@@ -41,19 +43,26 @@ const (
 )
 
 var (
-	// ErrInvalidPIN means the PIN was checked and is wrong.
-	ErrInvalidPIN = errors.New("invalid PIN")
-	// ErrRateLimited means the address has too many recent wrong PINs; the
-	// PIN was not checked.
-	ErrRateLimited = errors.New("too many wrong PINs from this address")
-	// ErrLocked means PIN login is locked for everyone after too many wrong
-	// PINs; the PIN was not checked.
-	ErrLocked = errors.New("PIN login is locked")
+	// ErrInvalidCode means the code was checked and is wrong, or was
+	// already used.
+	ErrInvalidCode = errors.New("invalid code")
+	// ErrInvalidToken means the setup token was checked and is wrong.
+	ErrInvalidToken = errors.New("invalid token")
+	// ErrRateLimited means the address has too many recent wrong codes or
+	// tokens; the code or token was not checked.
+	ErrRateLimited = errors.New("too many wrong attempts from this address")
+	// ErrLocked means web login is locked for everyone after too many wrong
+	// codes; the code was not checked.
+	ErrLocked = errors.New("web login is locked")
 )
 
 // Config configures an Authenticator.
 type Config struct {
-	PIN string
+	// TOTPKey is the decoded WEB_TOTP_SECRET; at least MinSecretBytes.
+	TOTPKey []byte
+	// SetupToken (AUTH_TOKEN) opens the setup page, which shows the TOTP
+	// secret; "" keeps it closed.
+	SetupToken string
 	// Secret signs session cookies; at least 32 bytes.
 	Secret []byte
 	// SessionTTL is how long a session lasts. The expiry is fixed at login
@@ -68,27 +77,28 @@ type Config struct {
 	AlertWindow   time.Duration
 	// Now defaults to time.Now.
 	Now func() time.Time
-	// Logger receives the warning when the PIN Alert triggers; the standard
-	// logger when nil.
+	// Logger receives the warning when the Login Alert triggers; the
+	// standard logger when nil.
 	Logger logging.Logger
 }
 
-// Authenticator checks the PIN and issues and verifies session cookies. It
-// is safe for concurrent use.
+// Authenticator checks login codes and the setup token, and issues and
+// verifies session cookies. It is safe for concurrent use.
 type Authenticator struct {
-	pin     []byte
+	totp    *totp
+	token   []byte
 	secret  []byte
 	ttl     time.Duration
 	secure  bool
 	now     func() time.Time
 	limiter *limiter
-	alerter *pinAlerter
+	alerter *loginAlerter
 }
 
 // New validates cfg and returns an Authenticator.
 func New(cfg Config) (*Authenticator, error) {
-	if cfg.PIN == "" {
-		return nil, errors.New("PIN must be set")
+	if len(cfg.TOTPKey) < MinSecretBytes {
+		return nil, fmt.Errorf("TOTP key must be at least %d bytes", MinSecretBytes)
 	}
 	if len(cfg.Secret) < 32 {
 		return nil, errors.New("session secret must be at least 32 bytes")
@@ -112,21 +122,23 @@ func New(cfg Config) (*Authenticator, error) {
 		cfg.Now = time.Now
 	}
 	return &Authenticator{
-		pin:     []byte(cfg.PIN),
+		totp:    newTOTP(cfg.TOTPKey),
+		token:   []byte(cfg.SetupToken),
 		secret:  append([]byte(nil), cfg.Secret...),
 		ttl:     cfg.SessionTTL,
 		secure:  cfg.SecureCookie,
 		now:     cfg.Now,
 		limiter: newLimiter(cfg.MaxFailures, cfg.FailureWindow),
-		alerter: newPINAlerter(cfg.AlertFailures, cfg.AlertWindow, cfg.Logger),
+		alerter: newLoginAlerter(cfg.AlertFailures, cfg.AlertWindow, cfg.Logger),
 	}, nil
 }
 
-// Login checks pin for a request from clientAddr. While PIN login is locked
-// it returns ErrLocked, and while clientAddr is blocked ErrRateLimited, both
-// without checking the PIN. A wrong PIN returns ErrInvalidPIN and counts
-// towards the block, the PIN Alert and the lock.
-func (a *Authenticator) Login(clientAddr, pin string) error {
+// Login checks code, a TOTP code, for a request from clientAddr. While web
+// login is locked it returns ErrLocked, and while clientAddr is blocked
+// ErrRateLimited, both without checking the code. A wrong code, or one
+// whose step a login already used, returns ErrInvalidCode and counts
+// towards the block, the Login Alert and the lock.
+func (a *Authenticator) Login(clientAddr, code string) error {
 	now := a.now()
 	if a.alerter.locked(now) {
 		return ErrLocked
@@ -134,22 +146,57 @@ func (a *Authenticator) Login(clientAddr, pin string) error {
 	if !a.limiter.reserve(clientAddr, now) {
 		return ErrRateLimited
 	}
-	if subtle.ConstantTimeCompare([]byte(pin), a.pin) == 1 {
+	if a.totp.use(code, now) {
 		a.limiter.reset(clientAddr)
 		return nil
 	}
 	a.alerter.record(now)
-	return ErrInvalidPIN
+	return ErrInvalidCode
 }
 
-// Locked reports whether PIN login is locked after too many wrong PINs.
+// CheckCode reports whether code is right now, without logging in or using
+// it up, so the setup page can show that an app makes the right codes.
+// Only call it behind Setup.
+func (a *Authenticator) CheckCode(code string) bool {
+	return a.totp.check(code, a.now())
+}
+
+// Setup checks token, which opens the setup page, for a request from
+// clientAddr. While clientAddr is blocked it returns ErrRateLimited without
+// checking the token. A wrong token returns ErrInvalidToken and counts
+// towards the block, but not the Login Alert.
+func (a *Authenticator) Setup(clientAddr, token string) error {
+	now := a.now()
+	if !a.limiter.reserve(clientAddr, now) {
+		return ErrRateLimited
+	}
+	if len(a.token) > 0 && subtle.ConstantTimeCompare([]byte(token), a.token) == 1 {
+		a.limiter.reset(clientAddr)
+		return nil
+	}
+	return ErrInvalidToken
+}
+
+// Secret is the TOTP secret in base32, for an authenticator app.
+func (a *Authenticator) Secret() string {
+	return EncodeSecret(a.totp.key)
+}
+
+// KeyURI is the otpauth:// URI an authenticator app reads from a QR code,
+// with host naming this server in the app.
+func (a *Authenticator) KeyURI(host string) string {
+	return "otpauth://totp/" + url.PathEscape("Scribble:"+host) +
+		"?secret=" + a.Secret() + "&issuer=Scribble"
+}
+
+// Locked reports whether web login is locked after too many wrong codes.
 func (a *Authenticator) Locked() bool {
 	return a.alerter.locked(a.now())
 }
 
-// PINAlert returns the PIN Alert, once it has triggered. It stays until the
-// service restarts.
-func (a *Authenticator) PINAlert() (PINAlert, bool) {
+// LoginAlert returns the Login Alert, once it has triggered. It stays until
+// the service restarts.
+func (a *Authenticator) LoginAlert() (LoginAlert, bool) {
 	return a.alerter.current()
 }
 

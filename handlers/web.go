@@ -19,11 +19,12 @@ import (
 	"github.com/johansundell/scribble/store"
 )
 
-// The web app at the root (ADR 4, ADR 5, #92). The router only registers
-// these routes when WEB_PIN is set, and checks the session before App. Its
-// note pages are under /note, as /notes is the JSON API.
+// The web app at the root (ADR 4, ADR 5, ADR 13, #92). The router only
+// registers these routes when WEB_TOTP_SECRET is set, and checks the
+// session before App. Its note pages are under /note, as /notes is the JSON
+// API.
 
-// AppHome is where a login lands, LoginPath the PIN screen and LogoutPath
+// AppHome is where a login lands, LoginPath the login screen and LogoutPath
 // where Log out posts.
 const (
 	AppHome    = "/"
@@ -35,7 +36,7 @@ const (
 	TitlePrefix = "/title/"
 )
 
-// LoginTo is the PIN screen, going on to next after login. The slashes in
+// LoginTo is the login screen, going on to next after login. The slashes in
 // next are left as they are, for readability.
 func LoginTo(next string) string {
 	return LoginPath + "?next=" + strings.ReplaceAll(url.QueryEscape(next), "%2F", "/")
@@ -58,9 +59,9 @@ func ProjectPath(project string) string {
 }
 
 const (
-	msgWrongPIN     = "Wrong PIN"
-	msgRateLimited  = "Too many wrong PINs from this address. Try again later."
-	msgLocked       = "Web login is locked after too many wrong PINs. Restart the service (or wait 24 hours) to unlock it."
+	msgWrongCode    = "Wrong code"
+	msgRateLimited  = "Too many wrong codes from this address. Try again later."
+	msgLocked       = "Web login is locked after too many wrong codes. Restart the service (or wait 24 hours) to unlock it."
 	msgNoteNotFound = "Note not found"
 )
 
@@ -71,11 +72,13 @@ type webPage struct {
 	Title    string
 	Version  string
 	LoggedIn bool
-	Alert    *auth.PINAlert
+	Alert    *auth.LoginAlert
 	// Login page only. Hint is WEB_LOGIN_HINT (#168).
 	Error string
 	Next  string
 	Hint  string
+	// Setup page only: the secret, once the token is right.
+	Setup *totpSetup
 	// Notes pages only. Note is the open one, if any; Message replaces it
 	// when there is nothing to show.
 	Notes     []notes.Note
@@ -135,7 +138,7 @@ func (p webPage) Filtered() bool {
 	return p.Query != "" || p.Project != ""
 }
 
-// LoginPage shows the PIN entry screen, or sends someone with a valid
+// LoginPage shows the login screen, for an authenticator code, or sends someone with a valid
 // session on to next or the app.
 func (h *Handler) LoginPage(c *gin.Context) error {
 	if h.auth == nil {
@@ -152,20 +155,20 @@ func (h *Handler) LoginPage(c *gin.Context) error {
 	return h.renderLogin(c, http.StatusOK, msg)
 }
 
-// Login checks the posted PIN. The right one starts a session and goes to
+// Login checks the posted authenticator code. The right one starts a session and goes to
 // next (a web app page) or AppHome; a wrong one shows the screen again.
 func (h *Handler) Login(c *gin.Context) error {
 	if h.auth == nil {
 		return httperror.ReturnWithHTTPStatus(errWebNotConfigured, http.StatusInternalServerError)
 	}
-	err := h.auth.Login(c.ClientIP(), c.PostForm("pin"))
+	err := h.auth.Login(c.ClientIP(), c.PostForm("code"))
 	switch {
 	case errors.Is(err, auth.ErrLocked):
 		return h.renderLogin(c, http.StatusTooManyRequests, msgLocked)
 	case errors.Is(err, auth.ErrRateLimited):
 		return h.renderLogin(c, http.StatusTooManyRequests, msgRateLimited)
-	case errors.Is(err, auth.ErrInvalidPIN):
-		return h.renderLogin(c, http.StatusUnauthorized, msgWrongPIN)
+	case errors.Is(err, auth.ErrInvalidCode):
+		return h.renderLogin(c, http.StatusUnauthorized, msgWrongCode)
 	case err != nil:
 		return httperror.ReturnWithHTTPStatus(err, http.StatusInternalServerError)
 	}
@@ -300,11 +303,11 @@ func (h *Handler) renderNotes(c *gin.Context, status int, p webPage) error {
 	return h.renderWeb(c, status, "app_home.html", p)
 }
 
-// appPage is the data for a page behind the login, with the PIN Alert when
+// appPage is the data for a page behind the login, with the Login Alert when
 // it has triggered.
 func (h *Handler) appPage(title string) webPage {
 	p := webPage{Title: title, Version: h.versionOfService, LoggedIn: true}
-	if alert, ok := h.auth.PINAlert(); ok {
+	if alert, ok := h.auth.LoginAlert(); ok {
 		p.Alert = &alert
 	}
 	return p

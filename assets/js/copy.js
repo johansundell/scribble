@@ -1,4 +1,5 @@
-// The Copy button on code blocks (#160). Each <pre> in a note gets one at
+// The Copy button on code blocks (#160). Each <pre> in a note, and each
+// <pre data-copy> such as the authenticator setup page's secret, gets one at
 // its top right, which copies the code and says "✓ Copied" for 2 seconds.
 // It runs on load, after nav.js swaps in a note (scribble:pane) and after
 // app.js fills the Preview tab (scribble:preview). Without JavaScript the
@@ -82,7 +83,7 @@
 	}
 
 	function enhance() {
-		document.querySelectorAll(".note-body pre").forEach(addButton);
+		document.querySelectorAll(".note-body pre, pre[data-copy]").forEach(addButton);
 	}
 
 	enhance();

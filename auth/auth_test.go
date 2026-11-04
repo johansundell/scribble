@@ -14,9 +14,15 @@ import (
 )
 
 const (
-	testPIN    = "123456"
 	testSecret = "0123456789abcdef0123456789abcdef"
+	testToken  = "the-auth-token"
 )
+
+// testKey is the TOTP key the tests' authenticators use.
+var testKey = []byte("0123456789abcdefghij")
+
+// code is the right code at clk's time.
+func code(clk *clock) string { return auth.Code(testKey, clk.Now()) }
 
 type clock struct {
 	mu sync.Mutex
@@ -52,7 +58,8 @@ func newAuth(t *testing.T, mod func(*auth.Config)) (*auth.Authenticator, *clock)
 	t.Helper()
 	clk := &clock{t: time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC)}
 	cfg := auth.Config{
-		PIN:          testPIN,
+		TOTPKey:      testKey,
+		SetupToken:   testToken,
 		Secret:       []byte(testSecret),
 		SessionTTL:   time.Hour,
 		SecureCookie: true,
@@ -88,11 +95,12 @@ func hasSession(a *auth.Authenticator, c *http.Cookie) bool {
 }
 
 func TestNew_Validates(t *testing.T) {
-	base := auth.Config{PIN: testPIN, Secret: []byte(testSecret), SessionTTL: time.Hour}
+	base := auth.Config{TOTPKey: testKey, Secret: []byte(testSecret), SessionTTL: time.Hour}
 	for name, mod := range map[string]func(*auth.Config){
-		"no PIN":       func(c *auth.Config) { c.PIN = "" },
-		"short secret": func(c *auth.Config) { c.Secret = []byte("short") },
-		"no TTL":       func(c *auth.Config) { c.SessionTTL = 0 },
+		"no TOTP key":    func(c *auth.Config) { c.TOTPKey = nil },
+		"short TOTP key": func(c *auth.Config) { c.TOTPKey = testKey[:auth.MinSecretBytes-1] },
+		"short secret":   func(c *auth.Config) { c.Secret = []byte("short") },
+		"no TTL":         func(c *auth.Config) { c.SessionTTL = 0 },
 	} {
 		t.Run(name, func(t *testing.T) {
 			cfg := base
@@ -108,15 +116,15 @@ func TestNew_Validates(t *testing.T) {
 }
 
 func TestLogin(t *testing.T) {
-	a, _ := newAuth(t, nil)
-	if err := a.Login("1.1.1.1", testPIN); err != nil {
-		t.Errorf("right PIN: %v", err)
+	a, clk := newAuth(t, nil)
+	if err := a.Login("1.1.1.1", code(clk)); err != nil {
+		t.Errorf("right code: %v", err)
 	}
-	if err := a.Login("1.1.1.1", "654321"); !errors.Is(err, auth.ErrInvalidPIN) {
-		t.Errorf("wrong PIN: got %v, want ErrInvalidPIN", err)
+	if err := a.Login("1.1.1.1", "654321"); !errors.Is(err, auth.ErrInvalidCode) {
+		t.Errorf("wrong code: got %v, want ErrInvalidCode", err)
 	}
-	if err := a.Login("1.1.1.1", testPIN+"0"); !errors.Is(err, auth.ErrInvalidPIN) {
-		t.Errorf("PIN with an extra digit: got %v, want ErrInvalidPIN", err)
+	if err := a.Login("1.1.1.1", code(clk)+"0"); !errors.Is(err, auth.ErrInvalidCode) {
+		t.Errorf("code with an extra digit: got %v, want ErrInvalidCode", err)
 	}
 }
 
@@ -196,39 +204,39 @@ func TestLogin_PerAddressLimit(t *testing.T) {
 	a, clk := newAuth(t, nil)
 
 	for i := 0; i < auth.DefaultMaxFailures; i++ {
-		if err := a.Login("1.1.1.1", "000000"); !errors.Is(err, auth.ErrInvalidPIN) {
-			t.Fatalf("attempt %d: got %v, want ErrInvalidPIN", i+1, err)
+		if err := a.Login("1.1.1.1", "000000"); !errors.Is(err, auth.ErrInvalidCode) {
+			t.Fatalf("attempt %d: got %v, want ErrInvalidCode", i+1, err)
 		}
 	}
-	// The 6th attempt is refused without the PIN being checked, so even the
-	// right PIN gets nowhere.
-	if err := a.Login("1.1.1.1", testPIN); !errors.Is(err, auth.ErrRateLimited) {
+	// The 6th attempt is refused without the code being checked, so even the
+	// right code gets nowhere.
+	if err := a.Login("1.1.1.1", code(clk)); !errors.Is(err, auth.ErrRateLimited) {
 		t.Errorf("6th attempt: got %v, want ErrRateLimited", err)
 	}
-	if err := a.Login("2.2.2.2", testPIN); err != nil {
+	if err := a.Login("2.2.2.2", code(clk)); err != nil {
 		t.Errorf("another address: %v", err)
 	}
 
 	clk.Add(auth.DefaultFailureWindow - time.Second)
-	if err := a.Login("1.1.1.1", testPIN); !errors.Is(err, auth.ErrRateLimited) {
+	if err := a.Login("1.1.1.1", code(clk)); !errors.Is(err, auth.ErrRateLimited) {
 		t.Errorf("before the window ends: got %v, want ErrRateLimited", err)
 	}
 	clk.Add(time.Second)
-	if err := a.Login("1.1.1.1", testPIN); err != nil {
+	if err := a.Login("1.1.1.1", code(clk)); err != nil {
 		t.Errorf("after the window: %v", err)
 	}
 }
 
-func TestLogin_RightPINResetsAddress(t *testing.T) {
-	a, _ := newAuth(t, nil)
+func TestLogin_RightCodeResetsAddress(t *testing.T) {
+	a, clk := newAuth(t, nil)
 	for i := 0; i < auth.DefaultMaxFailures-1; i++ {
 		_ = a.Login("1.1.1.1", "000000")
 	}
-	if err := a.Login("1.1.1.1", testPIN); err != nil {
-		t.Fatalf("right PIN: %v", err)
+	if err := a.Login("1.1.1.1", code(clk)); err != nil {
+		t.Fatalf("right code: %v", err)
 	}
 	for i := 0; i < auth.DefaultMaxFailures; i++ {
-		if err := a.Login("1.1.1.1", "000000"); !errors.Is(err, auth.ErrInvalidPIN) {
+		if err := a.Login("1.1.1.1", "000000"); !errors.Is(err, auth.ErrInvalidCode) {
 			t.Fatalf("attempt %d after reset: got %v", i+1, err)
 		}
 	}
@@ -253,28 +261,28 @@ func TestLogin_AlertAndLockout(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		_ = a.Login("2.2.2.2", "000000")
 	}
-	if _, ok := a.PINAlert(); ok {
-		t.Fatal("alert after 6 checked wrong PINs")
+	if _, ok := a.LoginAlert(); ok {
+		t.Fatal("alert after 6 checked wrong codes")
 	}
 	if a.Locked() {
-		t.Fatal("locked after 6 checked wrong PINs")
+		t.Fatal("locked after 6 checked wrong codes")
 	}
 
 	clk.Add(time.Hour)
-	if err := a.Login("3.3.3.3", "000000"); !errors.Is(err, auth.ErrInvalidPIN) {
-		t.Fatalf("7th wrong PIN: got %v, want ErrInvalidPIN", err)
+	if err := a.Login("3.3.3.3", "000000"); !errors.Is(err, auth.ErrInvalidCode) {
+		t.Fatalf("7th wrong code: got %v, want ErrInvalidCode", err)
 	}
-	alert, ok := a.PINAlert()
+	alert, ok := a.LoginAlert()
 	if !ok || alert.Count != 7 || !alert.First.Equal(first) || !alert.Last.Equal(clk.Now()) {
 		t.Errorf("alert = %+v, %v; want 7 from %v to %v", alert, ok, first, clk.Now())
 	}
-	if len(l.warnings) != 1 || !strings.Contains(l.warnings[0], "7 wrong PINs") {
+	if len(l.warnings) != 1 || !strings.Contains(l.warnings[0], "7 wrong codes") {
 		t.Errorf("warnings = %q", l.warnings)
 	}
 
-	// Locked for everyone, even with the right PIN, but existing sessions work.
-	if err := a.Login("4.4.4.4", testPIN); !errors.Is(err, auth.ErrLocked) {
-		t.Errorf("right PIN while locked: got %v, want ErrLocked", err)
+	// Locked for everyone, even with the right code, but existing sessions work.
+	if err := a.Login("4.4.4.4", code(clk)); !errors.Is(err, auth.ErrLocked) {
+		t.Errorf("right code while locked: got %v, want ErrLocked", err)
 	}
 	if !a.Locked() {
 		t.Error("Locked() = false")
@@ -285,26 +293,26 @@ func TestLogin_AlertAndLockout(t *testing.T) {
 
 	// The lock lifts after the alert window; the alert stays until restart.
 	clk.Add(auth.DefaultAlertWindow - time.Second)
-	if err := a.Login("4.4.4.4", testPIN); !errors.Is(err, auth.ErrLocked) {
+	if err := a.Login("4.4.4.4", code(clk)); !errors.Is(err, auth.ErrLocked) {
 		t.Errorf("just before unlock: got %v, want ErrLocked", err)
 	}
 	clk.Add(time.Second)
-	if err := a.Login("4.4.4.4", testPIN); err != nil {
+	if err := a.Login("4.4.4.4", code(clk)); err != nil {
 		t.Errorf("after unlock: %v", err)
 	}
-	if _, ok := a.PINAlert(); !ok {
+	if _, ok := a.LoginAlert(); !ok {
 		t.Error("alert cleared by unlock")
 	}
 
-	// Later wrong PINs add to the alert, and enough of them lock again.
+	// Later wrong codes add to the alert, and enough of them lock again.
 	for i := 0; i < 7; i++ {
 		_ = a.Login(fmt.Sprintf("5.5.5.%d", i), "000000")
 	}
-	if alert, _ := a.PINAlert(); alert.Count != 14 || !alert.First.Equal(first) {
-		t.Errorf("alert after more wrong PINs = %+v", alert)
+	if alert, _ := a.LoginAlert(); alert.Count != 14 || !alert.First.Equal(first) {
+		t.Errorf("alert after more wrong codes = %+v", alert)
 	}
 	if !a.Locked() {
-		t.Error("not locked again after 7 more wrong PINs")
+		t.Error("not locked again after 7 more wrong codes")
 	}
 }
 
@@ -317,14 +325,14 @@ func TestLogin_AlertWindowSlides(t *testing.T) {
 	clk.Add(auth.DefaultAlertWindow / 2)
 	_ = a.Login("1.1.1.1", "000000")
 	clk.Add(auth.DefaultAlertWindow / 2)
-	// The first wrong PIN is now 24 hours old and no longer counts.
+	// The first wrong code is now 24 hours old and no longer counts.
 	_ = a.Login("1.1.1.1", "000000")
-	if _, ok := a.PINAlert(); ok {
-		t.Error("alert counted a wrong PIN older than the window")
+	if _, ok := a.LoginAlert(); ok {
+		t.Error("alert counted a wrong code older than the window")
 	}
 	_ = a.Login("1.1.1.1", "000000")
-	if _, ok := a.PINAlert(); !ok {
-		t.Error("no alert after 3 wrong PINs within the window")
+	if _, ok := a.LoginAlert(); !ok {
+		t.Error("no alert after 3 wrong codes within the window")
 	}
 }
 
@@ -337,7 +345,7 @@ func TestLogin_ConcurrentAttemptsRespectLimit(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := a.Login("1.1.1.1", "000000"); errors.Is(err, auth.ErrInvalidPIN) {
+			if err := a.Login("1.1.1.1", "000000"); errors.Is(err, auth.ErrInvalidCode) {
 				mu.Lock()
 				checked++
 				mu.Unlock()
@@ -346,6 +354,108 @@ func TestLogin_ConcurrentAttemptsRespectLimit(t *testing.T) {
 	}
 	wg.Wait()
 	if checked != auth.DefaultMaxFailures {
-		t.Errorf("%d PINs checked, want %d", checked, auth.DefaultMaxFailures)
+		t.Errorf("%d codes checked, want %d", checked, auth.DefaultMaxFailures)
+	}
+}
+
+func TestLogin_AcceptsOneStepOfClockDrift(t *testing.T) {
+	a, clk := newAuth(t, nil)
+	now := clk.Now()
+	for _, d := range []time.Duration{-30 * time.Second, 30 * time.Second} {
+		clk.Add(5 * time.Minute) // a fresh step each time, so none is a replay
+		now = clk.Now()
+		if err := a.Login("1.1.1.1", auth.Code(testKey, now.Add(d))); err != nil {
+			t.Errorf("code from %v away: %v", d, err)
+		}
+	}
+	clk.Add(5 * time.Minute)
+	now = clk.Now()
+	for _, d := range []time.Duration{-60 * time.Second, 60 * time.Second} {
+		if err := a.Login("1.1.1.1", auth.Code(testKey, now.Add(d))); !errors.Is(err, auth.ErrInvalidCode) {
+			t.Errorf("code from %v away: got %v, want ErrInvalidCode", d, err)
+		}
+	}
+}
+
+func TestLogin_RefusesReplayedCode(t *testing.T) {
+	a, clk := newAuth(t, nil)
+	used := code(clk)
+	if err := a.Login("1.1.1.1", used); err != nil {
+		t.Fatalf("first use: %v", err)
+	}
+	// The same code again, from anywhere, while it is still in the window.
+	for _, d := range []time.Duration{0, 10 * time.Second, 40 * time.Second} {
+		clk.Add(d)
+		if err := a.Login("2.2.2.2", used); !errors.Is(err, auth.ErrInvalidCode) {
+			t.Errorf("replay after %v more: got %v, want ErrInvalidCode", d, err)
+		}
+	}
+	// The previous step's code is older than the used one: refused too.
+	if err := a.Login("2.2.2.2", auth.Code(testKey, clk.Now().Add(-30*time.Second))); !errors.Is(err, auth.ErrInvalidCode) {
+		t.Errorf("older code after a login: got %v, want ErrInvalidCode", err)
+	}
+	// The next step's code works.
+	clk.Add(30 * time.Second)
+	if err := a.Login("2.2.2.2", code(clk)); err != nil {
+		t.Errorf("next code: %v", err)
+	}
+}
+
+func TestCheckCode_DoesNotUseTheCodeUp(t *testing.T) {
+	a, clk := newAuth(t, nil)
+	if !a.CheckCode(code(clk)) || !a.CheckCode(code(clk)) {
+		t.Error("right code not accepted twice by CheckCode")
+	}
+	if a.CheckCode("000000") {
+		t.Error("wrong code accepted")
+	}
+	if err := a.Login("1.1.1.1", code(clk)); err != nil {
+		t.Errorf("login after CheckCode: %v", err)
+	}
+	if !a.CheckCode(code(clk)) {
+		t.Error("CheckCode refuses a code a login used")
+	}
+}
+
+func TestSetup_NeedsTheToken(t *testing.T) {
+	a, _ := newAuth(t, func(c *auth.Config) { c.MaxFailures = 3 })
+	if err := a.Setup("1.1.1.1", testToken); err != nil {
+		t.Errorf("right token: %v", err)
+	}
+	for _, tok := range []string{"", "wrong", testToken + "x"} {
+		if err := a.Setup("1.1.1.1", tok); !errors.Is(err, auth.ErrInvalidToken) {
+			t.Errorf("token %q: got %v, want ErrInvalidToken", tok, err)
+		}
+	}
+	// Wrong tokens count towards the address's limit, as wrong codes do.
+	if err := a.Setup("1.1.1.1", testToken); !errors.Is(err, auth.ErrRateLimited) {
+		t.Errorf("after 3 wrong tokens: got %v, want ErrRateLimited", err)
+	}
+	if _, ok := a.LoginAlert(); ok {
+		t.Error("wrong tokens raised the Login Alert")
+	}
+
+	// Without a token, setup is off.
+	off, _ := newAuth(t, func(c *auth.Config) { c.SetupToken = "" })
+	if err := off.Setup("1.1.1.1", ""); !errors.Is(err, auth.ErrInvalidToken) {
+		t.Errorf("no token configured: got %v, want ErrInvalidToken", err)
+	}
+}
+
+func TestKeyURI(t *testing.T) {
+	a, _ := newAuth(t, nil)
+	if got := a.Secret(); got != auth.EncodeSecret(testKey) {
+		t.Errorf("Secret = %s", got)
+	}
+	want := "otpauth://totp/Scribble:notes.example.com?secret=" + auth.EncodeSecret(testKey) + "&issuer=Scribble"
+	if got := a.KeyURI("notes.example.com"); got != want {
+		t.Errorf("KeyURI = %s, want %s", got, want)
+	}
+	// A port is kept; anything odd in the host is escaped.
+	if got := a.KeyURI("localhost:8080"); got != "otpauth://totp/Scribble:localhost:8080?secret="+auth.EncodeSecret(testKey)+"&issuer=Scribble" {
+		t.Errorf("KeyURI with a port = %s", got)
+	}
+	if got := a.KeyURI("a b?c"); got != "otpauth://totp/Scribble:a%20b%3Fc?secret="+auth.EncodeSecret(testKey)+"&issuer=Scribble" {
+		t.Errorf("KeyURI with an odd host = %s", got)
 	}
 }

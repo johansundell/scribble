@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/johansundell/scribble/auth"
 )
 
 // Storage backends selectable with STORAGE.
@@ -57,19 +59,24 @@ type ReplicaSettings struct {
 // Enabled reports whether the replica is turned on.
 func (r ReplicaSettings) Enabled() bool { return r.Mode != "" }
 
-// WebSettings configures the web app at /. An empty PIN turns it off.
+// WebSettings configures the web app at /. An empty TOTPSecret turns it
+// off.
 type WebSettings struct {
-	PIN            string        `json:"pin"`            // WEB_PIN
+	// TOTPSecret is the base32 secret authenticator apps make login codes
+	// from (ADR 13).
+	TOTPSecret     string        `json:"totpSecret"`     // WEB_TOTP_SECRET
 	SessionSecret  string        `json:"sessionSecret"`  // SESSION_SECRET
 	SessionTimeout time.Duration `json:"sessionTimeout"` // WEB_SESSION_TIMEOUT
 	CookieSecure   bool          `json:"cookieSecure"`   // COOKIE_SECURE
-	// LoginHint is plain text shown under the PIN field, such as a demo
-	// server's PIN (#168); "" shows nothing.
+	// LoginHint is plain text shown under the code field (#168); "" shows
+	// nothing.
 	LoginHint string `json:"loginHint"` // WEB_LOGIN_HINT
+	// LegacyPIN reports that WEB_PIN, which #172 replaced, is still set.
+	LegacyPIN bool `json:"-"`
 }
 
 // Enabled reports whether the web app is turned on.
-func (w WebSettings) Enabled() bool { return w.PIN != "" }
+func (w WebSettings) Enabled() bool { return w.TOTPSecret != "" }
 
 // minSessionSecret is the shortest SESSION_SECRET accepted.
 const minSessionSecret = 32
@@ -161,18 +168,18 @@ func (s AppSettings) validateReplica() error {
 	return nil
 }
 
-// validateWeb checks the web app settings when WEB_PIN is set. The messages
-// never include the PIN or the secret, since they end up in the service log.
+// validateWeb checks the web app settings when WEB_TOTP_SECRET is set. The
+// messages never include a secret, since they end up in the service log.
 func (s AppSettings) validateWeb() error {
 	w := s.Web
 	if !w.Enabled() {
 		return nil
 	}
-	if !isPIN(w.PIN) {
-		return fmt.Errorf("WEB_PIN must be 6 to 12 digits (0-9), or unset to turn the web app off")
+	if _, err := auth.DecodeSecret(w.TOTPSecret); err != nil {
+		return fmt.Errorf("WEB_TOTP_SECRET is %v; generate one with: head -c 20 /dev/urandom | base32", err)
 	}
 	if w.SessionSecret == "" {
-		return fmt.Errorf("SESSION_SECRET must be set when WEB_PIN is set; generate one with: openssl rand -base64 33")
+		return fmt.Errorf("SESSION_SECRET must be set when WEB_TOTP_SECRET is set; generate one with: openssl rand -base64 33")
 	}
 	if len(w.SessionSecret) < minSessionSecret {
 		return fmt.Errorf("SESSION_SECRET must be at least %d characters; generate one with: openssl rand -base64 33", minSessionSecret)
@@ -184,16 +191,4 @@ func (s AppSettings) validateWeb() error {
 		return fmt.Errorf("WEB_SESSION_TIMEOUT must be a positive duration such as 168h")
 	}
 	return nil
-}
-
-func isPIN(pin string) bool {
-	if len(pin) < 6 || len(pin) > 12 {
-		return false
-	}
-	for _, r := range pin {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return true
 }

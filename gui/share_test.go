@@ -184,7 +184,7 @@ func TestShareRefusedWhenTheServerHasNoWebApp(t *testing.T) {
 
 	test.Tap(ui.Share)
 	tapDialogButton(t, w, "Create public link")
-	if !strings.Contains(dialogText(w), "WEB_PIN") {
+	if !strings.Contains(dialogText(w), "WEB_TOTP_SECRET") {
 		t.Fatalf("dialog says %q, want why sharing is off", dialogText(w))
 	}
 	if dialogLink(w) != nil {

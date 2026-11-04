@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/johansundell/scribble/auth"
 	"github.com/johansundell/scribble/store"
 	"github.com/johansundell/scribble/types"
 )
@@ -35,17 +36,21 @@ func TestStart_DatabaseInitializationErrorReturnsError(t *testing.T) {
 }
 
 func TestNewWebAuth(t *testing.T) {
-	a, err := newWebAuth(types.WebSettings{})
+	a, err := newWebAuth(types.WebSettings{}, "token")
 	if err != nil || a != nil {
 		t.Errorf("web off: got %v, %v; want nil, nil", a, err)
 	}
 
-	a, err = newWebAuth(types.WebSettings{PIN: "123456", SessionSecret: "0123456789abcdef0123456789abcdef", SessionTimeout: time.Hour})
+	// Spaces and lower case, as some apps show a secret, are fine.
+	a, err = newWebAuth(types.WebSettings{TOTPSecret: "gezd gnbv gy3t qojq gezd gnbv gy3t qojq", SessionSecret: "0123456789abcdef0123456789abcdef", SessionTimeout: time.Hour}, "token")
 	if err != nil || a == nil {
 		t.Fatalf("web on: got %v, %v", a, err)
 	}
-	if err := a.Login("127.0.0.1", "123456"); err != nil {
-		t.Errorf("the configured PIN doesn't log in: %v", err)
+	if err := a.Login("127.0.0.1", auth.Code([]byte("12345678901234567890"), time.Now())); err != nil {
+		t.Errorf("the configured secret's code doesn't log in: %v", err)
+	}
+	if err := a.Setup("127.0.0.1", "token"); err != nil {
+		t.Errorf("AUTH_TOKEN doesn't open the setup page: %v", err)
 	}
 }
 

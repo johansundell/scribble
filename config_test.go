@@ -62,7 +62,7 @@ func TestLoadSettings(t *testing.T) {
 
 func TestLoadSettings_Precedence(t *testing.T) {
 	t.Setenv("PORT", ":8888") // Real environment
-	
+
 	tmpEnv, err := os.CreateTemp("", ".env.*")
 	if err != nil {
 		t.Fatalf("Failed to create temp env file: %v", err)
@@ -308,7 +308,7 @@ func TestLoadSettings_Timeout(t *testing.T) {
 
 func TestLoadSettings_Web(t *testing.T) {
 	load := func(content string) types.AppSettings {
-		defer unsetEnv("WEB_PIN", "SESSION_SECRET", "WEB_SESSION_TIMEOUT", "TRUSTED_PROXIES", "COOKIE_SECURE", "WEB_LOGIN_HINT")()
+		defer unsetEnv("WEB_PIN", "WEB_TOTP_SECRET", "SESSION_SECRET", "WEB_SESSION_TIMEOUT", "TRUSTED_PROXIES", "COOKIE_SECURE", "WEB_LOGIN_HINT")()
 		tmpEnv, err := os.CreateTemp("", ".env.*")
 		if err != nil {
 			t.Fatalf("Failed to create temp env file: %v", err)
@@ -322,25 +322,30 @@ func TestLoadSettings_Web(t *testing.T) {
 	defer loadSettings()
 
 	got := load("PORT=:9999\n")
-	if got.Web.PIN != "" || got.Web.SessionTimeout != 168*time.Hour || !got.Web.CookieSecure || len(got.TrustedProxies) != 0 {
+	if got.Web.TOTPSecret != "" || got.Web.LegacyPIN || got.Web.SessionTimeout != 168*time.Hour || !got.Web.CookieSecure || len(got.TrustedProxies) != 0 {
 		t.Errorf("defaults: Web = %+v, TrustedProxies = %q", got.Web, got.TrustedProxies)
 	}
 
-	got = load("WEB_PIN=123456\nSESSION_SECRET=s3cret\nWEB_SESSION_TIMEOUT=12h\nTRUSTED_PROXIES= 127.0.0.1, 10.0.0.0/8 ,\nCOOKIE_SECURE=false\n")
-	if got.Web.PIN != "123456" || got.Web.SessionSecret != "s3cret" || got.Web.SessionTimeout != 12*time.Hour || got.Web.CookieSecure {
+	got = load("WEB_TOTP_SECRET=GEZDGNBVGY3TQOJQ\nSESSION_SECRET=s3cret\nWEB_SESSION_TIMEOUT=12h\nTRUSTED_PROXIES= 127.0.0.1, 10.0.0.0/8 ,\nCOOKIE_SECURE=false\n")
+	if got.Web.TOTPSecret != "GEZDGNBVGY3TQOJQ" || got.Web.SessionSecret != "s3cret" || got.Web.SessionTimeout != 12*time.Hour || got.Web.CookieSecure {
 		t.Errorf("loaded Web = %+v", got.Web)
 	}
 	if len(got.TrustedProxies) != 2 || got.TrustedProxies[0] != "127.0.0.1" || got.TrustedProxies[1] != "10.0.0.0/8" {
 		t.Errorf("TrustedProxies = %q", got.TrustedProxies)
 	}
 
+	// WEB_PIN (before #172) no longer turns the web app on, but is noticed
+	// so the service can say why the web app is off.
+	if got := load("WEB_PIN=123456\n"); got.Web.Enabled() || !got.Web.LegacyPIN {
+		t.Errorf("WEB_PIN alone: Web = %+v, want off with LegacyPIN", got.Web)
+	}
 	if got := load("WEB_SESSION_TIMEOUT=soon\n"); got.Web.SessionTimeout != 0 {
 		t.Errorf("expected an invalid WEB_SESSION_TIMEOUT to become 0 for Validate to reject, got %v", got.Web.SessionTimeout)
 	}
 	if got := load("COOKIE_SECURE=nope\n"); !got.Web.CookieSecure {
 		t.Error("expected an invalid COOKIE_SECURE to keep the safe default true")
 	}
-	if got := load("WEB_LOGIN_HINT=\"  Demo: the PIN is 123456.  \"\n"); got.Web.LoginHint != "Demo: the PIN is 123456." {
+	if got := load("WEB_LOGIN_HINT=\"  Demo: log in with code 123456.  \"\n"); got.Web.LoginHint != "Demo: log in with code 123456." {
 		t.Errorf("WEB_LOGIN_HINT: LoginHint = %q, want it trimmed", got.Web.LoginHint)
 	}
 	if got := load("WEB_LOGIN_HINT=\"   \"\n"); got.Web.LoginHint != "" {

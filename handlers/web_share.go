@@ -15,7 +15,7 @@ import (
 )
 
 // Share links (#83): a note can be given a public, read-only link, so it
-// can be read on a phone without the PIN. The share pane works like rename:
+// can be read on a phone without logging in. The share pane works like rename:
 // a GET shows it and a POST changes it.
 
 // SharePath is the share pane of the note with id.

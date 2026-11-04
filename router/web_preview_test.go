@@ -56,7 +56,7 @@ func TestWebPreview_EditorHasToolbarAndTabs(t *testing.T) {
 		`data-tab="write"`, `data-tab="preview"`,
 		`id="note-preview"`,
 	)
-	// The PIN screen needs none of it.
+	// The login screen needs none of it.
 	wantNot(t, e.do(get("/login")).Body.String(), "/assets/js/app.js")
 	// The vendored files are served from here, not a CDN.
 	for _, p := range []string{
