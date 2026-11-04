@@ -68,8 +68,10 @@ func TestTOTPSetup_ShowsTheSecretAndQRCode(t *testing.T) {
 		if got := w.Header().Get("Cache-Control"); got != "no-store" {
 			t.Errorf("Cache-Control = %q", got)
 		}
-		// The token may be in the URL: don't pass it on to other sites.
-		if got := w.Header().Get("Referrer-Policy"); got != "no-referrer" {
+		// The token may be in the URL: don't pass it on to other sites. Not
+		// no-referrer, which makes the page's forms send "Origin: null"
+		// (TestTOTPSetupBrowser).
+		if got := w.Header().Get("Referrer-Policy"); got != "same-origin" {
 			t.Errorf("Referrer-Policy = %q", got)
 		}
 

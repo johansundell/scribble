@@ -46,8 +46,10 @@ func (h *Handler) TOTPSetup(c *gin.Context) error {
 	if h.auth == nil {
 		return httperror.ReturnWithHTTPStatus(errWebNotConfigured, http.StatusInternalServerError)
 	}
-	// The token may be in the URL; links on the page mustn't pass it on.
-	c.Header("Referrer-Policy", "no-referrer")
+	// The token may be in the URL; links on the page mustn't pass it on to
+	// other sites. Not no-referrer: with it, browsers send "Origin: null" on
+	// the page's own forms, which the same-origin check refuses.
+	c.Header("Referrer-Policy", "same-origin")
 	token := c.Query("token")
 	if c.Request.Method == http.MethodPost {
 		token = c.PostForm("token")
