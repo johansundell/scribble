@@ -92,15 +92,6 @@
     <Step enable="True" id="103" name="Exit Script" />
     <Step enable="True" id="70" name="End If" />
     <Step enable="True" id="6" name="Go to Layout"><LayoutDestination value="SelectedLayout" /><Layout id="0" name="Scribble_PendingEdits" /></Step>
-    <Step enable="True" id="89" name="# (comment)"><Text>Remove your waiting update of this note first; the delete replaces it.</Text></Step>
-    <Step enable="True" id="22" name="Enter Find Mode"><Pause state="False" /><Restore state="False" /></Step>
-    <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA[$noteID]]></Calculation><Field table="PendingEdits" id="0" name="WaitingUpdateNoteID" /></Step>
-    <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA["==\"" & Get ( AccountName ) & "\""]]></Calculation><Field table="PendingEdits" id="0" name="CreatedBy" /></Step>
-    <Step enable="True" id="28" name="Perform Find"><Restore state="False" /></Step>
-    <Step enable="True" id="68" name="If"><Calculation><![CDATA[Get ( FoundCount ) > 0]]></Calculation></Step>
-    <Step enable="True" id="10" name="Delete All Records"><NoInteract state="True" /></Step>
-    <Step enable="True" id="70" name="End If" />
-    <Step enable="True" id="55" name="Enter Browse Mode"><Pause state="False" /></Step>
     <Step enable="True" id="7" name="New Record/Request" />
     <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA["delete"]]></Calculation><Field table="PendingEdits" id="0" name="Kind" /></Step>
     <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA[$noteID]]></Calculation><Field table="PendingEdits" id="0" name="NoteID" /></Step>
@@ -112,6 +103,14 @@
     <Step enable="True" id="6" name="Go to Layout"><LayoutDestination value="SelectedLayout" /><Layout id="0" name="Scribble_Edit" /></Step>
     <Step enable="True" id="87" name="Show Custom Dialog"><DisableStepCollapsed state="False" /><Title><Calculation><![CDATA["Scribble"]]></Calculation></Title><Message><Calculation><![CDATA["Could not save the edit (FileMaker error " & $error & ")."]]></Calculation></Message><Buttons><Button CommitState="True"><Calculation><![CDATA["OK"]]></Calculation></Button><Button CommitState="False" /><Button CommitState="False" /></Buttons><InputFields><InputField UsePasswordCharacter="False"><Field table="" id="0" name="" /></InputField><InputField UsePasswordCharacter="False"><Field table="" id="0" name="" /></InputField><InputField UsePasswordCharacter="False"><Field table="" id="0" name="" /></InputField></InputFields></Step>
     <Step enable="True" id="103" name="Exit Script" />
+    <Step enable="True" id="70" name="End If" />
+    <Step enable="True" id="89" name="# (comment)"><Text>The delete replaces your waiting update of this note. Removed only now, so a failed save above loses nothing.</Text></Step>
+    <Step enable="True" id="22" name="Enter Find Mode"><Pause state="False" /><Restore state="False" /></Step>
+    <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA[$noteID]]></Calculation><Field table="PendingEdits" id="0" name="WaitingUpdateNoteID" /></Step>
+    <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA["==\"" & Get ( AccountName ) & "\""]]></Calculation><Field table="PendingEdits" id="0" name="CreatedBy" /></Step>
+    <Step enable="True" id="28" name="Perform Find"><Restore state="False" /></Step>
+    <Step enable="True" id="68" name="If"><Calculation><![CDATA[Get ( FoundCount ) > 0]]></Calculation></Step>
+    <Step enable="True" id="10" name="Delete All Records"><NoInteract state="True" /></Step>
     <Step enable="True" id="70" name="End If" />
     <Step enable="True" id="1" name="Perform Script"><Calculation><![CDATA[]]></Calculation><Script id="0" name="Scribble UI Show List" /></Step>
   </Script>

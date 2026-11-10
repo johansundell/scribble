@@ -41,7 +41,7 @@ Let ( [
 				a ≤ lineLength and Position ( whitespace ; Middle ( line ; a ; 1 ) ; 1 ; 1 ) > 0 ;
 				[ a = a + 1 ] ; a ) ;
 			first = While ( [ b = first ] ;
-				b ≤ lineLength and Middle ( line ; b ; 1 ) = "#" ;
+				b ≤ lineLength and Exact ( Middle ( line ; b ; 1 ) ; "#" ) ;
 				[ b = b + 1 ] ; b ) ;
 			first = While ( [ c = first ] ;
 				c ≤ lineLength and Position ( whitespace ; Middle ( line ; c ; 1 ) ; 1 ; 1 ) > 0 ;

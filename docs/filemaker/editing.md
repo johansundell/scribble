@@ -71,7 +71,7 @@ Allow no creation or deletion of records through any of them.
    | `Scribble UI New` | "New note" on the list. Clears the editor. |
    | `Scribble UI Open` | "Open" in a list row. Copies `Body`, `NoteID` and `Revision` into the editor. If you have a waiting update of that note, it loads that text instead, so you continue from your own unsynced text. |
    | `Scribble UI Save` | "Save" on the edit layout. See below. |
-   | `Scribble UI Delete` | "Delete" on the edit layout. Asks `Delete "X"? This cannot be undone.`, removes your waiting update of the note, and queues a `delete` row with `NoteID` and `BaseRevision`. |
+   | `Scribble UI Delete` | "Delete" on the edit layout. Asks `Delete "X"? This cannot be undone.`, queues a `delete` row with `NoteID` and `BaseRevision`, then removes your waiting update of the note. The update is removed only after the `delete` row is saved, so a failed save loses nothing. |
    | `Scribble UI Show Problems` | "Sync problems" on the list. Your `conflict` and `rejected` rows, oldest first. |
    | `Scribble UI Copy Text` | "Copy text" in a problems row. Puts the row's `Body` on the clipboard. |
    | `Scribble UI Dismiss` | "Dismiss" in a problems row. Deletes the row. |
@@ -88,7 +88,7 @@ Allow no creation or deletion of records through any of them.
 - **Existing note:** if you already have a waiting `update` row for it, Save replaces that row's `Body` and leaves its `BaseRevision` alone. Otherwise it adds an `update` row with `NoteID`, `Body` and `BaseRevision`. Folding repeated saves into one row means a second save never conflicts with the first.
 - Then it goes back to the list and says "Saved. It will appear in Scribble within a minute."
 
-Waiting rows are per user: Save and Delete only change rows you created. If two people edit the same note before a sync, the first edit is applied and the second becomes a conflict, which keeps its text in the note's history.
+Waiting rows are per user: Open, Save and Delete only use rows you created, and **Sync problems** shows only your own rows, because you can only dismiss your own. If two people edit the same note before a sync, the first edit is applied and the second becomes a conflict, which keeps its text in the note's history.
 
 ## 5. Layouts
 
@@ -104,7 +104,7 @@ Build these by hand. The names must match, because the scripts go to them.
   GetAsNumber ( ExecuteSQL ( "SELECT COUNT(*) FROM \"PendingEdits\" WHERE \"Status\" IN ('conflict', 'rejected') AND \"CreatedBy\" = ?" ; "" ; "" ; Get ( AccountName ) ) ) < 1
   ```
 
-- Also in the header, a portal on `Scribble_WaitingCreates` showing `Scribble_WaitingCreates::DisplayTitle`, with the portal filter `IsEmpty ( Scribble_WaitingCreates::Status ) and Scribble_WaitingCreates::Kind = "create"`. It lists new notes until the sync has created them, under a label such as "New notes waiting for sync".
+- Also in the header, a portal on `Scribble_WaitingCreates` showing `Scribble_WaitingCreates::DisplayTitle`, with the portal filter `IsEmpty ( Scribble_WaitingCreates::Status ) and Scribble_WaitingCreates::Kind = "create"`. It lists new notes until the sync has created them, under a label such as "New notes waiting for sync". Like any header object on a list, it shows nothing while the found set is empty, for example before the first note exists.
 - Quick Find: turn it on in **Layout Setup**, and include only `Title` and `Body`. Set the fields on the layout to not be enterable in Browse mode.
 - An **OnLayoutEnter** trigger is not needed; open the list with `Scribble UI Show List` so the found set is live notes, sorted.
 

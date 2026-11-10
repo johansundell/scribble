@@ -92,15 +92,6 @@ If [ Get ( LastMessageChoice ) ≠ 1 ]
     Exit Script [ ]
 End If
 Go to Layout [ "Scribble_PendingEdits" ]
-# Remove your waiting update of this note first; the delete replaces it.
-Enter Find Mode [ Pause: Off ]
-Set Field [ PendingEdits::WaitingUpdateNoteID ; $noteID ]
-Set Field [ PendingEdits::CreatedBy ; "==\"" & Get ( AccountName ) & "\"" ]
-Perform Find [ ]
-If [ Get ( FoundCount ) > 0 ]
-    Delete All Records [ With dialog: Off ]
-End If
-Enter Browse Mode [ Pause: Off ]
 New Record/Request
 Set Field [ PendingEdits::Kind ; "delete" ]
 Set Field [ PendingEdits::NoteID ; $noteID ]
@@ -112,6 +103,14 @@ If [ $error ≠ 0 ]
     Go to Layout [ "Scribble_Edit" ]
     Show Custom Dialog [ "Scribble" ; "Could not save the edit (FileMaker error " & $error & ")." ; Buttons: "OK" ]
     Exit Script [ ]
+End If
+# The delete replaces your waiting update of this note. Removed only now, so a failed save above loses nothing.
+Enter Find Mode [ Pause: Off ]
+Set Field [ PendingEdits::WaitingUpdateNoteID ; $noteID ]
+Set Field [ PendingEdits::CreatedBy ; "==\"" & Get ( AccountName ) & "\"" ]
+Perform Find [ ]
+If [ Get ( FoundCount ) > 0 ]
+    Delete All Records [ With dialog: Off ]
 End If
 Perform Script [ "Scribble UI Show List" ]
 
