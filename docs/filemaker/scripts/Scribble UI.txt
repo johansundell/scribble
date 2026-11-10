@@ -1,0 +1,149 @@
+Generated together with the XML next to this file. Paste the XML; this text is for reading.
+
+=== Scribble UI Show List ===
+# The live notes, newest first. Run by "Back" buttons and after a save or delete; also a good start-up script.
+Set Error Capture [ On ]
+Commit Records/Requests [ With dialog: Off ]
+Go to Layout [ "Scribble_List" ]
+Enter Find Mode [ Pause: Off ]
+Set Field [ Notes::Deleted ; 0 ]
+Perform Find [ ]
+Sort Records by Field [ Descending ; Notes::UpdatedAt ]
+
+=== Scribble UI New ===
+# "New note" button on Scribble_List: an empty editor.
+Commit Records/Requests [ With dialog: Off ]
+Go to Layout [ "Scribble_Edit" ]
+Set Field [ ScribbleUI::gNoteID ; "" ]
+Set Field [ ScribbleUI::gBaseRevision ; "" ]
+Set Field [ ScribbleUI::gBody ; "" ]
+Go to Field [ ScribbleUI::gBody ]
+
+=== Scribble UI Open ===
+# "Open" button in the Scribble_List row: copy the note into the editor's global fields.
+If [ IsEmpty ( Notes::NoteID ) ]
+    Exit Script [ ]
+End If
+Set Variable [ $noteID ; Value: Notes::NoteID ]
+Set Variable [ $revision ; Value: Notes::Revision ]
+Set Variable [ $body ; Value: Notes::Body ]
+Go to Layout [ "Scribble_Edit" ]
+Set Field [ ScribbleUI::gNoteID ; $noteID ]
+Set Field [ ScribbleUI::gBaseRevision ; $revision ]
+# If you already have an unsynced edit of this note, continue from its text.
+Set Field [ ScribbleUI::gBody ; If ( IsEmpty ( Scribble_MyWaitingUpdate::ID ) ; $body ; Scribble_MyWaitingUpdate::Body ) ]
+Go to Field [ ScribbleUI::gBody ]
+
+=== Scribble UI Save ===
+# "Save" button on Scribble_Edit. Queues the edit in PendingEdits; never writes to Notes.
+Set Error Capture [ On ]
+Commit Records/Requests [ With dialog: Off ]
+Set Variable [ $body ; Value: ScribbleUI::gBody ]
+Set Variable [ $noteID ; Value: ScribbleUI::gNoteID ]
+Set Variable [ $baseRevision ; Value: ScribbleUI::gBaseRevision ]
+If [ IsEmpty ( Scribble_TitleOf ( $body ) ) ]
+    Show Custom Dialog [ "Scribble" ; "Type a title on the first line." ; Buttons: "OK" ]
+    Go to Field [ ScribbleUI::gBody ]
+    Exit Script [ ]
+End If
+If [ not IsEmpty ( $noteID ) and not IsEmpty ( Scribble_MyWaitingUpdate::ID ) ]
+    # Fold the save into your waiting update and keep its BaseRevision, so a second save never conflicts with the first.
+    Set Field [ Scribble_MyWaitingUpdate::Body ; $body ]
+    Commit Records/Requests [ With dialog: Off ]
+    Set Variable [ $error ; Value: Get ( LastError ) ]
+    If [ $error ≠ 0 ]
+        Revert Record/Request [ With dialog: Off ]
+        Go to Layout [ "Scribble_Edit" ]
+        Show Custom Dialog [ "Scribble" ; "Could not save the edit (FileMaker error " & $error & ")." ; Buttons: "OK" ]
+        Exit Script [ ]
+    End If
+Else
+    Go to Layout [ "Scribble_PendingEdits" ]
+    New Record/Request
+    Set Field [ PendingEdits::Kind ; If ( IsEmpty ( $noteID ) ; "create" ; "update" ) ]
+    Set Field [ PendingEdits::NoteID ; $noteID ]
+    Set Field [ PendingEdits::BaseRevision ; If ( IsEmpty ( $noteID ) ; "" ; $baseRevision ) ]
+    Set Field [ PendingEdits::Body ; $body ]
+    Commit Records/Requests [ With dialog: Off ]
+    Set Variable [ $error ; Value: Get ( LastError ) ]
+    If [ $error ≠ 0 ]
+        Revert Record/Request [ With dialog: Off ]
+        Go to Layout [ "Scribble_Edit" ]
+        Show Custom Dialog [ "Scribble" ; "Could not save the edit (FileMaker error " & $error & ")." ; Buttons: "OK" ]
+        Exit Script [ ]
+    End If
+End If
+Perform Script [ "Scribble UI Show List" ]
+Show Custom Dialog [ "Scribble" ; "Saved. It will appear in Scribble within a minute." ; Buttons: "OK" ]
+
+=== Scribble UI Delete ===
+# "Delete" button on Scribble_Edit. Queues a delete in PendingEdits.
+Set Error Capture [ On ]
+Commit Records/Requests [ With dialog: Off ]
+Set Variable [ $noteID ; Value: ScribbleUI::gNoteID ]
+Set Variable [ $baseRevision ; Value: ScribbleUI::gBaseRevision ]
+If [ IsEmpty ( $noteID ) ]
+    # A new note that was never saved: nothing to delete.
+    Perform Script [ "Scribble UI Show List" ]
+    Exit Script [ ]
+End If
+Show Custom Dialog [ "Delete note" ; "Delete \"" & Scribble_EditNote::Title & "\"? This cannot be undone." ; Buttons: "Delete", "Cancel" ]
+If [ Get ( LastMessageChoice ) ≠ 1 ]
+    Exit Script [ ]
+End If
+Go to Layout [ "Scribble_PendingEdits" ]
+# Remove your waiting update of this note first; the delete replaces it.
+Enter Find Mode [ Pause: Off ]
+Set Field [ PendingEdits::WaitingUpdateNoteID ; $noteID ]
+Set Field [ PendingEdits::CreatedBy ; "==\"" & Get ( AccountName ) & "\"" ]
+Perform Find [ ]
+If [ Get ( FoundCount ) > 0 ]
+    Delete All Records [ With dialog: Off ]
+End If
+Enter Browse Mode [ Pause: Off ]
+New Record/Request
+Set Field [ PendingEdits::Kind ; "delete" ]
+Set Field [ PendingEdits::NoteID ; $noteID ]
+Set Field [ PendingEdits::BaseRevision ; $baseRevision ]
+Commit Records/Requests [ With dialog: Off ]
+Set Variable [ $error ; Value: Get ( LastError ) ]
+If [ $error ≠ 0 ]
+    Revert Record/Request [ With dialog: Off ]
+    Go to Layout [ "Scribble_Edit" ]
+    Show Custom Dialog [ "Scribble" ; "Could not save the edit (FileMaker error " & $error & ")." ; Buttons: "OK" ]
+    Exit Script [ ]
+End If
+Perform Script [ "Scribble UI Show List" ]
+
+=== Scribble UI Show Problems ===
+# "Sync problems" button on Scribble_List: your conflict and rejected rows.
+Set Error Capture [ On ]
+Commit Records/Requests [ With dialog: Off ]
+Go to Layout [ "Scribble_Problems" ]
+Enter Find Mode [ Pause: Off ]
+Set Field [ PendingEdits::Status ; "==conflict" ]
+Set Field [ PendingEdits::CreatedBy ; "==\"" & Get ( AccountName ) & "\"" ]
+New Record/Request
+Set Field [ PendingEdits::Status ; "==rejected" ]
+Set Field [ PendingEdits::CreatedBy ; "==\"" & Get ( AccountName ) & "\"" ]
+Perform Find [ ]
+If [ Get ( FoundCount ) = 0 ]
+    Perform Script [ "Scribble UI Show List" ]
+    Exit Script [ ]
+End If
+Sort Records by Field [ Ascending ; PendingEdits::ID ]
+
+=== Scribble UI Copy Text ===
+# "Copy text" button in the Scribble_Problems row. PendingEdits::Body must be on the layout and enterable in Browse mode.
+Go to Field [ PendingEdits::Body ]
+Copy [ Select entire contents ]
+Commit Records/Requests [ With dialog: Off ]
+Show Custom Dialog [ "Scribble" ; "The text is on the clipboard." ; Buttons: "OK" ]
+
+=== Scribble UI Dismiss ===
+# "Dismiss" button in the Scribble_Problems row: deletes the row.
+Set Error Capture [ On ]
+Delete Record/Request [ With dialog: Off ]
+If [ Get ( FoundCount ) = 0 ]
+    Perform Script [ "Scribble UI Show List" ]
+End If

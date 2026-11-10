@@ -507,6 +507,8 @@ The server can keep a copy of the notes in a FileMaker file, so people can brows
 
 Turn it on with `NOTES_REPLICA=filemaker`, `STORAGE=sqlite` and the `FMS_HOST`, `FMS_DATABASE`, `FMS_USERNAME` and `FMS_PASSWORD` settings. `FMS_NOTES_TABLE`, `FMS_PENDING_TABLE`, `FMS_INFO_TABLE` and `NOTES_REPLICA_INTERVAL` change the defaults ([settings](docs/service-template.md#configuration)). A FileMaker developer creates the tables once from [docs/filemaker/notes.md](docs/filemaker/notes.md). If the setup is missing or wrong, the server logs an error and runs without the replica. `/healthz` shows the replica's state, and `scribble-server replica resync` pushes every note again after the FileMaker file was replaced.
 
+To browse and edit the notes inside FileMaker, add the layouts, scripts and privilege set from [docs/filemaker/editing.md](docs/filemaker/editing.md) (#67). Edits made there go to `PendingEdits`, never straight to `Notes`, and show up in the apps after the next sync.
+
 ## Layout
 
 ```
@@ -514,7 +516,7 @@ main.go, service.go, config.go   service lifecycle (from the template)
 router/, handlers/, store/       routes, handlers, storage (notes: handlers/notes.go, store/notes.go)
 auth/                            the web app's TOTP login, session cookie and guessing limits
 replica/                         the FileMaker replica's sync (push, pull, conflicts)
-docs/filemaker/                  the FileMaker tables for the replica
+docs/filemaker/                  the FileMaker tables for the replica, and the layouts and scripts for editing in FileMaker
 tmpl/, assets/                   page templates (web app: app.html), CSS and scripts
 notes/                           Note type, [[link]] and #project helpers (no server deps)
 client/                          Go API client

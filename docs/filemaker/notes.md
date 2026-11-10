@@ -12,7 +12,7 @@ The service never creates FileMaker tables or fields. A FileMaker developer sets
 
 ## `Notes`
 
-A copy of SQLite's notes, deleted notes (tombstones) included. **Only the sync writes to it.** FileMaker users edit notes through `PendingEdits` (#67). Table name: `FMS_NOTES_TABLE`, default `Notes`.
+A copy of SQLite's notes, deleted notes (tombstones) included. **Only the sync writes to it.** FileMaker users edit notes through `PendingEdits`; [editing.md](editing.md) sets up the layouts and scripts (#67). Table name: `FMS_NOTES_TABLE`, default `Notes`.
 
 | Field | Type | Options | Purpose |
 |---|---|---|---|
@@ -69,7 +69,7 @@ The account in `FMS_USERNAME` needs:
 - the `fmodata` extended privilege;
 - **create, edit, view and delete** on `Notes` and `PendingEdits`, and edit on `ScribbleInfo` (the service only reads it).
 
-#67 adds a privilege set for FileMaker users that makes the three tables view-only, except for adding rows to `PendingEdits`, so edits can't skip the history.
+FileMaker users get their own privilege set, in [editing.md](editing.md) (#67): `Notes` and `ScribbleInfo` are view only, and in `PendingEdits` they can add rows and change only their own, so edits can't skip the history.
 
 ## Replacing or emptying the FileMaker file
 

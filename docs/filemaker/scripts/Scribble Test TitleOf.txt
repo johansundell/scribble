@@ -1,0 +1,18 @@
+Generated together with the XML next to this file. Paste the XML; this text is for reading.
+
+=== Scribble Test TitleOf ===
+# Checks Scribble_TitleOf against docs/filemaker/titleof-cases.json. When that file changes, paste it into the Insert Text step (a Go test checks this copy).
+Insert Text [ Target: $cases ; <the contents of docs/filemaker/titleof-cases.json> ]
+Set Variable [ $count ; Value: ValueCount ( JSONListKeys ( $cases ; "" ) ) ]
+Set Variable [ $i ; Value: 0 ]
+Set Variable [ $failures ; Value: "" ]
+Loop [ Flush: Always ]
+    Exit Loop If [ $i ≥ $count ]
+    Set Variable [ $case ; Value: JSONGetElement ( $cases ; "[" & $i & "]" ) ]
+    Set Variable [ $got ; Value: Scribble_TitleOf ( JSONGetElement ( $case ; "body" ) ) ]
+    If [ not Exact ( $got ; JSONGetElement ( $case ; "title" ) ) ]
+        Set Variable [ $failures ; Value: List ( $failures ; JSONGetElement ( $case ; "name" ) & ": got \"" & $got & "\"" ) ]
+    End If
+    Set Variable [ $i ; Value: $i + 1 ]
+End Loop
+Show Custom Dialog [ "Scribble_TitleOf" ; If ( IsEmpty ( $failures ) ; "All " & $count & " cases pass." ; "Failed:¶" & $failures ) ; Buttons: "OK" ]
