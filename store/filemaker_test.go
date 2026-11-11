@@ -281,6 +281,7 @@ func TestFileMaker_LogRequestsClassifiesErrors(t *testing.T) {
 		{http.StatusRequestTimeout, false},
 		{http.StatusTooManyRequests, false},
 		{http.StatusInternalServerError, false},
+		{http.StatusNotImplemented, true},
 		{http.StatusServiceUnavailable, false},
 	}
 	for _, tc := range cases {

@@ -59,15 +59,16 @@ func (c *Client) batchCreateBody(tableName string, records []map[string]interfac
 	createURL := fmt.Sprintf("%s/%s", c.baseURL, tableName)
 
 	var changeset bytes.Buffer
-	for i, record := range records {
+	for _, record := range records {
 		payload, err := json.Marshal(record)
 		if err != nil {
 			return nil, "", err
 		}
 		fmt.Fprintf(&changeset, "--%s\r\n", changesetBoundary)
 		changeset.WriteString("Content-Type: application/http\r\n")
-		changeset.WriteString("Content-Transfer-Encoding: binary\r\n")
-		fmt.Fprintf(&changeset, "Content-ID: %d\r\n\r\n", i+1)
+		// No Content-ID: nothing refers to it, and some FileMaker Servers
+		// reject a multi-part change set that carries one with 501 (#116).
+		changeset.WriteString("Content-Transfer-Encoding: binary\r\n\r\n")
 		fmt.Fprintf(&changeset, "POST %s HTTP/1.1\r\n", createURL)
 		changeset.WriteString("Content-Type: application/json\r\n")
 		changeset.WriteString("Prefer: return=minimal\r\n")
