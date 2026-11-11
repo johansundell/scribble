@@ -1,0 +1,20 @@
+[
+  {"name": "plain first line", "body": "Groceries\nmilk", "title": "Groceries"},
+  {"name": "heading", "body": "# Groceries\nmilk", "title": "Groceries"},
+  {"name": "deep heading with closing marks", "body": "### Plan ###", "title": "Plan ###"},
+  {"name": "blank lines before the title", "body": "\n\n  \nTitle\n", "title": "Title"},
+  {"name": "surrounding spaces", "body": "   Spaced title   \nx", "title": "Spaced title"},
+  {"name": "tabs", "body": "\t# \tTabbed\t\nx", "title": "Tabbed"},
+  {"name": "no-break spaces", "body": " Title ", "title": "Title"},
+  {"name": "ideographic space", "body": "　Title", "title": "Title"},
+  {"name": "line of only marks is skipped", "body": "###\n# \nReal", "title": "Real"},
+  {"name": "mark inside the text is kept", "body": "C# notes", "title": "C# notes"},
+  {"name": "mark after a space is kept", "body": "# #Ideas", "title": "#Ideas"},
+  {"name": "CRLF", "body": "Title\r\nbody", "title": "Title"},
+  {"name": "CRLF with blank lines first", "body": "\r\n  \r\nTitle\r\n", "title": "Title"},
+  {"name": "code fence first", "body": "```go\nx", "title": "```go"},
+  {"name": "non-ASCII", "body": "## Åsa’s anteckningar 📝\nx", "title": "Åsa’s anteckningar 📝"},
+  {"name": "empty", "body": "", "title": ""},
+  {"name": "only whitespace", "body": "  \n\t\n", "title": ""},
+  {"name": "only marks", "body": "#\n##", "title": ""}
+]

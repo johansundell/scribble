@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<fmxmlsnippet type="FMObjectList">
+  <Script includeInMenu="False" SiriShortcutVisible="False" runFullAccess="False" id="0" name="Scribble UI Show List">
+    <Step enable="True" id="89" name="# (comment)"><Text>The live notes, newest first. Run by "Back" buttons and after a save or delete; also a good start-up script.</Text></Step>
+    <Step enable="True" id="86" name="Set Error Capture"><Set state="True" /></Step>
+    <Step enable="True" id="75" name="Commit Records/Requests"><NoInteract state="True" /><Option state="False" /><ESSForceCommit state="False" /></Step>
+    <Step enable="True" id="6" name="Go to Layout"><LayoutDestination value="SelectedLayout" /><Layout id="0" name="Scribble_List" /></Step>
+    <Step enable="True" id="22" name="Enter Find Mode"><Pause state="False" /><Restore state="False" /></Step>
+    <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA[0]]></Calculation><Field table="Notes" id="0" name="Deleted" /></Step>
+    <Step enable="True" id="28" name="Perform Find"><Restore state="False" /></Step>
+    <Step enable="True" id="154" name="Sort Records by Field"><SortRecordsByField value="SortDescending" /><Field table="Notes" id="0" name="UpdatedAt" /></Step>
+  </Script>
+  <Script includeInMenu="False" SiriShortcutVisible="False" runFullAccess="False" id="0" name="Scribble UI New">
+    <Step enable="True" id="89" name="# (comment)"><Text>"New note" button on Scribble_List: an empty editor.</Text></Step>
+    <Step enable="True" id="75" name="Commit Records/Requests"><NoInteract state="True" /><Option state="False" /><ESSForceCommit state="False" /></Step>
+    <Step enable="True" id="6" name="Go to Layout"><LayoutDestination value="SelectedLayout" /><Layout id="0" name="Scribble_Edit" /></Step>
+    <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA[""]]></Calculation><Field table="ScribbleUI" id="0" name="gNoteID" /></Step>
+    <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA[""]]></Calculation><Field table="ScribbleUI" id="0" name="gBaseRevision" /></Step>
+    <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA[""]]></Calculation><Field table="ScribbleUI" id="0" name="gBody" /></Step>
+    <Step enable="True" id="17" name="Go to Field"><SelectAll state="False" /><Field table="ScribbleUI" id="0" name="gBody" /></Step>
+  </Script>
+  <Script includeInMenu="False" SiriShortcutVisible="False" runFullAccess="False" id="0" name="Scribble UI Open">
+    <Step enable="True" id="89" name="# (comment)"><Text>"Open" button in the Scribble_List row: copy the note into the editor's global fields.</Text></Step>
+    <Step enable="True" id="68" name="If"><Calculation><![CDATA[IsEmpty ( Notes::NoteID )]]></Calculation></Step>
+    <Step enable="True" id="103" name="Exit Script" />
+    <Step enable="True" id="70" name="End If" />
+    <Step enable="True" id="141" name="Set Variable"><Value><Calculation><![CDATA[Notes::NoteID]]></Calculation></Value><Repetition><Calculation><![CDATA[1]]></Calculation></Repetition><Name>$noteID</Name></Step>
+    <Step enable="True" id="141" name="Set Variable"><Value><Calculation><![CDATA[Notes::Revision]]></Calculation></Value><Repetition><Calculation><![CDATA[1]]></Calculation></Repetition><Name>$revision</Name></Step>
+    <Step enable="True" id="141" name="Set Variable"><Value><Calculation><![CDATA[Notes::Body]]></Calculation></Value><Repetition><Calculation><![CDATA[1]]></Calculation></Repetition><Name>$body</Name></Step>
+    <Step enable="True" id="6" name="Go to Layout"><LayoutDestination value="SelectedLayout" /><Layout id="0" name="Scribble_Edit" /></Step>
+    <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA[$noteID]]></Calculation><Field table="ScribbleUI" id="0" name="gNoteID" /></Step>
+    <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA[$revision]]></Calculation><Field table="ScribbleUI" id="0" name="gBaseRevision" /></Step>
+    <Step enable="True" id="89" name="# (comment)"><Text>If you already have an unsynced edit of this note, continue from its text.</Text></Step>
+    <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA[If ( IsEmpty ( Scribble_MyWaitingUpdate::ID ) ; $body ; Scribble_MyWaitingUpdate::Body )]]></Calculation><Field table="ScribbleUI" id="0" name="gBody" /></Step>
+    <Step enable="True" id="17" name="Go to Field"><SelectAll state="False" /><Field table="ScribbleUI" id="0" name="gBody" /></Step>
+  </Script>
+  <Script includeInMenu="False" SiriShortcutVisible="False" runFullAccess="False" id="0" name="Scribble UI Save">
+    <Step enable="True" id="89" name="# (comment)"><Text>"Save" button on Scribble_Edit. Queues the edit in PendingEdits; never writes to Notes.</Text></Step>
+    <Step enable="True" id="86" name="Set Error Capture"><Set state="True" /></Step>
+    <Step enable="True" id="75" name="Commit Records/Requests"><NoInteract state="True" /><Option state="False" /><ESSForceCommit state="False" /></Step>
+    <Step enable="True" id="141" name="Set Variable"><Value><Calculation><![CDATA[ScribbleUI::gBody]]></Calculation></Value><Repetition><Calculation><![CDATA[1]]></Calculation></Repetition><Name>$body</Name></Step>
+    <Step enable="True" id="141" name="Set Variable"><Value><Calculation><![CDATA[ScribbleUI::gNoteID]]></Calculation></Value><Repetition><Calculation><![CDATA[1]]></Calculation></Repetition><Name>$noteID</Name></Step>
+    <Step enable="True" id="141" name="Set Variable"><Value><Calculation><![CDATA[ScribbleUI::gBaseRevision]]></Calculation></Value><Repetition><Calculation><![CDATA[1]]></Calculation></Repetition><Name>$baseRevision</Name></Step>
+    <Step enable="True" id="68" name="If"><Calculation><![CDATA[IsEmpty ( Scribble_TitleOf ( $body ) )]]></Calculation></Step>
+    <Step enable="True" id="87" name="Show Custom Dialog"><DisableStepCollapsed state="False" /><Title><Calculation><![CDATA["Scribble"]]></Calculation></Title><Message><Calculation><![CDATA["Type a title on the first line."]]></Calculation></Message><Buttons><Button CommitState="True"><Calculation><![CDATA["OK"]]></Calculation></Button><Button CommitState="False" /><Button CommitState="False" /></Buttons><InputFields><InputField UsePasswordCharacter="False"><Field table="" id="0" name="" /></InputField><InputField UsePasswordCharacter="False"><Field table="" id="0" name="" /></InputField><InputField UsePasswordCharacter="False"><Field table="" id="0" name="" /></InputField></InputFields></Step>
+    <Step enable="True" id="17" name="Go to Field"><SelectAll state="False" /><Field table="ScribbleUI" id="0" name="gBody" /></Step>
+    <Step enable="True" id="103" name="Exit Script" />
+    <Step enable="True" id="70" name="End If" />
+    <Step enable="True" id="68" name="If"><Calculation><![CDATA[not IsEmpty ( $noteID ) and not IsEmpty ( Scribble_MyWaitingUpdate::ID )]]></Calculation></Step>
+    <Step enable="True" id="89" name="# (comment)"><Text>Fold the save into your waiting update and keep its BaseRevision, so a second save never conflicts with the first.</Text></Step>
+    <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA[$body]]></Calculation><Field table="Scribble_MyWaitingUpdate" id="0" name="Body" /></Step>
+    <Step enable="True" id="75" name="Commit Records/Requests"><NoInteract state="True" /><Option state="False" /><ESSForceCommit state="False" /></Step>
+    <Step enable="True" id="141" name="Set Variable"><Value><Calculation><![CDATA[Get ( LastError )]]></Calculation></Value><Repetition><Calculation><![CDATA[1]]></Calculation></Repetition><Name>$error</Name></Step>
+    <Step enable="True" id="68" name="If"><Calculation><![CDATA[$error ≠ 0]]></Calculation></Step>
+    <Step enable="True" id="51" name="Revert Record/Request"><NoInteract state="True" /></Step>
+    <Step enable="True" id="6" name="Go to Layout"><LayoutDestination value="SelectedLayout" /><Layout id="0" name="Scribble_Edit" /></Step>
+    <Step enable="True" id="87" name="Show Custom Dialog"><DisableStepCollapsed state="False" /><Title><Calculation><![CDATA["Scribble"]]></Calculation></Title><Message><Calculation><![CDATA["Could not save the edit (FileMaker error " & $error & ")."]]></Calculation></Message><Buttons><Button CommitState="True"><Calculation><![CDATA["OK"]]></Calculation></Button><Button CommitState="False" /><Button CommitState="False" /></Buttons><InputFields><InputField UsePasswordCharacter="False"><Field table="" id="0" name="" /></InputField><InputField UsePasswordCharacter="False"><Field table="" id="0" name="" /></InputField><InputField UsePasswordCharacter="False"><Field table="" id="0" name="" /></InputField></InputFields></Step>
+    <Step enable="True" id="103" name="Exit Script" />
+    <Step enable="True" id="70" name="End If" />
+    <Step enable="True" id="69" name="Else"></Step>
+    <Step enable="True" id="6" name="Go to Layout"><LayoutDestination value="SelectedLayout" /><Layout id="0" name="Scribble_PendingEdits" /></Step>
+    <Step enable="True" id="7" name="New Record/Request" />
+    <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA[If ( IsEmpty ( $noteID ) ; "create" ; "update" )]]></Calculation><Field table="PendingEdits" id="0" name="Kind" /></Step>
+    <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA[$noteID]]></Calculation><Field table="PendingEdits" id="0" name="NoteID" /></Step>
+    <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA[If ( IsEmpty ( $noteID ) ; "" ; $baseRevision )]]></Calculation><Field table="PendingEdits" id="0" name="BaseRevision" /></Step>
+    <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA[$body]]></Calculation><Field table="PendingEdits" id="0" name="Body" /></Step>
+    <Step enable="True" id="75" name="Commit Records/Requests"><NoInteract state="True" /><Option state="False" /><ESSForceCommit state="False" /></Step>
+    <Step enable="True" id="141" name="Set Variable"><Value><Calculation><![CDATA[Get ( LastError )]]></Calculation></Value><Repetition><Calculation><![CDATA[1]]></Calculation></Repetition><Name>$error</Name></Step>
+    <Step enable="True" id="68" name="If"><Calculation><![CDATA[$error ≠ 0]]></Calculation></Step>
+    <Step enable="True" id="51" name="Revert Record/Request"><NoInteract state="True" /></Step>
+    <Step enable="True" id="6" name="Go to Layout"><LayoutDestination value="SelectedLayout" /><Layout id="0" name="Scribble_Edit" /></Step>
+    <Step enable="True" id="87" name="Show Custom Dialog"><DisableStepCollapsed state="False" /><Title><Calculation><![CDATA["Scribble"]]></Calculation></Title><Message><Calculation><![CDATA["Could not save the edit (FileMaker error " & $error & ")."]]></Calculation></Message><Buttons><Button CommitState="True"><Calculation><![CDATA["OK"]]></Calculation></Button><Button CommitState="False" /><Button CommitState="False" /></Buttons><InputFields><InputField UsePasswordCharacter="False"><Field table="" id="0" name="" /></InputField><InputField UsePasswordCharacter="False"><Field table="" id="0" name="" /></InputField><InputField UsePasswordCharacter="False"><Field table="" id="0" name="" /></InputField></InputFields></Step>
+    <Step enable="True" id="103" name="Exit Script" />
+    <Step enable="True" id="70" name="End If" />
+    <Step enable="True" id="70" name="End If" />
+    <Step enable="True" id="1" name="Perform Script"><Calculation><![CDATA[]]></Calculation><Script id="0" name="Scribble UI Show List" /></Step>
+    <Step enable="True" id="87" name="Show Custom Dialog"><DisableStepCollapsed state="False" /><Title><Calculation><![CDATA["Scribble"]]></Calculation></Title><Message><Calculation><![CDATA["Saved. It will appear in Scribble within a minute."]]></Calculation></Message><Buttons><Button CommitState="True"><Calculation><![CDATA["OK"]]></Calculation></Button><Button CommitState="False" /><Button CommitState="False" /></Buttons><InputFields><InputField UsePasswordCharacter="False"><Field table="" id="0" name="" /></InputField><InputField UsePasswordCharacter="False"><Field table="" id="0" name="" /></InputField><InputField UsePasswordCharacter="False"><Field table="" id="0" name="" /></InputField></InputFields></Step>
+  </Script>
+  <Script includeInMenu="False" SiriShortcutVisible="False" runFullAccess="False" id="0" name="Scribble UI Delete">
+    <Step enable="True" id="89" name="# (comment)"><Text>"Delete" button on Scribble_Edit. Queues a delete in PendingEdits.</Text></Step>
+    <Step enable="True" id="86" name="Set Error Capture"><Set state="True" /></Step>
+    <Step enable="True" id="75" name="Commit Records/Requests"><NoInteract state="True" /><Option state="False" /><ESSForceCommit state="False" /></Step>
+    <Step enable="True" id="141" name="Set Variable"><Value><Calculation><![CDATA[ScribbleUI::gNoteID]]></Calculation></Value><Repetition><Calculation><![CDATA[1]]></Calculation></Repetition><Name>$noteID</Name></Step>
+    <Step enable="True" id="141" name="Set Variable"><Value><Calculation><![CDATA[ScribbleUI::gBaseRevision]]></Calculation></Value><Repetition><Calculation><![CDATA[1]]></Calculation></Repetition><Name>$baseRevision</Name></Step>
+    <Step enable="True" id="68" name="If"><Calculation><![CDATA[IsEmpty ( $noteID )]]></Calculation></Step>
+    <Step enable="True" id="89" name="# (comment)"><Text>A new note that was never saved: nothing to delete.</Text></Step>
+    <Step enable="True" id="1" name="Perform Script"><Calculation><![CDATA[]]></Calculation><Script id="0" name="Scribble UI Show List" /></Step>
+    <Step enable="True" id="103" name="Exit Script" />
+    <Step enable="True" id="70" name="End If" />
+    <Step enable="True" id="87" name="Show Custom Dialog"><DisableStepCollapsed state="False" /><Title><Calculation><![CDATA["Delete note"]]></Calculation></Title><Message><Calculation><![CDATA["Delete \"" & Scribble_EditNote::Title & "\"? This cannot be undone."]]></Calculation></Message><Buttons><Button CommitState="True"><Calculation><![CDATA["Delete"]]></Calculation></Button><Button CommitState="False"><Calculation><![CDATA["Cancel"]]></Calculation></Button><Button CommitState="False" /></Buttons><InputFields><InputField UsePasswordCharacter="False"><Field table="" id="0" name="" /></InputField><InputField UsePasswordCharacter="False"><Field table="" id="0" name="" /></InputField><InputField UsePasswordCharacter="False"><Field table="" id="0" name="" /></InputField></InputFields></Step>
+    <Step enable="True" id="68" name="If"><Calculation><![CDATA[Get ( LastMessageChoice ) ≠ 1]]></Calculation></Step>
+    <Step enable="True" id="103" name="Exit Script" />
+    <Step enable="True" id="70" name="End If" />
+    <Step enable="True" id="6" name="Go to Layout"><LayoutDestination value="SelectedLayout" /><Layout id="0" name="Scribble_PendingEdits" /></Step>
+    <Step enable="True" id="7" name="New Record/Request" />
+    <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA["delete"]]></Calculation><Field table="PendingEdits" id="0" name="Kind" /></Step>
+    <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA[$noteID]]></Calculation><Field table="PendingEdits" id="0" name="NoteID" /></Step>
+    <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA[$baseRevision]]></Calculation><Field table="PendingEdits" id="0" name="BaseRevision" /></Step>
+    <Step enable="True" id="75" name="Commit Records/Requests"><NoInteract state="True" /><Option state="False" /><ESSForceCommit state="False" /></Step>
+    <Step enable="True" id="141" name="Set Variable"><Value><Calculation><![CDATA[Get ( LastError )]]></Calculation></Value><Repetition><Calculation><![CDATA[1]]></Calculation></Repetition><Name>$error</Name></Step>
+    <Step enable="True" id="68" name="If"><Calculation><![CDATA[$error ≠ 0]]></Calculation></Step>
+    <Step enable="True" id="51" name="Revert Record/Request"><NoInteract state="True" /></Step>
+    <Step enable="True" id="6" name="Go to Layout"><LayoutDestination value="SelectedLayout" /><Layout id="0" name="Scribble_Edit" /></Step>
+    <Step enable="True" id="87" name="Show Custom Dialog"><DisableStepCollapsed state="False" /><Title><Calculation><![CDATA["Scribble"]]></Calculation></Title><Message><Calculation><![CDATA["Could not save the edit (FileMaker error " & $error & ")."]]></Calculation></Message><Buttons><Button CommitState="True"><Calculation><![CDATA["OK"]]></Calculation></Button><Button CommitState="False" /><Button CommitState="False" /></Buttons><InputFields><InputField UsePasswordCharacter="False"><Field table="" id="0" name="" /></InputField><InputField UsePasswordCharacter="False"><Field table="" id="0" name="" /></InputField><InputField UsePasswordCharacter="False"><Field table="" id="0" name="" /></InputField></InputFields></Step>
+    <Step enable="True" id="103" name="Exit Script" />
+    <Step enable="True" id="70" name="End If" />
+    <Step enable="True" id="89" name="# (comment)"><Text>The delete replaces your waiting update of this note. Removed only now, so a failed save above loses nothing.</Text></Step>
+    <Step enable="True" id="22" name="Enter Find Mode"><Pause state="False" /><Restore state="False" /></Step>
+    <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA[$noteID]]></Calculation><Field table="PendingEdits" id="0" name="WaitingUpdateNoteID" /></Step>
+    <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA["==\"" & Get ( AccountName ) & "\""]]></Calculation><Field table="PendingEdits" id="0" name="CreatedBy" /></Step>
+    <Step enable="True" id="28" name="Perform Find"><Restore state="False" /></Step>
+    <Step enable="True" id="68" name="If"><Calculation><![CDATA[Get ( FoundCount ) > 0]]></Calculation></Step>
+    <Step enable="True" id="10" name="Delete All Records"><NoInteract state="True" /></Step>
+    <Step enable="True" id="70" name="End If" />
+    <Step enable="True" id="1" name="Perform Script"><Calculation><![CDATA[]]></Calculation><Script id="0" name="Scribble UI Show List" /></Step>
+  </Script>
+  <Script includeInMenu="False" SiriShortcutVisible="False" runFullAccess="False" id="0" name="Scribble UI Show Problems">
+    <Step enable="True" id="89" name="# (comment)"><Text>"Sync problems" button on Scribble_List: your conflict and rejected rows.</Text></Step>
+    <Step enable="True" id="86" name="Set Error Capture"><Set state="True" /></Step>
+    <Step enable="True" id="75" name="Commit Records/Requests"><NoInteract state="True" /><Option state="False" /><ESSForceCommit state="False" /></Step>
+    <Step enable="True" id="6" name="Go to Layout"><LayoutDestination value="SelectedLayout" /><Layout id="0" name="Scribble_Problems" /></Step>
+    <Step enable="True" id="22" name="Enter Find Mode"><Pause state="False" /><Restore state="False" /></Step>
+    <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA["==conflict"]]></Calculation><Field table="PendingEdits" id="0" name="Status" /></Step>
+    <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA["==\"" & Get ( AccountName ) & "\""]]></Calculation><Field table="PendingEdits" id="0" name="CreatedBy" /></Step>
+    <Step enable="True" id="7" name="New Record/Request" />
+    <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA["==rejected"]]></Calculation><Field table="PendingEdits" id="0" name="Status" /></Step>
+    <Step enable="True" id="76" name="Set Field"><Calculation><![CDATA["==\"" & Get ( AccountName ) & "\""]]></Calculation><Field table="PendingEdits" id="0" name="CreatedBy" /></Step>
+    <Step enable="True" id="28" name="Perform Find"><Restore state="False" /></Step>
+    <Step enable="True" id="68" name="If"><Calculation><![CDATA[Get ( FoundCount ) = 0]]></Calculation></Step>
+    <Step enable="True" id="1" name="Perform Script"><Calculation><![CDATA[]]></Calculation><Script id="0" name="Scribble UI Show List" /></Step>
+    <Step enable="True" id="103" name="Exit Script" />
+    <Step enable="True" id="70" name="End If" />
+    <Step enable="True" id="154" name="Sort Records by Field"><SortRecordsByField value="SortAscending" /><Field table="PendingEdits" id="0" name="ID" /></Step>
+  </Script>
+  <Script includeInMenu="False" SiriShortcutVisible="False" runFullAccess="False" id="0" name="Scribble UI Copy Text">
+    <Step enable="True" id="89" name="# (comment)"><Text>"Copy text" button in the Scribble_Problems row. PendingEdits::Body must be on the layout and enterable in Browse mode.</Text></Step>
+    <Step enable="True" id="17" name="Go to Field"><SelectAll state="False" /><Field table="PendingEdits" id="0" name="Body" /></Step>
+    <Step enable="True" id="47" name="Copy"><SelectAll state="True" /></Step>
+    <Step enable="True" id="75" name="Commit Records/Requests"><NoInteract state="True" /><Option state="False" /><ESSForceCommit state="False" /></Step>
+    <Step enable="True" id="87" name="Show Custom Dialog"><DisableStepCollapsed state="False" /><Title><Calculation><![CDATA["Scribble"]]></Calculation></Title><Message><Calculation><![CDATA["The text is on the clipboard."]]></Calculation></Message><Buttons><Button CommitState="True"><Calculation><![CDATA["OK"]]></Calculation></Button><Button CommitState="False" /><Button CommitState="False" /></Buttons><InputFields><InputField UsePasswordCharacter="False"><Field table="" id="0" name="" /></InputField><InputField UsePasswordCharacter="False"><Field table="" id="0" name="" /></InputField><InputField UsePasswordCharacter="False"><Field table="" id="0" name="" /></InputField></InputFields></Step>
+  </Script>
+  <Script includeInMenu="False" SiriShortcutVisible="False" runFullAccess="False" id="0" name="Scribble UI Dismiss">
+    <Step enable="True" id="89" name="# (comment)"><Text>"Dismiss" button in the Scribble_Problems row: deletes the row.</Text></Step>
+    <Step enable="True" id="86" name="Set Error Capture"><Set state="True" /></Step>
+    <Step enable="True" id="9" name="Delete Record/Request"><NoInteract state="True" /></Step>
+    <Step enable="True" id="68" name="If"><Calculation><![CDATA[Get ( FoundCount ) = 0]]></Calculation></Step>
+    <Step enable="True" id="1" name="Perform Script"><Calculation><![CDATA[]]></Calculation><Script id="0" name="Scribble UI Show List" /></Step>
+    <Step enable="True" id="70" name="End If" />
+  </Script>
+</fmxmlsnippet>

@@ -1,0 +1,57 @@
+/*
+Scribble_TitleOf ( body )
+
+@description
+Returns the title Scribble gives a note: the first line that is not empty
+after removing surrounding whitespace and leading # marks. It mirrors
+notes.TitleOf in the Go code, so FileMaker can refuse an empty title and
+show the titles of edits that are still waiting for the sync. The server
+decides the real title; use this only for checks and display.
+Lines may end in CR (FileMaker), LF or CRLF. "Whitespace" is the set Go's
+unicode.IsSpace uses; the Go test TestTitleOfFileMakerWhitespaceMatchesGo
+checks the list below. The cases in docs/filemaker/titleof-cases.json must
+pass; run the script "Scribble Test TitleOf" to check them in FileMaker.
+
+@param {string} body, The note's full Markdown text.
+
+@returns {string} The title, or "" when every line is empty.
+
+@history
+2026-11-10, Johan Sundell. Created (#67).
+*/
+Let ( [
+	whitespace =
+		Char ( 9 ) & Char ( 10 ) & Char ( 11 ) & Char ( 12 ) & Char ( 13 ) & Char ( 32 ) &
+		Char ( 133 ) & Char ( 160 ) & Char ( 5760 ) &
+		Char ( 8192 ) & Char ( 8193 ) & Char ( 8194 ) & Char ( 8195 ) & Char ( 8196 ) & Char ( 8197 ) &
+		Char ( 8198 ) & Char ( 8199 ) & Char ( 8200 ) & Char ( 8201 ) & Char ( 8202 ) &
+		Char ( 8232 ) & Char ( 8233 ) & Char ( 8239 ) & Char ( 8287 ) & Char ( 12288 ) ;
+	lines = Substitute ( body ; [ Char ( 13 ) & Char ( 10 ) ; ¶ ] ; [ Char ( 10 ) ; ¶ ] ) ;
+	lineCount = ValueCount ( lines )
+] ;
+	While (
+		[ i = 0 ; title = "" ] ;
+		title = "" and i < lineCount ;
+		[
+			i = i + 1 ;
+			line = GetValue ( lines ; i ) ;
+			lineLength = Length ( line ) ;
+			// Skip whitespace, then the # marks, then whitespace again.
+			first = While ( [ a = 1 ] ;
+				a ≤ lineLength and Position ( whitespace ; Middle ( line ; a ; 1 ) ; 1 ; 1 ) > 0 ;
+				[ a = a + 1 ] ; a ) ;
+			first = While ( [ b = first ] ;
+				b ≤ lineLength and Exact ( Middle ( line ; b ; 1 ) ; "#" ) ;
+				[ b = b + 1 ] ; b ) ;
+			first = While ( [ c = first ] ;
+				c ≤ lineLength and Position ( whitespace ; Middle ( line ; c ; 1 ) ; 1 ; 1 ) > 0 ;
+				[ c = c + 1 ] ; c ) ;
+			// Drop trailing whitespace.
+			last = While ( [ d = lineLength ] ;
+				d ≥ first and Position ( whitespace ; Middle ( line ; d ; 1 ) ; 1 ; 1 ) > 0 ;
+				[ d = d - 1 ] ; d ) ;
+			title = If ( last ≥ first ; Middle ( line ; first ; last - first + 1 ) ; "" )
+		] ;
+		title
+	)
+)
