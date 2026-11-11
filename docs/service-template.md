@@ -21,7 +21,7 @@ Every response carries an `X-Version` header with the build version, and an `X-S
 
 ### Protected Endpoints
 
-These endpoints require an `Authorization` header with the configured `AUTH_TOKEN` (e.g., `Authorization: Bearer <token>` or `Authorization: <token>`). A missing or wrong token gets **401**.
+These endpoints require an `Authorization` header with an OAuth2 access token from `POST /oauth/token` (see [API login](../README.md#api-login), [ADR 14](adr/0014-oauth2-api-authentication.md)) or the configured `AUTH_TOKEN`, which is deprecated (e.g., `Authorization: Bearer <token>` or `Authorization: <token>`). A missing or wrong token gets **401**.
 
 - **POST /pong**
   - Echo endpoint. Accepts a JSON **object** and returns `{"message": <input>}`. Anything else (invalid JSON, an array, an empty body) gets **400**.
@@ -179,8 +179,8 @@ The application is configured via environment variables. You can set these in a 
 | `SQLITE_PATH` | string | `<binary dir>/<nameOfService>.db` | Path to SQLite database file (`STORAGE=sqlite`). Set it when using `go run .`, whose binary dir is temporary. |
 | `BACKUP_DIR` | string | `backups` beside the database | Where `scribble-server backup` stores its `scribble_<timestamp>.db.gz` archives. The `-dir` flag overrides it. |
 | `RETENTION_DAYS` | int | `7` | After each backup, `scribble-server backup` deletes archives older than this many days. The newest archive is always kept, however old. The `-retention-days` flag overrides it. |
-| `AUTH_TOKEN` | string | random per start | Token required for protected endpoints. When unset, a temporary token is generated and logged (see [Authentication token](#authentication-token)). |
-| `WEB_TOTP_SECRET` | string | - | The base32 secret authenticator apps make the web app's 6-digit login codes from (TOTP, RFC 6238; [ADR 13](adr/0013-web-totp-authenticator-login.md)): at least 16 bytes (26 characters); case, spaces and `=` padding are ignored. Generate it with `head -c 20 /dev/urandom \| base32`. `/totp-setup` shows it as a QR code to whoever enters `AUTH_TOKEN`. **Unset means the web app is off**: its paths answer 404 and `/` redirects to `/healthz`. The JSON API never accepts a code. Replaces `WEB_PIN` (#172), which is ignored. |
+| `AUTH_TOKEN` | string | random per start | Opens `/totp-setup`, and is a static token for the protected endpoints, deprecated beside the OAuth2 login with authenticator codes (ADR 14). When unset, a temporary token is generated and logged (see [Authentication token](#authentication-token)). |
+| `WEB_TOTP_SECRET` | string | - | The base32 secret authenticator apps make the web app's 6-digit login codes from (TOTP, RFC 6238; [ADR 13](adr/0013-web-totp-authenticator-login.md)): at least 16 bytes (26 characters); case, spaces and `=` padding are ignored. Generate it with `head -c 20 /dev/urandom \| base32`. `/totp-setup` shows it as a QR code to whoever enters `AUTH_TOKEN`. **Unset means the web app is off**: its paths answer 404 and `/` redirects to `/healthz`. With `STORAGE=sqlite` the codes also log in API clients at `/oauth/token` ([ADR 14](adr/0014-oauth2-api-authentication.md)); the other JSON endpoints never accept a code. Replaces `WEB_PIN` (#172), which is ignored. |
 | `SESSION_SECRET` | string | - | The key that signs the web app's session cookie: at least 32 characters, and not equal to `AUTH_TOKEN`. Required when `WEB_TOTP_SECRET` is set. Generate it with `openssl rand -base64 33`. Changing it ends every session. |
 | `WEB_SESSION_TIMEOUT` | duration | `168h` | How long a web login lasts (7 days). The expiry is fixed at login and never extended. |
 | `WEB_LOGIN_HINT` | string | empty | Plain text shown under the login code field, such as how to log in to a demo server (#168). Empty shows nothing. |

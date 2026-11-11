@@ -32,13 +32,30 @@ go build -o sn ./cmd/sn
 
 ## Configuration
 
-Apart from `show -r` and `restore -y`, the CLI has no flags. It needs two
-settings:
+Apart from `show -r` and `restore -y`, the CLI has no flags. Log in once
+with a code from the authenticator app you set up for the web app
+([ADR 14](../../docs/adr/0014-oauth2-api-authentication.md)):
+
+```sh
+$ sn login
+Server URL [https://notes.sudde.net]: https://notes.example.com
+Authenticator code: 123456
+Logged in to https://notes.example.com; saved in ~/.scribble
+```
+
+`sn login` saves the server's address and the login's tokens in the
+[config file](#config-file), and renews them as they expire; see
+[login, logout](#login-logout). The settings are:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `SCRIBBLE_URL` | `https://notes.sudde.net` | address of the scribble server |
-| `SCRIBBLE_TOKEN` | none (required) | the server's `AUTH_TOKEN` |
+| `SCRIBBLE_TOKEN` | none (required) | the access token `sn login` saved, or a static token: the server's `AUTH_TOKEN` (deprecated) |
+| `SCRIBBLE_REFRESH_TOKEN` | none | renews the access token; only read from the config file |
+| `SCRIBBLE_TOKEN_EXPIRY` | none | when the access token expires; only read from the config file |
+
+`SCRIBBLE_TOKEN` in the environment still works with a server's
+`AUTH_TOKEN`, but it is deprecated and wins over the saved login:
 
 ```sh
 export SCRIBBLE_URL=https://notes.example.com
@@ -50,7 +67,8 @@ export SCRIBBLE_TOKEN=change-me
 Instead of exporting the variables in every shell, put them in
 `~/.scribble`, one `KEY=VALUE` per line. Blank lines and lines starting
 with `#` are ignored, values may be quoted, and the keys may also be
-written `url` and `token`, in any case:
+written `url`, `token`, `refresh_token` and `token_expiry`, in any case.
+`sn login` writes it for you:
 
 ```sh
 # ~/.scribble
@@ -58,7 +76,8 @@ url=https://notes.example.com
 token=change-me
 ```
 
-The file holds the token, so only you should be able to read it:
+The file holds the token, so only you should be able to read it. `sn
+login` sets that; for a file you write yourself:
 
 ```sh
 chmod 600 ~/.scribble
@@ -78,9 +97,10 @@ A file that exists but cannot be read is an error. `sn version` prints
 which file was used (see [version](#version)).
 
 If `SCRIBBLE_TOKEN` is not set in any of them, every command except `help`,
-`completion` and `version` fails with
-`SCRIBBLE_TOKEN is not set (set it in the environment or in ~/.scribble)`.
-If the server does not accept the token, the error is `the server rejected SCRIBBLE_TOKEN`.
+`completion`, `version`, `login` and `logout` fails with
+`not logged in: run sn login, or set SCRIBBLE_TOKEN (in the environment or in ~/.scribble)`.
+If the server does not accept the token, and a saved refresh token cannot
+renew it, the error is `the server rejected the token; run sn login`.
 
 `sn edit` also reads `VISUAL`, then `EDITOR`, to choose the editor
 (fallback: `vi`, or `notepad` on Windows). `sn diff` reads `NO_COLOR`
@@ -125,6 +145,8 @@ stderr as `sn: <message>`.
 | `undelete <title>` | bring back a deleted note |
 | `completion [bash]` | output shell completion script |
 | `version` | print the client's and the server's versions and API levels, and the server's schema version |
+| `login [<url>]` | log in with a code from your authenticator app and save the login |
+| `logout` | remove the saved login |
 
 Lists (`ls`, `search`, `backlinks`, `projects <name>`) print one title per
 line, so they work with `grep`, `head`, `xargs` and so on. `ls` and `search`
@@ -410,6 +432,36 @@ sn completion > ~/.local/share/bash-completion/completions/sn
 # Or system-wide (requires root):
 sudo sn completion > /etc/bash_completion.d/sn
 ```
+
+### login, logout
+
+```
+sn login [<url>]
+sn logout
+```
+
+`sn login` asks for the server's address, offering the current one (press
+Enter to keep it), unless it is given as `<url>`, and then for a 6-digit
+code from the authenticator app you set up for the web app. Both can be
+piped in, one per line. It trades the code for an access token, which
+lasts 24 hours, and a refresh token, which lasts a year
+([ADR 14](../../docs/adr/0014-oauth2-api-authentication.md)). It saves them,
+with the address, in the config file `sn` read its settings from, or
+`~/.scribble` when there was none, replacing any token there, and makes the
+file readable only by you. Other lines in the file are kept.
+
+When the access token is about to expire, or the server refuses it, `sn`
+renews it with the refresh token, saves the new pair and carries on; each
+renewal also restarts the refresh token's year. After a year without use,
+or once the server has forgotten the tokens, run `sn login` again.
+
+A code logs in once, and wrong codes count towards the same limit as the
+web app's: after 5 wrong codes from one address it is refused for 15
+minutes. The server needs `WEB_TOTP_SECRET` and `STORAGE=sqlite`; without
+them `sn login` says the server has no authenticator code login.
+
+`sn logout` removes the tokens from the config file and keeps the address.
+It does not revoke them on the server, where they expire.
 
 ### version
 

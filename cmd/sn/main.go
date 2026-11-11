@@ -1,10 +1,12 @@
 // Command sn is the command-line client for a scribble server.
 //
 //	SCRIBBLE_URL    server address (default https://notes.sudde.net)
-//	SCRIBBLE_TOKEN  the server's AUTH_TOKEN
+//	SCRIBBLE_TOKEN  the access token sn login saved, or a static token:
+//	                the server's AUTH_TOKEN (deprecated)
 //
 // Settings not in the environment are read from ~/.scribble, or failing
 // that from scribble/.env in the user's config folder (see config.go).
+// sn login saves its tokens there (see login.go).
 package main
 
 import (
