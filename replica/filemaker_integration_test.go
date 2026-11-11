@@ -8,8 +8,9 @@
 // Like store's test, it uses its own FMS_TEST_* variables, and lets the sync
 // create temporary tables (FMS_CREATE_REPLICA_TABLES) and deletes them after,
 // so the account needs schema privileges. OData cannot create an auto-enter
-// serial, so the test sets PendingEdits::ID itself; check the auto-enter fields once by hand on tables set up in
-// FileMaker from docs/filemaker/notes.md.
+// serial, so the test sets PendingEdits::ID itself; check the auto-enter
+// fields once by hand on tables set up in FileMaker from
+// docs/filemaker/notes.md.
 package replica
 
 import (

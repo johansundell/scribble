@@ -10,10 +10,10 @@ The FileMaker replica of the notes ([ADR 10](0010-sqlite-master-filemaker-replic
 ## Decision
 
 - **Opt-in:** with `FMS_CREATE_REPLICA_TABLES=true`, the sync creates each replica table that is missing when it checks the setup at startup. It is off by default, and off nothing changes. Creating a table needs schema privileges, which the sync's account shouldn't need otherwise.
-- **Only a missing table:** a table is created only when FileMaker answers the check with 404 and code `-1020` ("table not defined"), as for the log table. A missing or wrong field, a wrong schema version or a wrong password is never repaired, and an existing table is never changed.
-- **The `ScribbleInfo` record:** only in an `ScribbleInfo` table it created does the sync add the record `SchemaVersion = 1`. An existing table without a record stays a setup error, so the service never decides a file's schema version for a developer.
+- **Only a missing table:** a table is created only when FileMaker answers the check with 404 and code `-1020` ("table not defined"), as for the log table. A missing or wrong field, a wrong `ScribbleInfo::SchemaVersion` or a wrong password is never repaired, and an existing table is never changed.
+- **The `ScribbleInfo` record:** only in an `ScribbleInfo` table it created does the sync add the record `SchemaVersion = 1`. An existing table without a record stays a setup error, so the service never decides a file's `SchemaVersion` for a developer. If adding the record fails after the create, a later check in the same run adds it; after a restart a developer adds it by hand.
 - After creating a table, the sync checks it again and logs a warning that it created it.
-- **A failed create turns the replica off, not the server.** A refused create (for example, no schema privileges) is a setup error: the sync logs it, turns the replica off and `/healthz` shows the reason. SQLite and the API are not affected. An unreachable server is retried as before.
+- **A failed create turns the replica off, not the server.** A create FileMaker refuses, with any status (for example, no schema privileges), is a setup error: the sync logs it, turns the replica off and `/healthz` shows the reason. SQLite and the API are not affected. An unreachable server is retried as before.
 
 ## Consequences
 

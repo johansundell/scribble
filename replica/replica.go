@@ -29,7 +29,7 @@ const SchemaVersion = 1
 // types Check creates them with (FMS_CREATE_REPLICA_TABLES, #185). The
 // first is the primary key; ScribbleInfo has none.
 var (
-	noteDefs = []fmsodata.FieldDefinition{
+	noteFieldDefs = []fmsodata.FieldDefinition{
 		{Name: "NoteID", Type: "NUMERIC", Primary: true},
 		{Name: "Title", Type: "VARCHAR"},
 		{Name: "Body", Type: "VARCHAR"},
@@ -40,7 +40,7 @@ var (
 		{Name: "UpdatedAt", Type: "TIMESTAMP"},
 		{Name: "SyncedAt", Type: "TIMESTAMP"},
 	}
-	pendingDefs = []fmsodata.FieldDefinition{
+	pendingFieldDefs = []fmsodata.FieldDefinition{
 		{Name: "ID", Type: "NUMERIC", Primary: true},
 		{Name: "Kind", Type: "VARCHAR"},
 		{Name: "NoteID", Type: "NUMERIC"},
@@ -51,13 +51,13 @@ var (
 		{Name: "Status", Type: "VARCHAR"},
 		{Name: "Message", Type: "VARCHAR"},
 	}
-	infoDefs = []fmsodata.FieldDefinition{
+	infoFieldDefs = []fmsodata.FieldDefinition{
 		{Name: "SchemaVersion", Type: "NUMERIC"},
 	}
 
-	noteFields    = fieldNames(noteDefs)
-	pendingFields = fieldNames(pendingDefs)
-	infoFields    = fieldNames(infoDefs)
+	noteFields    = fieldNames(noteFieldDefs)
+	pendingFields = fieldNames(pendingFieldDefs)
+	infoFields    = fieldNames(infoFieldDefs)
 )
 
 func fieldNames(defs []fmsodata.FieldDefinition) []string {
@@ -193,7 +193,7 @@ func (s *Syncer) Check(ctx context.Context) error {
 	for _, tf := range []struct {
 		table  string
 		fields []fmsodata.FieldDefinition
-	}{{t.Notes, noteDefs}, {t.Pending, pendingDefs}, {t.Info, infoDefs}} {
+	}{{t.Notes, noteFieldDefs}, {t.Pending, pendingFieldDefs}, {t.Info, infoFieldDefs}} {
 		err := s.checkTable(ctx, tf.table, tf.fields)
 		if err != nil && s.cfg.CreateTables && fmsodata.IsMissingTable(err) {
 			err = s.createTable(ctx, tf.table, tf.fields)
@@ -214,7 +214,7 @@ func (s *Syncer) Check(ctx context.Context) error {
 		return err
 	}
 	if len(info) != 1 {
-		return setupError{fmt.Errorf("FileMaker table %q must have exactly one record, has %d", t.Info, len(info))}
+		return setupError{fmt.Errorf("FileMaker table %q must have exactly one record, with SchemaVersion %d; it has %d", t.Info, SchemaVersion, len(info))}
 	}
 	if v := number(info[0]["SchemaVersion"]); v != SchemaVersion {
 		return setupError{fmt.Errorf("FileMaker %s::SchemaVersion is %d; this server needs %d", t.Info, v, SchemaVersion)}
@@ -248,7 +248,14 @@ func (s *Syncer) checkTable(ctx context.Context, table string, fields []fmsodata
 // createTable creates table with fields, and checks it again.
 func (s *Syncer) createTable(ctx context.Context, table string, fields []fmsodata.FieldDefinition) error {
 	if err := s.client.CreateTable(ctx, fmsodata.TableDefinition{TableName: table, Fields: fields}); err != nil {
-		return fmt.Errorf("create FileMaker table %q: %w", table, err)
+		err = fmt.Errorf("create FileMaker table %q: %w", table, err)
+		var st *fmsodata.StatusError
+		if errors.As(err, &st) {
+			// FileMaker refused it, with whatever status; only a network
+			// failure is worth retrying.
+			return setupError{err}
+		}
+		return err
 	}
 	if table == s.cfg.Tables.Info {
 		s.createdInfo = true

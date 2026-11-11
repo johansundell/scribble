@@ -546,3 +546,30 @@ func TestCheckSeedsACreatedInfoTableAfterAFailure(t *testing.T) {
 		t.Errorf("ScribbleInfo has %d records, created %v", fm.count("ScribbleInfo"), fm.created())
 	}
 }
+
+// Any refusal from FileMaker turns the replica off; a network failure is
+// retried.
+func TestCheckCreateErrors(t *testing.T) {
+	for name, c := range map[string]struct {
+		err   error
+		setup bool
+	}{
+		"server error": {&fmsodata.StatusError{StatusCode: http.StatusInternalServerError, Body: "refused"}, true},
+		"network":      {errors.New("connection refused"), false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			s, fm, _ := newTest(t)
+			s.cfg.CreateTables = true
+			fm.drop("Notes")
+			fm.fail = func(op, _ string, _ map[string]any) error {
+				if op == "CREATE" {
+					return c.err
+				}
+				return nil
+			}
+			if err := s.Check(ctx); err == nil || isSetupError(err) != c.setup {
+				t.Errorf("Check = %v, setup error %v, want %v", err, isSetupError(err), c.setup)
+			}
+		})
+	}
+}

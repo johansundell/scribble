@@ -6,7 +6,7 @@ A FileMaker developer sets the tables up once from this page. At startup the ser
 
 ## Letting the service create the tables
 
-With `FMS_CREATE_REPLICA_TABLES=true`, the sync creates each table that FileMaker says doesn't exist, with the fields below, and logs a warning for each ([ADR 14](../adr/0014-service-may-create-the-filemaker-replica-tables.md)). In a `ScribbleInfo` table it created, it adds the record with `SchemaVersion = 1`. The account then needs schema privileges; if the create is refused, the replica turns off with that reason and the server keeps running. It never changes an existing table: a missing field, or an existing `ScribbleInfo` without its record, is still a setup error.
+With `FMS_CREATE_REPLICA_TABLES=true`, the sync creates each table that FileMaker says doesn't exist, with the fields below, and logs a warning for each ([ADR 14](../adr/0014-service-may-create-the-filemaker-replica-tables.md)). In a `ScribbleInfo` table it created, it adds the record with `SchemaVersion = 1`. The account then needs schema privileges; if the create is refused, the replica turns off with that reason and the server keeps running. It never changes an existing table: a missing field, or an existing `ScribbleInfo` without its record, is still a setup error. So if the table was created but adding its record failed, and the server has restarted since, add the record (`SchemaVersion = 1`) by hand.
 
 OData can't set field options. In a created table, `NoteID` and `PendingEdits::ID` are the primary keys, but there is no auto-enter, validation or indexing. Before people edit notes in FileMaker, a developer must:
 
