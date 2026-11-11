@@ -14,6 +14,7 @@ import (
 	"github.com/johansundell/scribble/handlers"
 	"github.com/johansundell/scribble/logging"
 	"github.com/johansundell/scribble/logqueue"
+	"github.com/johansundell/scribble/oauth"
 	"github.com/johansundell/scribble/replica"
 	"github.com/johansundell/scribble/router"
 	"github.com/johansundell/scribble/store"
@@ -145,6 +146,16 @@ func (p *program) run(startup chan<- error) error {
 		logWarning("WEB_PIN is no longer used, so the web app is off; set WEB_TOTP_SECRET instead (generate one with: head -c 20 /dev/urandom | base32)")
 	}
 
+	apiOAuth, err := newAPIOAuth(webAuth, st)
+	if err != nil {
+		logError("failed to set up OAuth login: %v", err)
+		startup <- err
+		return err
+	}
+	if apiOAuth != nil {
+		logInfo("API clients log in with an authenticator code at %s (sn login); AUTH_TOKEN for the API is deprecated", oauth.TokenPath)
+	}
+
 	// Stopped before the store is closed (defers run in reverse).
 	syncer, stopReplica := startReplica(st)
 	defer stopReplica()
@@ -168,6 +179,7 @@ func (p *program) run(startup chan<- error) error {
 		Handler:  handler,
 		LogSink:  logQueue,
 		Auth:     webAuth,
+		OAuth:    apiOAuth,
 		Settings: settings,
 		Assets:   embeddedAssets,
 		Version:  Version,
@@ -337,6 +349,22 @@ func newWebAuth(w types.WebSettings, authToken string) (*auth.Authenticator, err
 		NoLockout:    w.PublicDemo,
 		Logger:       appLogger(),
 	})
+}
+
+// newAPIOAuth sets up OAuth2 login for API clients (#184, ADR 14), with
+// webAuth checking the codes and the tokens kept in st. It returns nil,
+// leaving only AUTH_TOKEN, when the web app is off (no WEB_TOTP_SECRET to
+// check codes with) or st cannot keep tokens (only SQLite can).
+func newAPIOAuth(webAuth *auth.Authenticator, st store.Store) (*oauth.Server, error) {
+	if webAuth == nil {
+		return nil, nil
+	}
+	tokens, ok := st.(store.OAuthTokenStore)
+	if !ok || settings.Storage != types.StorageSQLite {
+		logWarning("STORAGE=%s cannot keep OAuth tokens, so sn login is off; API clients need AUTH_TOKEN", settings.Storage)
+		return nil, nil
+	}
+	return oauth.New(oauth.Config{Auth: webAuth, Tokens: tokens})
 }
 
 // ensureAuthToken generates a temporary random token when AUTH_TOKEN is not

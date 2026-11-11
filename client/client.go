@@ -43,8 +43,20 @@ func ServerURL() string {
 // Client talks to one scribble server.
 type Client struct {
 	BaseURL string // e.g. http://localhost:8080
-	Token   string // the server's AUTH_TOKEN
-	HTTP    *http.Client
+	// Token is sent as the bearer token: an OAuth2 access token, or the
+	// server's AUTH_TOKEN (deprecated, ADR 14). Set it before the first
+	// request; after that use SetTokens.
+	Token string
+	// RefreshToken renews Token when it expires or is refused; "" when
+	// Token is AUTH_TOKEN. Expiry is when Token expires; zero when unknown.
+	RefreshToken string
+	Expiry       time.Time
+	// ClientID is the OAuth2 client: ClientCLI or ClientGUI.
+	ClientID string
+	// TokensChanged, when set, is called with the new tokens after a
+	// refresh, to save them. It must not call the client.
+	TokensChanged func(Tokens)
+	HTTP          *http.Client
 
 	// Name, APILevel and Version are sent in X-Scribble-Client, so the
 	// server can refuse clients that are too old. Name is "cli" or "gui";
@@ -52,6 +64,10 @@ type Client struct {
 	Name     string
 	APILevel int
 	Version  string
+
+	// authMu guards Token, RefreshToken and Expiry once requests start,
+	// and lets one request at a time refresh them.
+	authMu sync.Mutex
 
 	mu            sync.Mutex
 	serverVersion string // X-Version of the last answer
@@ -379,12 +395,38 @@ func (c *Client) Import(ctx context.Context, archive io.Reader, overwrite bool) 
 }
 
 // sendAuthed sends req with the token and turns a non-2xx answer into an
-// *Error. The caller closes the body of a 2xx answer.
+// *Error. The caller closes the body of a 2xx answer. With a refresh token,
+// an access token about to expire is renewed first, and a 401 renews it and
+// sends req again, when its body can be sent again.
 func (c *Client) sendAuthed(req *http.Request) (*http.Response, error) {
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	token, err := c.bearer(req.Context())
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := c.send(req)
 	if err != nil {
 		return nil, err
+	}
+	if resp.StatusCode == http.StatusUnauthorized && (req.Body == nil || req.GetBody != nil) {
+		renewed, ok, err := c.renew(req.Context(), token)
+		if err != nil {
+			resp.Body.Close()
+			return nil, err
+		}
+		if ok {
+			resp.Body.Close()
+			retry := req.Clone(req.Context())
+			if req.GetBody != nil {
+				if retry.Body, err = req.GetBody(); err != nil {
+					return nil, err
+				}
+			}
+			retry.Header.Set("Authorization", "Bearer "+renewed)
+			if resp, err = c.send(retry); err != nil {
+				return nil, err
+			}
+		}
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		defer resp.Body.Close()
