@@ -187,13 +187,18 @@ func (s *FileMakerStore) LogRequests(ctx context.Context, entries []types.UsageL
 	return classifyFileMakerError(s.client.CreateRecords(ctx, s.table, records))
 }
 
-// classifyFileMakerError marks client errors that retrying cannot fix (a
-// rejected record, bad credentials) as permanent. Timeouts and rate limits
-// stay retryable.
+// classifyFileMakerError marks errors that retrying cannot fix (a rejected
+// record, bad credentials, a request the server does not implement) as
+// permanent. Timeouts, rate limits and other server errors stay retryable.
 func classifyFileMakerError(err error) error {
 	var se *fmsodata.StatusError
-	if errors.As(err, &se) && se.StatusCode >= 400 && se.StatusCode < 500 &&
-		se.StatusCode != http.StatusRequestTimeout && se.StatusCode != http.StatusTooManyRequests {
+	if !errors.As(err, &se) {
+		return err
+	}
+	switch {
+	case se.StatusCode == http.StatusNotImplemented,
+		se.StatusCode >= 400 && se.StatusCode < 500 &&
+			se.StatusCode != http.StatusRequestTimeout && se.StatusCode != http.StatusTooManyRequests:
 		return Permanent(err)
 	}
 	return err

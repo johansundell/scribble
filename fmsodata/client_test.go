@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -362,6 +364,24 @@ func TestCreateRecords_BatchResponses(t *testing.T) {
 		var se *StatusError
 		assert.ErrorAs(t, err, &se)
 		assert.Equal(t, 401, se.StatusCode)
+	})
+
+	t.Run("change set parts carry no Content-ID", func(t *testing.T) {
+		// Some FileMaker Servers reject a change set of two or more parts
+		// with 501 when the parts carry Content-ID headers (#116).
+		var body []byte
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ = io.ReadAll(r.Body)
+			w.Header().Set("Content-Type", "multipart/mixed; boundary=b")
+			w.Write([]byte("--b\r\nContent-Type: multipart/mixed; boundary=c\r\n\r\n" +
+				"--c\r\nContent-Type: application/http\r\n\r\nHTTP/1.1 204 No Content\r\n\r\n\r\n" +
+				"--c\r\nContent-Type: application/http\r\n\r\nHTTP/1.1 204 No Content\r\n\r\n\r\n" +
+				"--c--\r\n--b--\r\n"))
+		}))
+		defer srv.Close()
+		assert.NoError(t, newTestClient(srv.URL).CreateRecords(context.Background(), "Logs", records))
+		assert.Equal(t, 2, strings.Count(string(body), "POST "))
+		assert.NotContains(t, strings.ToLower(string(body)), "content-id")
 	})
 
 	t.Run("empty batch sends nothing", func(t *testing.T) {
