@@ -21,4 +21,4 @@ The notes should also be in FileMaker, where people can browse and edit them nex
 
 - The apps never need FileMaker to work. A broken FileMaker setup turns the replica off without stopping the server.
 - An edit made in FileMaker reaches the apps at the next sync (about 30 seconds), not at once.
-- The FileMaker tables are set up by hand from [docs/filemaker/notes.md](../filemaker/notes.md). The service never creates them.
+- The FileMaker tables are set up by hand from [docs/filemaker/notes.md](../filemaker/notes.md). With `FMS_CREATE_REPLICA_TABLES=true` the service creates the missing ones. (Superseded by [ADR 14](0014-service-may-create-the-filemaker-replica-tables.md); the service used to never create them.)

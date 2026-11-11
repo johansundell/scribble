@@ -13,7 +13,7 @@ With `STORAGE=filemaker`, request logs go to a FileMaker table (`FMS_LOG_TABLE`,
 - **Only a missing table:** the table is created only when FileMaker answers the startup check with 404 and its code `-1020` ("table not defined"). Any other error — a missing or wrong field, a wrong password, an unreachable server — still stops startup, and an existing table is never changed.
 - After creating it, startup checks the table again, and logs a warning that it created it. A failed create stops startup with FileMaker's error.
 - The table gets the fields the service reads and writes. OData can't create an auto-enter serial, so `ID` stays empty until a developer makes it one in FileMaker; the service never reads it back to find a record.
-- The FileMaker replica's tables ([ADR 10](0010-sqlite-master-filemaker-replica.md)) are still never created by the service.
+- The FileMaker replica's tables ([ADR 10](0010-sqlite-master-filemaker-replica.md)) are still never created by the service. (Superseded by [ADR 14](0014-service-may-create-the-filemaker-replica-tables.md): `FMS_CREATE_REPLICA_TABLES=true` creates them the same way.)
 
 ## Consequences
 

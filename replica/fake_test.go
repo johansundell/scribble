@@ -21,6 +21,7 @@ type fakeFM struct {
 	tables map[string]map[int64]map[string]any              // table → key → record
 	fail   func(op, table string, rec map[string]any) error // nil, or the error for this call
 	calls  []string
+	defs   map[string]fmsodata.TableDefinition // the tables CreateTable made
 }
 
 func newFakeFM() *fakeFM {
@@ -38,6 +39,12 @@ func newFakeFM() *fakeFM {
 
 func notFound() error { return &fmsodata.StatusError{StatusCode: http.StatusNotFound} }
 
+// tableMissing is FileMaker's answer for a table that isn't defined.
+func tableMissing(table string) error {
+	return &fmsodata.StatusError{StatusCode: http.StatusNotFound,
+		Body: `{"error":{"code":"-1020","message":"Table '` + table + `' not defined in database"}}`}
+}
+
 func (f *fakeFM) check(op, table string, rec map[string]any) error {
 	f.calls = append(f.calls, op+" "+table)
 	if f.fail != nil {
@@ -46,7 +53,7 @@ func (f *fakeFM) check(op, table string, rec map[string]any) error {
 		}
 	}
 	if _, ok := f.fields[table]; !ok {
-		return notFound()
+		return tableMissing(table)
 	}
 	for k := range rec {
 		if !slices.Contains(f.fields[table], k) {
@@ -167,6 +174,50 @@ func (f *fakeFM) DeleteRecordByKey(ctx context.Context, table, key string) error
 	}
 	delete(f.tables[table], k)
 	return nil
+}
+
+func (f *fakeFM) CreateTable(ctx context.Context, def fmsodata.TableDefinition) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, "CREATE "+def.TableName)
+	if f.fail != nil {
+		if err := f.fail("CREATE", def.TableName, nil); err != nil {
+			return err
+		}
+	}
+	if _, ok := f.fields[def.TableName]; ok {
+		return &fmsodata.StatusError{StatusCode: http.StatusBadRequest, Body: "table exists"}
+	}
+	var names []string
+	for _, fd := range def.Fields {
+		names = append(names, fd.Name)
+	}
+	f.fields[def.TableName] = names
+	f.tables[def.TableName] = map[int64]map[string]any{}
+	if f.defs == nil {
+		f.defs = map[string]fmsodata.TableDefinition{}
+	}
+	f.defs[def.TableName] = def
+	return nil
+}
+
+// drop removes table, as if it was never set up.
+func (f *fakeFM) drop(table string) {
+	delete(f.fields, table)
+	delete(f.tables, table)
+}
+
+// created lists the tables CreateTable was asked for, in order.
+func (f *fakeFM) created() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []string
+	for _, c := range f.calls {
+		if t, ok := strings.CutPrefix(c, "CREATE "); ok {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 // record returns a copy of table's record key, or nil.

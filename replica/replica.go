@@ -25,13 +25,48 @@ import (
 // SchemaVersion is the ScribbleInfo::SchemaVersion this build expects.
 const SchemaVersion = 1
 
-// The fields of each FileMaker table (docs/filemaker/notes.md). The first
-// is the primary key.
+// The fields of each FileMaker table (docs/filemaker/notes.md), with the
+// types Check creates them with (FMS_CREATE_REPLICA_TABLES, #185). The
+// first is the primary key; ScribbleInfo has none.
 var (
-	noteFields    = []string{"NoteID", "Title", "Body", "Revision", "Seq", "Deleted", "CreatedAt", "UpdatedAt", "SyncedAt"}
-	pendingFields = []string{"ID", "Kind", "NoteID", "Body", "BaseRevision", "CreatedAt", "CreatedBy", "Status", "Message"}
-	infoFields    = []string{"SchemaVersion"}
+	noteFieldDefs = []fmsodata.FieldDefinition{
+		{Name: "NoteID", Type: "NUMERIC", Primary: true},
+		{Name: "Title", Type: "VARCHAR"},
+		{Name: "Body", Type: "VARCHAR"},
+		{Name: "Revision", Type: "NUMERIC"},
+		{Name: "Seq", Type: "NUMERIC"},
+		{Name: "Deleted", Type: "NUMERIC"},
+		{Name: "CreatedAt", Type: "TIMESTAMP"},
+		{Name: "UpdatedAt", Type: "TIMESTAMP"},
+		{Name: "SyncedAt", Type: "TIMESTAMP"},
+	}
+	pendingFieldDefs = []fmsodata.FieldDefinition{
+		{Name: "ID", Type: "NUMERIC", Primary: true},
+		{Name: "Kind", Type: "VARCHAR"},
+		{Name: "NoteID", Type: "NUMERIC"},
+		{Name: "Body", Type: "VARCHAR"},
+		{Name: "BaseRevision", Type: "NUMERIC"},
+		{Name: "CreatedAt", Type: "TIMESTAMP"},
+		{Name: "CreatedBy", Type: "VARCHAR"},
+		{Name: "Status", Type: "VARCHAR"},
+		{Name: "Message", Type: "VARCHAR"},
+	}
+	infoFieldDefs = []fmsodata.FieldDefinition{
+		{Name: "SchemaVersion", Type: "NUMERIC"},
+	}
+
+	noteFields    = fieldNames(noteFieldDefs)
+	pendingFields = fieldNames(pendingFieldDefs)
+	infoFields    = fieldNames(infoFieldDefs)
 )
+
+func fieldNames(defs []fmsodata.FieldDefinition) []string {
+	names := make([]string, len(defs))
+	for i, d := range defs {
+		names[i] = d.Name
+	}
+	return names
+}
 
 // timeLayout writes timestamps as UTC without an offset, as for the log
 // table: FileMaker timestamps have no time zone.
@@ -47,6 +82,7 @@ type Client interface {
 	CreateRecord(ctx context.Context, table string, data map[string]any) (map[string]any, error)
 	UpdateRecordByKey(ctx context.Context, table, key string, data map[string]any) error
 	DeleteRecordByKey(ctx context.Context, table, key string) error
+	CreateTable(ctx context.Context, table fmsodata.TableDefinition) error
 }
 
 // Store is the SQLite side; *store.SQLStore has it.
@@ -71,7 +107,10 @@ type Config struct {
 	// Interval is how often a round runs when nothing has changed
 	// (NOTES_REPLICA_INTERVAL).
 	Interval time.Duration
-	Logger   logging.Logger
+	// CreateTables lets Check create a missing table, and the ScribbleInfo
+	// record in a table it created (FMS_CREATE_REPLICA_TABLES, #185).
+	CreateTables bool
+	Logger       logging.Logger
 }
 
 // Status is the replica's state for /healthz.
@@ -96,6 +135,10 @@ type Syncer struct {
 	// FileMaker within about that time. Retries wait from minRetry,
 	// doubling up to maxRetry. Tests shorten them.
 	poll, minRetry, maxRetry time.Duration
+
+	// createdInfo is set once Check created the info table, so a later
+	// Check still adds its record if adding it failed.
+	createdInfo bool
 
 	mu       sync.Mutex
 	off      error // the setup is wrong; the sync stays off
@@ -140,33 +183,86 @@ func isNotFound(err error) bool {
 	return errors.As(err, &st) && st.StatusCode == http.StatusNotFound
 }
 
-// Check reads every table with all its fields, and the schema version. The
-// service never creates FileMaker tables; a FileMaker developer sets them
-// up from docs/filemaker/notes.md.
+// Check reads every table with all its fields, and the schema version. A
+// FileMaker developer sets the tables up from docs/filemaker/notes.md; with
+// CreateTables, Check creates a table FileMaker says doesn't exist, and the
+// ScribbleInfo record in a table it created (ADR 14). An existing table is
+// never changed.
 func (s *Syncer) Check(ctx context.Context) error {
 	t := s.cfg.Tables
 	for _, tf := range []struct {
 		table  string
-		fields []string
-	}{{t.Notes, noteFields}, {t.Pending, pendingFields}, {t.Info, infoFields}} {
-		q := url.Values{}
-		q.Set("$select", fmsodata.QuoteFields(tf.fields...))
-		q.Set("$top", "0")
-		if _, err := s.client.GetRecords(ctx, tf.table, q); err != nil {
-			return fmt.Errorf("check FileMaker table %q: %w", tf.table, err)
+		fields []fmsodata.FieldDefinition
+	}{{t.Notes, noteFieldDefs}, {t.Pending, pendingFieldDefs}, {t.Info, infoFieldDefs}} {
+		err := s.checkTable(ctx, tf.table, tf.fields)
+		if err != nil && s.cfg.CreateTables && fmsodata.IsMissingTable(err) {
+			err = s.createTable(ctx, tf.table, tf.fields)
+		}
+		if err != nil {
+			return err
 		}
 	}
-	q := url.Values{}
-	q.Set("$select", fmsodata.QuoteFields(infoFields...))
-	info, err := s.client.GetRecords(ctx, t.Info, q)
+	info, err := s.readInfo(ctx)
+	if err == nil && len(info) == 0 && s.createdInfo {
+		rec := map[string]any{"SchemaVersion": SchemaVersion}
+		if _, err := s.client.CreateRecord(ctx, t.Info, rec); err != nil {
+			return fmt.Errorf("add the record to FileMaker table %q: %w", t.Info, err)
+		}
+		info, err = s.readInfo(ctx)
+	}
 	if err != nil {
-		return fmt.Errorf("read FileMaker table %q: %w", t.Info, err)
+		return err
 	}
 	if len(info) != 1 {
-		return setupError{fmt.Errorf("FileMaker table %q must have exactly one record, has %d", t.Info, len(info))}
+		return setupError{fmt.Errorf("FileMaker table %q must have exactly one record, with SchemaVersion %d; it has %d", t.Info, SchemaVersion, len(info))}
 	}
 	if v := number(info[0]["SchemaVersion"]); v != SchemaVersion {
 		return setupError{fmt.Errorf("FileMaker %s::SchemaVersion is %d; this server needs %d", t.Info, v, SchemaVersion)}
+	}
+	return nil
+}
+
+// readInfo reads the ScribbleInfo records.
+func (s *Syncer) readInfo(ctx context.Context) ([]map[string]any, error) {
+	q := url.Values{}
+	q.Set("$select", fmsodata.QuoteFields(infoFields...))
+	info, err := s.client.GetRecords(ctx, s.cfg.Tables.Info, q)
+	if err != nil {
+		return nil, fmt.Errorf("read FileMaker table %q: %w", s.cfg.Tables.Info, err)
+	}
+	return info, nil
+}
+
+// checkTable reads no records but every field of table, so a missing table
+// or field fails.
+func (s *Syncer) checkTable(ctx context.Context, table string, fields []fmsodata.FieldDefinition) error {
+	q := url.Values{}
+	q.Set("$select", fmsodata.QuoteFields(fieldNames(fields)...))
+	q.Set("$top", "0")
+	if _, err := s.client.GetRecords(ctx, table, q); err != nil {
+		return fmt.Errorf("check FileMaker table %q: %w", table, err)
+	}
+	return nil
+}
+
+// createTable creates table with fields, and checks it again.
+func (s *Syncer) createTable(ctx context.Context, table string, fields []fmsodata.FieldDefinition) error {
+	if err := s.client.CreateTable(ctx, fmsodata.TableDefinition{TableName: table, Fields: fields}); err != nil {
+		err = fmt.Errorf("create FileMaker table %q: %w", table, err)
+		var st *fmsodata.StatusError
+		if errors.As(err, &st) {
+			// FileMaker refused it, with whatever status; only a network
+			// failure is worth retrying.
+			return setupError{err}
+		}
+		return err
+	}
+	if table == s.cfg.Tables.Info {
+		s.createdInfo = true
+	}
+	s.log.Warningf("FMS_CREATE_REPLICA_TABLES: created FileMaker table %s", table)
+	if err := s.checkTable(ctx, table, fields); err != nil {
+		return fmt.Errorf("created FileMaker table %q, but: %w", table, err)
 	}
 	return nil
 }

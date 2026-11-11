@@ -44,3 +44,7 @@ FMS_CREATE_LOG_TABLE=false
 # optional PEM file with a private CA; FMS_INSECURE_SKIP_VERIFY disables checks
 FMS_CA_FILE=""
 FMS_INSECURE_SKIP_VERIFY=false
+# FileMaker replica of the notes (NOTES_REPLICA=filemaker); its tables must
+# exist, see docs/filemaker/notes.md, unless FMS_CREATE_REPLICA_TABLES=true
+# lets the sync create the missing ones (needs schema privileges)
+FMS_CREATE_REPLICA_TABLES=false

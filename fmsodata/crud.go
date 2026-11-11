@@ -3,6 +3,7 @@ package fmsodata
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -146,6 +147,26 @@ type StatusError struct {
 
 func (e *StatusError) Error() string {
 	return fmt.Sprintf("OData request failed with status %d: %s", e.StatusCode, e.Body)
+}
+
+// codeTableMissing is FileMaker's error code for a table that isn't defined
+// in the database, sent with 404.
+const codeTableMissing = "-1020"
+
+// IsMissingTable reports whether err is FileMaker saying the table doesn't
+// exist, and not a missing record or field, a wrong password or a network
+// error.
+func IsMissingTable(err error) bool {
+	var se *StatusError
+	if !errors.As(err, &se) || se.StatusCode != http.StatusNotFound {
+		return false
+	}
+	var body struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	return json.Unmarshal([]byte(se.Body), &body) == nil && body.Error.Code == codeTableMissing
 }
 
 // maxErrorBody caps how much of an error response is kept in a StatusError.

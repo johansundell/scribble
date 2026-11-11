@@ -97,6 +97,7 @@ func loadSettings(filenames ...string) {
 	settings.Replica.NotesTable = envOr("FMS_NOTES_TABLE", "Notes")
 	settings.Replica.PendingTable = envOr("FMS_PENDING_TABLE", "PendingEdits")
 	settings.Replica.InfoTable = envOr("FMS_INFO_TABLE", "ScribbleInfo")
+	settings.Replica.CreateTables, _ = strconv.ParseBool(os.Getenv("FMS_CREATE_REPLICA_TABLES"))
 	settings.Replica.Interval = 30 * time.Second
 	if v := os.Getenv("NOTES_REPLICA_INTERVAL"); v != "" {
 		// An invalid value becomes 0, which Validate rejects.

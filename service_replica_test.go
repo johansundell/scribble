@@ -18,8 +18,13 @@ import (
 // noTables is a FileMaker file without the replica's tables.
 type noTables struct{ replica.Client }
 
-func (noTables) GetRecords(context.Context, string, url.Values) ([]map[string]any, error) {
-	return nil, &fmsodata.StatusError{StatusCode: 404, Body: "table not found"}
+func (noTables) GetRecords(_ context.Context, table string, _ url.Values) ([]map[string]any, error) {
+	return nil, &fmsodata.StatusError{StatusCode: 404, Body: `{"error":{"code":"-1020","message":"Table '` + table + `' not defined in database"}}`}
+}
+
+// The account may not create tables.
+func (noTables) CreateTable(context.Context, fmsodata.TableDefinition) error {
+	return &fmsodata.StatusError{StatusCode: 403, Body: `{"error":{"code":"9","message":"Insufficient privileges"}}`}
 }
 
 func replicaSettings(t *testing.T) {
@@ -70,6 +75,31 @@ func TestStartReplica_ABrokenSetupTurnsItOff(t *testing.T) {
 				t.Errorf("status: %+v", st)
 			}
 		})
+	}
+}
+
+// FMS_CREATE_REPLICA_TABLES reaches the sync: without schema privileges the
+// create fails, and the replica turns off with that reason.
+func TestStartReplica_CreateTablesWithoutPrivileges(t *testing.T) {
+	db, err := store.NewSQLite(filepath.Join(t.TempDir(), "notes.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	replicaSettings(t)
+	settings.Replica.CreateTables = true
+	orig := newReplicaClient
+	newReplicaClient = func(types.FileMakerSettings) (replica.Client, error) { return noTables{}, nil }
+	defer func() { newReplicaClient = orig }()
+
+	syncer, stop := startReplica(db)
+	defer stop()
+	deadline := time.Now().Add(2 * time.Second)
+	for syncer.Status(context.Background()).Status != "off" && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if st := syncer.Status(context.Background()); st.Status != "off" || !strings.Contains(st.Reason, `create FileMaker table "Notes"`) {
+		t.Errorf("status: %+v", st)
 	}
 }
 
