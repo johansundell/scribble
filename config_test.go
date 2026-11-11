@@ -254,7 +254,7 @@ func TestLoadSettings_FileMaker(t *testing.T) {
 
 func TestLoadSettings_Replica(t *testing.T) {
 	load := func(t *testing.T, content string) types.ReplicaSettings {
-		defer unsetEnv("NOTES_REPLICA", "FMS_NOTES_TABLE", "FMS_PENDING_TABLE", "FMS_INFO_TABLE", "NOTES_REPLICA_INTERVAL")()
+		defer unsetEnv("NOTES_REPLICA", "FMS_NOTES_TABLE", "FMS_PENDING_TABLE", "FMS_INFO_TABLE", "NOTES_REPLICA_INTERVAL", "FMS_CREATE_REPLICA_TABLES")()
 		tmpEnv, err := os.CreateTemp("", ".env.*")
 		if err != nil {
 			t.Fatalf("Failed to create temp env file: %v", err)
@@ -271,8 +271,8 @@ func TestLoadSettings_Replica(t *testing.T) {
 	if r := load(t, "PORT=:9999\n"); r != want {
 		t.Errorf("defaults: expected %+v, got %+v", want, r)
 	}
-	want = types.ReplicaSettings{Mode: "filemaker", NotesTable: "N", PendingTable: "P", InfoTable: "I", Interval: time.Minute}
-	if r := load(t, "NOTES_REPLICA= FileMaker \nFMS_NOTES_TABLE=N\nFMS_PENDING_TABLE=P\nFMS_INFO_TABLE=I\nNOTES_REPLICA_INTERVAL=1m\n"); r != want {
+	want = types.ReplicaSettings{Mode: "filemaker", NotesTable: "N", PendingTable: "P", InfoTable: "I", Interval: time.Minute, CreateTables: true}
+	if r := load(t, "NOTES_REPLICA= FileMaker \nFMS_NOTES_TABLE=N\nFMS_PENDING_TABLE=P\nFMS_INFO_TABLE=I\nNOTES_REPLICA_INTERVAL=1m\nFMS_CREATE_REPLICA_TABLES=true\n"); r != want {
 		t.Errorf("expected %+v, got %+v", want, r)
 	}
 	if r := load(t, "NOTES_REPLICA_INTERVAL=often\n"); r.Interval != 0 {

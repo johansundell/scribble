@@ -2,7 +2,16 @@
 
 With `NOTES_REPLICA=filemaker`, `scribble-server` keeps a copy of the notes in a FileMaker file, synced both ways (#66, [ADR 10](../adr/0010-sqlite-master-filemaker-replica.md)). **SQLite stays the master.** The API never waits on FileMaker and keeps working while it is down.
 
-The service never creates FileMaker tables or fields. A FileMaker developer sets them up once from this page. At startup the service reads each table with every field, and the `ScribbleInfo` record. If a table or field is missing, or the schema version is wrong, it logs an error and turns the replica off. The server still starts, and `/healthz` shows `replica.status = "off"` with the reason.
+A FileMaker developer sets the tables up once from this page. At startup the service reads each table with every field, and the `ScribbleInfo` record. If a table or field is missing, or the schema version is wrong, it logs an error and turns the replica off. The server still starts, and `/healthz` shows `replica.status = "off"` with the reason.
+
+## Letting the service create the tables
+
+With `FMS_CREATE_REPLICA_TABLES=true`, the sync creates each table that FileMaker says doesn't exist, with the fields below, and logs a warning for each ([ADR 14](../adr/0014-service-may-create-the-filemaker-replica-tables.md)). In a `ScribbleInfo` table it created, it adds the record with `SchemaVersion = 1`. The account then needs schema privileges; if the create is refused, the replica turns off with that reason and the server keeps running. It never changes an existing table: a missing field, or an existing `ScribbleInfo` without its record, is still a setup error.
+
+OData can't set field options. In a created table, `NoteID` and `PendingEdits::ID` are the primary keys, but there is no auto-enter, validation or indexing. Before people edit notes in FileMaker, a developer must:
+
+- make `PendingEdits::ID` an auto-enter serial. **The sync skips rows without an `ID`**, so until then edits made in FileMaker wait;
+- add the auto-enter calculations to `PendingEdits::CreatedAt` and `CreatedBy`, and the other options in the tables below, if wanted.
 
 ## Rules for every table
 
@@ -68,6 +77,7 @@ The account in `FMS_USERNAME` needs:
 
 - the `fmodata` extended privilege;
 - **create, edit, view and delete** on `Notes` and `PendingEdits`, and edit on `ScribbleInfo` (the service only reads it).
+- with `FMS_CREATE_REPLICA_TABLES=true`, schema privileges (full access, or a privilege set that may manage the schema) and create on `ScribbleInfo`, for the first start. Take them away once the tables exist.
 
 FileMaker users get their own privilege set, in [editing.md](editing.md) (#67): `Notes` and `ScribbleInfo` are view only, and in `PendingEdits` they can add rows and change only their own, so edits can't skip the history.
 

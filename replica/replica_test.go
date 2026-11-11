@@ -3,12 +3,14 @@ package replica
 import (
 	"context"
 	"errors"
+	"net/http"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/johansundell/scribble/fmsodata"
 	"github.com/johansundell/scribble/notes"
 	"github.com/johansundell/scribble/store"
 )
@@ -402,4 +404,145 @@ func TestDisable(t *testing.T) {
 		t.Errorf("status: %+v", st)
 	}
 	s.Run(ctx) // returns at once
+}
+
+func TestTableDefinitions(t *testing.T) {
+	type field struct {
+		name, typ string
+		primary   bool
+	}
+	want := map[string][]field{
+		"Notes": {{"NoteID", "NUMERIC", true}, {"Title", "VARCHAR", false}, {"Body", "VARCHAR", false},
+			{"Revision", "NUMERIC", false}, {"Seq", "NUMERIC", false}, {"Deleted", "NUMERIC", false},
+			{"CreatedAt", "TIMESTAMP", false}, {"UpdatedAt", "TIMESTAMP", false}, {"SyncedAt", "TIMESTAMP", false}},
+		"PendingEdits": {{"ID", "NUMERIC", true}, {"Kind", "VARCHAR", false}, {"NoteID", "NUMERIC", false},
+			{"Body", "VARCHAR", false}, {"BaseRevision", "NUMERIC", false}, {"CreatedAt", "TIMESTAMP", false},
+			{"CreatedBy", "VARCHAR", false}, {"Status", "VARCHAR", false}, {"Message", "VARCHAR", false}},
+		"ScribbleInfo": {{"SchemaVersion", "NUMERIC", false}},
+	}
+	s, fm, _ := newTest(t)
+	s.cfg.CreateTables = true
+	for table := range want {
+		fm.drop(table)
+	}
+	if err := s.Check(ctx); err != nil {
+		t.Fatalf("Check: %v", err)
+	}
+	for table, fields := range want {
+		def, ok := fm.defs[table]
+		if !ok {
+			t.Errorf("%s was not created", table)
+			continue
+		}
+		var got []field
+		for _, f := range def.Fields {
+			got = append(got, field{f.Name, f.Type, f.Primary})
+		}
+		if !slices.Equal(got, fields) {
+			t.Errorf("%s created with %v, want %v", table, got, fields)
+		}
+	}
+}
+
+func TestCheckCreatesOnlyTheMissingTables(t *testing.T) {
+	s, fm, db := newTest(t)
+	s.cfg.CreateTables = true
+	fm.drop("PendingEdits")
+	fm.drop("ScribbleInfo")
+	if err := s.Check(ctx); err != nil {
+		t.Fatalf("Check: %v", err)
+	}
+	if got := fm.created(); !slices.Equal(got, []string{"PendingEdits", "ScribbleInfo"}) {
+		t.Errorf("created %v, want PendingEdits and ScribbleInfo", got)
+	}
+	if r := fm.record("ScribbleInfo", SchemaVersion); r == nil || r["SchemaVersion"] != float64(SchemaVersion) {
+		t.Errorf("ScribbleInfo record: %v", r)
+	}
+	// The created tables work for a round.
+	n := mustCreate(t, db, "After setup")
+	round(t, s)
+	if fm.record("Notes", n.ID) == nil {
+		t.Errorf("note not pushed after the tables were created")
+	}
+	// A second check creates nothing.
+	if err := s.Check(ctx); err != nil || len(fm.created()) != 2 {
+		t.Errorf("second Check = %v, created %v", err, fm.created())
+	}
+}
+
+func TestCheckCreatesNothing(t *testing.T) {
+	cases := map[string]struct {
+		create bool
+		break_ func(*fakeFM)
+	}{
+		"setting off":            {false, func(f *fakeFM) { f.drop("Notes") }},
+		"missing field":          {true, func(f *fakeFM) { f.fields["Notes"] = noteFields[1:] }},
+		"empty ScribbleInfo":     {true, func(f *fakeFM) { delete(f.tables["ScribbleInfo"], 1) }},
+		"wrong schema version":   {true, func(f *fakeFM) { f.tables["ScribbleInfo"][1]["SchemaVersion"] = float64(2) }},
+		"a 404 that is no table": {true, func(f *fakeFM) { f.fail = func(op, _ string, _ map[string]any) error { return notFoundOn(op, "GET") } }},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			s, fm, _ := newTest(t)
+			s.cfg.CreateTables = c.create
+			c.break_(fm)
+			if err := s.Check(ctx); err == nil || !isSetupError(err) {
+				t.Errorf("Check = %v, want a setup error", err)
+			}
+			if got := fm.created(); len(got) != 0 {
+				t.Errorf("created %v", got)
+			}
+			if n := fm.count("ScribbleInfo"); name == "empty ScribbleInfo" && n != 0 {
+				t.Errorf("seeded an existing ScribbleInfo table")
+			}
+		})
+	}
+}
+
+func notFoundOn(op, want string) error {
+	if op == want {
+		return notFound()
+	}
+	return nil
+}
+
+func TestCheckCreateFails(t *testing.T) {
+	s, fm, _ := newTest(t)
+	fast(s)
+	s.cfg.CreateTables = true
+	fm.drop("Notes")
+	fm.fail = func(op, _ string, _ map[string]any) error {
+		if op == "CREATE" {
+			return &fmsodata.StatusError{StatusCode: http.StatusForbidden, Body: `{"error":{"code":"9","message":"Insufficient privileges"}}`}
+		}
+		return nil
+	}
+	done := make(chan struct{})
+	go func() { s.Run(ctx); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run kept going after the create failed")
+	}
+	if st := s.Status(ctx); st.Status != "off" || !strings.Contains(st.Reason, "create FileMaker table \"Notes\"") {
+		t.Errorf("status: %+v", st)
+	}
+}
+
+func TestCheckSeedsACreatedInfoTableAfterAFailure(t *testing.T) {
+	s, fm, _ := newTest(t)
+	s.cfg.CreateTables = true
+	fm.drop("ScribbleInfo")
+	fm.fail = errOn("POST", "ScribbleInfo")
+	err := s.Check(ctx)
+	if err == nil || isSetupError(err) {
+		t.Fatalf("Check with the seed failing = %v, want a retryable error", err)
+	}
+	fm.fail = nil
+	if err := s.Check(ctx); err != nil {
+		t.Fatalf("Check after the seed failed: %v", err)
+	}
+	if fm.count("ScribbleInfo") != 1 || len(fm.created()) != 1 {
+		t.Errorf("ScribbleInfo has %d records, created %v", fm.count("ScribbleInfo"), fm.created())
+	}
 }

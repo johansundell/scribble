@@ -274,9 +274,10 @@ func startReplica(st store.Store) (*replica.Syncer, func()) {
 	}
 	client, err := newReplicaClient(settings.FileMaker)
 	syncer := replica.New(client, db, replica.Config{
-		Tables:   replica.Tables{Notes: r.NotesTable, Pending: r.PendingTable, Info: r.InfoTable},
-		Interval: r.Interval,
-		Logger:   appLogger(),
+		Tables:       replica.Tables{Notes: r.NotesTable, Pending: r.PendingTable, Info: r.InfoTable},
+		Interval:     r.Interval,
+		CreateTables: r.CreateTables,
+		Logger:       appLogger(),
 	})
 	if err != nil {
 		syncer.Disable(fmt.Errorf("connect to FileMaker: %w", err))

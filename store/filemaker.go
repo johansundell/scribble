@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -71,7 +70,7 @@ func NewFileMaker(ctx context.Context, cfg types.FileMakerSettings) (*FileMakerS
 	}
 	s := &FileMakerStore{client: client, table: cfg.LogTable}
 	err = s.checkTable(ctx)
-	if err != nil && cfg.CreateLogTable && isMissingTable(err) {
+	if err != nil && cfg.CreateLogTable && fmsodata.IsMissingTable(err) {
 		if err = s.client.CreateTable(ctx, logTableDefinition(s.table)); err != nil {
 			err = fmt.Errorf("create FileMaker log table %q: %w", s.table, err)
 		} else if err = s.checkTable(ctx); err != nil {
@@ -102,25 +101,6 @@ func (s *FileMakerStore) checkTable(ctx context.Context) error {
 		return fmt.Errorf("check FileMaker log table %q: %w", s.table, err)
 	}
 	return nil
-}
-
-// fileMakerCodeTableMissing is FileMaker's error code for a table that isn't
-// defined in the database, sent with 404.
-const fileMakerCodeTableMissing = "-1020"
-
-// isMissingTable reports whether err is FileMaker saying the table doesn't
-// exist, and not a missing field, a wrong password or a network error.
-func isMissingTable(err error) bool {
-	var se *fmsodata.StatusError
-	if !errors.As(err, &se) || se.StatusCode != http.StatusNotFound {
-		return false
-	}
-	var body struct {
-		Error struct {
-			Code string `json:"code"`
-		} `json:"error"`
-	}
-	return json.Unmarshal([]byte(se.Body), &body) == nil && body.Error.Code == fileMakerCodeTableMissing
 }
 
 // logTableDefinition is the log table as startup creates it.

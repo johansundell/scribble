@@ -205,6 +205,7 @@ The application is configured via environment variables. You can set these in a 
 | `FMS_NOTES_TABLE` | string | `Notes` | The replica of the notes. |
 | `FMS_PENDING_TABLE` | string | `PendingEdits` | Edits made in FileMaker, waiting for the sync. |
 | `FMS_INFO_TABLE` | string | `ScribbleInfo` | One record holding the schema version. |
+| `FMS_CREATE_REPLICA_TABLES` | bool | `false` | Let the sync create the replica tables that don't exist, and the `ScribbleInfo` record in a table it created ([ADR 14](adr/0014-service-may-create-the-filemaker-replica-tables.md)). The account then needs schema privileges. A failed create turns the replica off. |
 | `NOTES_REPLICA_INTERVAL` | duration | `30s` | How often the sync runs. It also runs about 2 seconds after any note write. |
 
 ## FileMaker storage

@@ -113,7 +113,7 @@ func TestFileMakerIntegration_CreatesMissingTable(t *testing.T) {
 	// Off, a missing table still stops startup.
 	off := cfg
 	off.CreateLogTable = false
-	if _, err := NewFileMaker(ctx, off); err == nil || !isMissingTable(err) {
+	if _, err := NewFileMaker(ctx, off); err == nil || !fmsodata.IsMissingTable(err) {
 		t.Fatalf("without CreateLogTable: want the missing-table error, got %v", err)
 	}
 

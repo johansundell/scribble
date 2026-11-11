@@ -5,10 +5,10 @@
 //	FMS_TEST_HOST=https://fms.example.com FMS_TEST_DATABASE=... \
 //	FMS_TEST_USERNAME=... FMS_TEST_PASSWORD=... go test -tags filemaker ./replica
 //
-// Like store's test, it uses its own FMS_TEST_* variables, and creates and
-// deletes temporary tables, so the account needs schema privileges. OData
-// cannot create an auto-enter serial, so the test sets PendingEdits::ID
-// itself; check the auto-enter fields once by hand on tables set up in
+// Like store's test, it uses its own FMS_TEST_* variables, and lets the sync
+// create temporary tables (FMS_CREATE_REPLICA_TABLES) and deletes them after,
+// so the account needs schema privileges. OData cannot create an auto-enter
+// serial, so the test sets PendingEdits::ID itself; check the auto-enter fields once by hand on tables set up in
 // FileMaker from docs/filemaker/notes.md.
 package replica
 
@@ -49,40 +49,11 @@ func TestFileMakerIntegration(t *testing.T) {
 		Pending: fmt.Sprintf("PendingTest_%d", stamp),
 		Info:    fmt.Sprintf("InfoTest_%d", stamp),
 	}
-	defs := []fmsodata.TableDefinition{
-		{TableName: tables.Notes, Fields: []fmsodata.FieldDefinition{
-			{Name: "NoteID", Type: "NUMERIC", Primary: true},
-			{Name: "Title", Type: "VARCHAR"},
-			{Name: "Body", Type: "VARCHAR"},
-			{Name: "Revision", Type: "NUMERIC"},
-			{Name: "Seq", Type: "NUMERIC"},
-			{Name: "Deleted", Type: "NUMERIC"},
-			{Name: "CreatedAt", Type: "TIMESTAMP"},
-			{Name: "UpdatedAt", Type: "TIMESTAMP"},
-			{Name: "SyncedAt", Type: "TIMESTAMP"},
-		}},
-		{TableName: tables.Pending, Fields: []fmsodata.FieldDefinition{
-			{Name: "ID", Type: "NUMERIC", Primary: true},
-			{Name: "Kind", Type: "VARCHAR"},
-			{Name: "NoteID", Type: "NUMERIC"},
-			{Name: "Body", Type: "VARCHAR"},
-			{Name: "BaseRevision", Type: "NUMERIC"},
-			{Name: "CreatedAt", Type: "TIMESTAMP"},
-			{Name: "CreatedBy", Type: "VARCHAR"},
-			{Name: "Status", Type: "VARCHAR"},
-			{Name: "Message", Type: "VARCHAR"},
-		}},
-		{TableName: tables.Info, Fields: []fmsodata.FieldDefinition{
-			{Name: "SchemaVersion", Type: "NUMERIC"},
-		}},
-	}
-	for _, d := range defs {
-		if err := client.CreateTable(ctx, d); err != nil {
-			t.Fatalf("create table %s: %v", d.TableName, err)
-		}
+	// Registered before the create, so a half-done create is cleaned up too.
+	for _, table := range []string{tables.Notes, tables.Pending, tables.Info} {
 		t.Cleanup(func() {
-			if err := client.DeleteTable(context.Background(), d.TableName); err != nil {
-				t.Errorf("delete table %s: %v", d.TableName, err)
+			if err := client.DeleteTable(context.Background(), table); err != nil && !fmsodata.IsMissingTable(err) {
+				t.Errorf("delete table %s: %v", table, err)
 			}
 		})
 	}
@@ -92,16 +63,27 @@ func TestFileMakerIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	s := New(client, db, Config{Tables: tables, Interval: time.Hour})
 
-	if err := s.Check(ctx); err == nil || !isSetupError(err) {
-		t.Fatalf("Check without a ScribbleInfo record = %v, want a setup error", err)
+	// Off, missing tables turn the replica off and nothing is created.
+	off := New(client, db, Config{Tables: tables, Interval: time.Hour})
+	if err := off.Check(ctx); !isSetupError(err) || !fmsodata.IsMissingTable(err) {
+		t.Fatalf("Check without CreateTables = %v, want the missing-table setup error", err)
 	}
-	if _, err := client.CreateRecord(ctx, tables.Info, map[string]any{"SchemaVersion": SchemaVersion}); err != nil {
-		t.Fatal(err)
-	}
+
+	// FMS_CREATE_REPLICA_TABLES (#185) creates them, with the ScribbleInfo record.
+	s := New(client, db, Config{Tables: tables, Interval: time.Hour, CreateTables: true})
 	if err := s.Check(ctx); err != nil {
-		t.Fatalf("Check: %v", err)
+		t.Fatalf("Check creating the tables: %v", err)
+	}
+	if info, err := client.GetRecords(ctx, tables.Info, nil); err != nil || len(info) != 1 || number(info[0]["SchemaVersion"]) != SchemaVersion {
+		t.Fatalf("%s after the create: %v, %v", tables.Info, info, err)
+	}
+	// A second start finds them and changes nothing.
+	if err := New(client, db, Config{Tables: tables, Interval: time.Hour, CreateTables: true}).Check(ctx); err != nil {
+		t.Fatalf("second Check: %v", err)
+	}
+	if info, err := client.GetRecords(ctx, tables.Info, nil); err != nil || len(info) != 1 {
+		t.Fatalf("%s after the second check: %d records, %v", tables.Info, len(info), err)
 	}
 
 	bodies := []string{

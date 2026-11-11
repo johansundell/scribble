@@ -54,6 +54,9 @@ type ReplicaSettings struct {
 	PendingTable string        `json:"pendingTable"` // FMS_PENDING_TABLE
 	InfoTable    string        `json:"infoTable"`    // FMS_INFO_TABLE
 	Interval     time.Duration `json:"interval"`     // NOTES_REPLICA_INTERVAL
+	// CreateTables lets the sync create the tables that don't exist
+	// (FMS_CREATE_REPLICA_TABLES, #185, ADR 14).
+	CreateTables bool `json:"createTables"`
 }
 
 // Enabled reports whether the replica is turned on.
