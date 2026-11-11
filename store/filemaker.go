@@ -187,21 +187,24 @@ func (s *FileMakerStore) LogRequests(ctx context.Context, entries []types.UsageL
 	return classifyFileMakerError(s.client.CreateRecords(ctx, s.table, records))
 }
 
-// classifyFileMakerError marks errors that retrying cannot fix (a rejected
-// record, bad credentials, a request the server does not implement) as
-// permanent. Timeouts, rate limits and other server errors stay retryable.
+// classifyFileMakerError marks errors that retrying cannot fix as permanent.
 func classifyFileMakerError(err error) error {
 	var se *fmsodata.StatusError
-	if !errors.As(err, &se) {
-		return err
-	}
-	switch {
-	case se.StatusCode == http.StatusNotImplemented,
-		se.StatusCode >= 400 && se.StatusCode < 500 &&
-			se.StatusCode != http.StatusRequestTimeout && se.StatusCode != http.StatusTooManyRequests:
+	if errors.As(err, &se) && isPermanentStatus(se.StatusCode) {
 		return Permanent(err)
 	}
 	return err
+}
+
+// isPermanentStatus reports whether a FileMaker answer will not change on
+// retry: a rejected record, bad credentials, or a request the server does not
+// implement. Timeouts, rate limits and other server errors stay retryable.
+func isPermanentStatus(code int) bool {
+	if code == http.StatusNotImplemented {
+		return true
+	}
+	return code >= 400 && code < 500 &&
+		code != http.StatusRequestTimeout && code != http.StatusTooManyRequests
 }
 
 func (s *FileMakerStore) GetLogs(ctx context.Context, from, to time.Time, page Page) ([]types.UsageLog, error) {
