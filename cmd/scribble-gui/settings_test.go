@@ -1,17 +1,70 @@
 package main
 
 import (
+	"context"
+	"maps"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
+	"github.com/gin-gonic/gin"
+	"github.com/johansundell/scribble/auth"
+	"github.com/johansundell/scribble/client"
 	"github.com/johansundell/scribble/gui"
+	"github.com/johansundell/scribble/handlers"
+	"github.com/johansundell/scribble/oauth"
+	"github.com/johansundell/scribble/router"
+	"github.com/johansundell/scribble/store"
+	"github.com/johansundell/scribble/types"
 	"github.com/joho/godotenv"
 )
+
+var loginKey = []byte("abcdefghij0123456789")
+
+func loginCode() string { return auth.Code(loginKey, time.Now()) }
+
+// discardSink drops request log entries.
+type discardSink struct{}
+
+func (discardSink) Enqueue(types.UsageLog) {}
+
+// newOAuthServerURL starts a server with OAuth2 login (#184) and returns
+// its address.
+func newOAuthServerURL(t *testing.T) string {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	s, err := store.NewSQLite(filepath.Join(t.TempDir(), "gui.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	a, err := auth.New(auth.Config{TOTPKey: loginKey, Secret: []byte(strings.Repeat("k", 32)), SessionTTL: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	o, err := oauth.New(oauth.Config{Auth: a, Tokens: s})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := handlers.NewHandler(s, false, fstest.MapFS{}, "test", "dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := router.NewRouter(router.Config{Handler: h, OAuth: o, LogSink: discardSink{}, Assets: fstest.MapFS{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
 
 func readEnvFile(t *testing.T, path string) map[string]string {
 	t.Helper()
@@ -22,104 +75,76 @@ func readEnvFile(t *testing.T, path string) map[string]string {
 	return env
 }
 
-func TestWriteEnvCreatesMissingFile(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".env")
-
-	if err := writeEnv(path, map[string]string{"SCRIBBLE_URL": "http://notes:8080", "SCRIBBLE_TOKEN": "secret"}); err != nil {
-		t.Fatal(err)
-	}
-
-	env := readEnvFile(t, path)
-	if env["SCRIBBLE_URL"] != "http://notes:8080" || env["SCRIBBLE_TOKEN"] != "secret" || len(env) != 2 {
-		t.Errorf(".env holds %v", env)
-	}
-	if info, err := os.Stat(path); err == nil && info.Mode().Perm()&0o077 != 0 {
-		t.Errorf("a new .env holding the token has mode %v, want it private to the user", info.Mode().Perm())
-	}
-}
-
-func TestWriteEnvUpdatesKeysAndKeepsTheRest(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".env")
-	old := "# my settings\nFYNE_THEME=dark\nexport SCRIBBLE_TOKEN=old\n\nSCRIBBLE_HOTKEY=none # no hotkey\nSCRIBBLE_TOKEN=older\n"
-	if err := os.WriteFile(path, []byte(old), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := writeEnv(path, map[string]string{"SCRIBBLE_URL": "https://notes.example", "SCRIBBLE_TOKEN": "new"}); err != nil {
-		t.Fatal(err)
-	}
-
-	env := readEnvFile(t, path)
-	for k, want := range map[string]string{
-		"FYNE_THEME":      "dark",
-		"SCRIBBLE_HOTKEY": "none",
-		"SCRIBBLE_TOKEN":  "new",
-		"SCRIBBLE_URL":    "https://notes.example",
-	} {
-		if env[k] != want {
-			t.Errorf("%s = %q, want %q", k, env[k], want)
-		}
-	}
-	raw, _ := os.ReadFile(path)
-	text := string(raw)
-	if !strings.HasPrefix(text, "# my settings\nFYNE_THEME=dark\n") || !strings.Contains(text, "SCRIBBLE_HOTKEY=none # no hotkey\n") {
-		t.Errorf("the other lines were not kept as they were:\n%s", text)
-	}
-	if strings.Contains(text, "old") {
-		t.Errorf("an old token is still in the file:\n%s", text)
-	}
-	if strings.Index(text, "SCRIBBLE_TOKEN") > strings.Index(text, "SCRIBBLE_HOTKEY") {
-		t.Errorf("SCRIBBLE_TOKEN moved from where it was:\n%s", text)
-	}
-}
-
-func TestWriteEnvRoundTripsAwkwardValues(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".env")
-	token := `a#b "c" \d $HOME 'e' !f`
-
-	if err := writeEnv(path, map[string]string{"SCRIBBLE_TOKEN": token}); err != nil {
-		t.Fatal(err)
-	}
-
-	if got := readEnvFile(t, path)["SCRIBBLE_TOKEN"]; got != token {
-		t.Errorf("SCRIBBLE_TOKEN reads back as %q, want %q", got, token)
-	}
-}
-
-func TestWriteEnvAddsTrailingNewlineBeforeAppending(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".env")
-	if err := os.WriteFile(path, []byte("FYNE_THEME=dark"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := writeEnv(path, map[string]string{"SCRIBBLE_TOKEN": "t"}); err != nil {
-		t.Fatal(err)
-	}
-
-	env := readEnvFile(t, path)
-	if env["FYNE_THEME"] != "dark" || env["SCRIBBLE_TOKEN"] != "t" {
-		t.Errorf(".env holds %v", env)
-	}
-}
-
-func TestSaveSettingsWritesDotEnvAndSetsTheEnvironment(t *testing.T) {
+func TestSaveLoginWritesDotEnvAndSetsTheEnvironment(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".env")
 	if err := os.WriteFile(path, []byte("SCRIBBLE_HOTKEY=none\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("SCRIBBLE_URL", "")
-	t.Setenv("SCRIBBLE_TOKEN", "")
+	for _, k := range []string{envURL, envToken, envRefresh, envExpiry} {
+		t.Setenv(k, "")
+	}
+	exp := time.Date(2030, 1, 2, 3, 4, 5, 0, time.UTC)
 
-	if err := saveSettings(path, gui.Settings{URL: "https://notes.example", Token: "tok"}); err != nil {
+	if err := saveLogin(path, "https://notes.example", client.Tokens{Access: "a", Refresh: "r", Expiry: exp}); err != nil {
 		t.Fatal(err)
 	}
 
 	env := readEnvFile(t, path)
-	if env["SCRIBBLE_URL"] != "https://notes.example" || env["SCRIBBLE_TOKEN"] != "tok" || env["SCRIBBLE_HOTKEY"] != "none" {
-		t.Errorf(".env holds %v", env)
+	want := map[string]string{envURL: "https://notes.example", envToken: "a", envRefresh: "r", envExpiry: "2030-01-02T03:04:05Z", "SCRIBBLE_HOTKEY": "none"}
+	if !maps.Equal(env, want) {
+		t.Errorf(".env holds %v, want %v", env, want)
 	}
-	if os.Getenv("SCRIBBLE_URL") != "https://notes.example" || os.Getenv("SCRIBBLE_TOKEN") != "tok" {
-		t.Error("the saved settings are not in the environment for this run")
+	if got := savedLogin(gui.Overridden{}); got != (client.Tokens{Access: "a", Refresh: "r", Expiry: exp}) {
+		t.Errorf("the saved login in the environment for this run is %+v", got)
+	}
+}
+
+// A SCRIBBLE_TOKEN from the environment is static; the saved refresh
+// token is not used with it.
+func TestSavedLoginWithAnOverriddenToken(t *testing.T) {
+	t.Setenv(envToken, "static")
+	t.Setenv(envRefresh, "r")
+	t.Setenv(envExpiry, "2030-01-02T03:04:05Z")
+	if got := savedLogin(gui.Overridden{Token: true}); got != (client.Tokens{Access: "static"}) {
+		t.Errorf("savedLogin = %+v, want the static token only", got)
+	}
+}
+
+func TestLoginWithACode(t *testing.T) {
+	for _, k := range []string{envURL, envToken, envRefresh, envExpiry} {
+		t.Setenv(k, "")
+	}
+	srvURL := newOAuthServerURL(t)
+	path := filepath.Join(t.TempDir(), ".env")
+
+	wrong := "000000"
+	if wrong == loginCode() {
+		wrong = "111111"
+	}
+	if _, err := login(path, "dev", gui.Settings{URL: srvURL, Code: wrong}); err == nil || !strings.Contains(err.Error(), "wrong") {
+		t.Fatalf("wrong code: %v", err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Error("a failed login wrote the .env file")
+	}
+
+	tok, err := login(path, "dev", gui.Settings{URL: srvURL + "/", Code: loginCode()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := readEnvFile(t, path)
+	if env[envURL] != srvURL || env[envToken] != tok.Access || env[envRefresh] != tok.Refresh || tok.Refresh == "" {
+		t.Fatalf(".env holds %v after logging in with %+v", env, tok)
+	}
+
+	// The client renews the token and saves the new one.
+	tok.Expiry = time.Now().Add(-time.Minute)
+	c := newClient(srvURL, "dev", tok, func() (string, error) { return path, nil })
+	if _, err := c.List(context.Background(), ""); err != nil {
+		t.Fatal(err)
+	}
+	if env := readEnvFile(t, path); env[envToken] == tok.Access || env[envToken] != c.Tokens().Access {
+		t.Errorf("the renewed token was not saved: %v", env)
 	}
 }
 
@@ -128,7 +153,7 @@ func TestSetupScreenOffersSettings(t *testing.T) {
 	w := test.NewTempWindow(t, nil)
 	var saved gui.Settings
 	started := false
-	w.SetContent(setupScreen(w, "SCRIBBLE_TOKEN is not set.", gui.Settings{URL: "https://notes.sudde.net"}, gui.Overridden{},
+	w.SetContent(setupScreen(w, "Not logged in.", gui.Settings{URL: "https://notes.sudde.net"}, gui.Overridden{},
 		func(s gui.Settings) error { saved = s; return nil },
 		func() { started = true }))
 	w.Resize(fyne.NewSize(600, 400))
@@ -153,86 +178,15 @@ func TestSetupScreenOffersSettings(t *testing.T) {
 	if len(entries) != 2 || entries[0].Text != "https://notes.sudde.net" {
 		t.Fatalf("the Settings dialog is not filled in with the default URL")
 	}
-	entries[1].SetText("tok")
+	entries[1].SetText("123456")
 	for _, o := range test.LaidOutObjects(w.Canvas().Overlays().Top()) {
 		if b, ok := o.(*widget.Button); ok && b.Text == "Save" {
 			test.Tap(b)
 		}
 	}
 
-	if saved != (gui.Settings{URL: "https://notes.sudde.net", Token: "tok"}) || !started {
+	if saved != (gui.Settings{URL: "https://notes.sudde.net", Code: "123456"}) || !started {
 		t.Errorf("saved %v, started %v; want the settings saved and the app started", saved, started)
-	}
-}
-
-func TestWriteEnvReplacesTheFileInOneStep(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, ".env")
-	if err := os.WriteFile(path, []byte("SCRIBBLE_TOKEN=old\n"), 0o640); err != nil {
-		t.Fatal(err)
-	}
-	// A hard link keeps the old file: written in place, it would change too.
-	if err := os.Link(path, filepath.Join(dir, "old")); err != nil {
-		t.Skip("no hard links here:", err)
-	}
-
-	if err := writeEnv(path, map[string]string{"SCRIBBLE_TOKEN": "new"}); err != nil {
-		t.Fatal(err)
-	}
-
-	if old, _ := os.ReadFile(filepath.Join(dir, "old")); string(old) != "SCRIBBLE_TOKEN=old\n" {
-		t.Errorf("the .env was written in place, not replaced: the old file now holds %q", old)
-	}
-	if got := readEnvFile(t, path)["SCRIBBLE_TOKEN"]; got != "new" {
-		t.Errorf("SCRIBBLE_TOKEN = %q, want new", got)
-	}
-	if info, err := os.Stat(path); err != nil {
-		t.Error(err)
-	} else if info.Mode().Perm() != 0o640 {
-		t.Errorf("the replaced .env has mode %v, want the old file's 0640", info.Mode().Perm())
-	}
-	entries, _ := os.ReadDir(dir)
-	if len(entries) != 2 {
-		var names []string
-		for _, e := range entries {
-			names = append(names, e.Name())
-		}
-		t.Errorf("the folder holds %v, want only .env and old", names)
-	}
-}
-
-func TestWriteEnvBacksUpAFileItCannotRead(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".env")
-	broken := "FYNE_THEME=dark\nSCRIBBLE_TOKEN=\"unterminated\n"
-	if err := os.WriteFile(path, []byte(broken), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := writeEnv(path, map[string]string{"SCRIBBLE_URL": "https://notes.example"}); err != nil {
-		t.Fatal(err)
-	}
-
-	bak, err := os.ReadFile(path + ".bak")
-	if err != nil || string(bak) != broken {
-		t.Errorf(".env.bak holds %q (%v), want the broken file as it was", bak, err)
-	}
-	if info, err := os.Stat(path + ".bak"); err == nil && info.Mode().Perm()&0o077 != 0 {
-		t.Errorf(".env.bak has mode %v, want it private to the user", info.Mode().Perm())
-	}
-}
-
-func TestWriteEnvMakesNoBackupOfAGoodFile(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".env")
-	if err := os.WriteFile(path, []byte("FYNE_THEME=dark\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := writeEnv(path, map[string]string{"SCRIBBLE_TOKEN": "t"}); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := os.Stat(path + ".bak"); err == nil {
-		t.Error("a .env.bak was made of a file that reads fine")
 	}
 }
 
@@ -248,46 +202,5 @@ func TestEnvOverridesSeesVariablesSetInTheEnvironment(t *testing.T) {
 	t.Setenv("SCRIBBLE_TOKEN", "") // set, even if empty: .env cannot change it
 	if got := envOverrides(); got != (gui.Overridden{URL: true, Token: true}) {
 		t.Errorf("envOverrides() = %+v, want both", got)
-	}
-}
-
-func TestWriteEnvKeepsTheFirstBackup(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".env")
-	broken := "SCRIBBLE_TOKEN=old\nFYNE_THEME=\"unterminated\n"
-	if err := os.WriteFile(path, []byte(broken), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	for _, tok := range []string{"one", "two"} {
-		if err := writeEnv(path, map[string]string{"SCRIBBLE_TOKEN": tok}); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	if bak, _ := os.ReadFile(path + ".bak"); string(bak) != broken {
-		t.Errorf(".env.bak holds %q after a second save, want the original %q", bak, broken)
-	}
-}
-
-func TestWriteEnvThroughASymlinkKeepsTheLink(t *testing.T) {
-	dir := t.TempDir()
-	real := filepath.Join(dir, "real.env")
-	if err := os.WriteFile(real, []byte("FYNE_THEME=dark\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(dir, ".env")
-	if err := os.Symlink(real, path); err != nil {
-		t.Skip("no symlinks here:", err)
-	}
-
-	if err := writeEnv(path, map[string]string{"SCRIBBLE_TOKEN": "t"}); err != nil {
-		t.Fatal(err)
-	}
-
-	if info, err := os.Lstat(path); err != nil || info.Mode()&os.ModeSymlink == 0 {
-		t.Error(".env is no longer a symlink")
-	}
-	if env := readEnvFile(t, real); env["SCRIBBLE_TOKEN"] != "t" || env["FYNE_THEME"] != "dark" {
-		t.Errorf("the linked file holds %v", env)
 	}
 }

@@ -69,8 +69,9 @@ type UI struct {
 	// NewRelease links to a newer release the server runs, hidden if none.
 	NewRelease *widget.Hyperlink
 
-	// SaveSettings saves the settings entered in File > Settings…, for the
-	// next start. Nil leaves the menu item doing nothing.
+	// SaveSettings logs in with the settings entered in File > Settings…
+	// and saves the login for the next start (#184). Nil leaves the menu
+	// item doing nothing.
 	SaveSettings func(Settings) error
 	// Overridden marks the settings the environment set, for File >
 	// Settings… to say so.

@@ -122,6 +122,23 @@ CREATE TABLE database_info (
 INSERT INTO database_info (id, database_id) VALUES (1, lower(hex(randomblob(16))));
 `,
 	},
+	{
+		// OAuth2 tokens of API clients (#184, ADR 14), one row per access
+		// token and its refresh token ('' for none). data is the token's
+		// details as the oauth package encodes them; expires_at is when the
+		// row is of no more use, so it can be dropped.
+		name: "oauth_tokens",
+		sql: `
+CREATE TABLE oauth_tokens (
+	access TEXT NOT NULL PRIMARY KEY,
+	refresh TEXT NOT NULL DEFAULT '',
+	data TEXT NOT NULL,
+	expires_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX oauth_tokens_refresh ON oauth_tokens(refresh) WHERE refresh <> '';
+CREATE INDEX oauth_tokens_expires_at ON oauth_tokens(expires_at);
+`,
+	},
 }
 
 // migrate applies the migrations the database's user_version has not yet

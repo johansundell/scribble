@@ -123,7 +123,7 @@ func TestStartupAuthValidation(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Expected NewRouter to fail when protected routes exist without AuthToken, got nil")
 	}
-	if !strings.Contains(err.Error(), "AUTH_TOKEN must be configured") {
+	if !strings.Contains(err.Error(), "AUTH_TOKEN or OAuth must be configured") {
 		t.Fatalf("Expected AUTH_TOKEN error, got: %v", err)
 	}
 }
@@ -132,7 +132,7 @@ func TestAuthMiddleware_FailClosed(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	// Standalone AuthMiddleware with empty token must return 500 and not panic
-	mw := router.AuthMiddleware("", nil)
+	mw := router.AuthMiddleware("", nil, nil)
 	handler := mw(func(c *gin.Context) error {
 		return nil
 	})
@@ -480,7 +480,7 @@ func TestAuthMiddleware_InjectedLoggerOnEmptyToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	tl := &testLogger{}
-	mw := router.AuthMiddleware("", tl)
+	mw := router.AuthMiddleware("", nil, tl)
 	handler := mw(func(c *gin.Context) error { return nil })
 
 	w := httptest.NewRecorder()
@@ -503,7 +503,7 @@ func TestAuthMiddleware_Logs401OnMissingHeader(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	tl := &testLogger{}
-	mw := router.AuthMiddleware("secret-token", tl)
+	mw := router.AuthMiddleware("secret-token", nil, tl)
 	handler := mw(func(c *gin.Context) error { return nil })
 
 	w := httptest.NewRecorder()
@@ -534,7 +534,7 @@ func TestAuthMiddleware_Logs401OnInvalidToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	tl := &testLogger{}
-	mw := router.AuthMiddleware("secret-token", tl)
+	mw := router.AuthMiddleware("secret-token", nil, tl)
 	handler := mw(func(c *gin.Context) error { return nil })
 
 	w := httptest.NewRecorder()

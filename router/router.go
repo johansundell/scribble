@@ -2,6 +2,7 @@ package router
 
 import (
 	"bytes"
+	"context"
 	"crypto/subtle"
 	"errors"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"github.com/johansundell/scribble/handlers"
 	"github.com/johansundell/scribble/httperror"
 	"github.com/johansundell/scribble/logging"
+	"github.com/johansundell/scribble/oauth"
 	"github.com/johansundell/scribble/types"
 	"github.com/johansundell/scribble/utils"
 )
@@ -72,7 +74,11 @@ type Config struct {
 	// Auth turns on the web app; nil leaves its paths a 404, and the root
 	// a redirect to /healthz.
 	// Pass the same one to the Handler with handlers.WithAuth.
-	Auth     *auth.Authenticator
+	Auth *auth.Authenticator
+	// OAuth turns on OAuth2 login for API clients (#184, ADR 14): its
+	// token endpoint at oauth.TokenPath, and its access tokens on the
+	// routes that need a token. nil leaves only AUTH_TOKEN.
+	OAuth    *oauth.Server
 	Settings types.AppSettings
 	Assets   fs.FS
 	Version  string
@@ -148,8 +154,8 @@ func NewRouter(cfg Config) (*gin.Engine, error) {
 		if route.WebOff && cfg.Auth != nil {
 			continue // the web app is on and has the path
 		}
-		if route.UseAuth && cfg.Settings.AuthToken == "" {
-			return nil, fmt.Errorf("AUTH_TOKEN must be configured for route %q", route.Name)
+		if route.UseAuth && cfg.Settings.AuthToken == "" && cfg.OAuth == nil {
+			return nil, fmt.Errorf("AUTH_TOKEN or OAuth must be configured for route %q", route.Name)
 		}
 		if route.UseLogger && cfg.LogSink == nil {
 			return nil, fmt.Errorf("log sink must be configured for logged route %q", route.Name)
@@ -192,13 +198,21 @@ func NewRouter(cfg Config) (*gin.Engine, error) {
 		// Apply Auth Middleware second (outermost), so it executes first and rejects
 		// unauthenticated requests before the logger reads or stores the body.
 		if route.UseAuth {
-			fn = AuthMiddleware(cfg.Settings.AuthToken, l)(fn)
+			fn = AuthMiddleware(cfg.Settings.AuthToken, tokenValidator(cfg.OAuth), l)(fn)
 		}
 
 		router.Handle(route.Method, route.Pattern, WrapHandler(fn))
 		if debug {
 			l.Infof("route %s %s (%s) auth=%v logged=%v", route.Method, route.Pattern, route.Name, route.UseAuth, route.UseLogger)
 		}
+	}
+
+	// OAuth2 token endpoint (#184). Never request-logged: the log would
+	// copy authenticator codes and tokens.
+	if cfg.OAuth != nil {
+		router.POST(oauth.TokenPath, func(c *gin.Context) {
+			cfg.OAuth.HandleToken(c.Writer, c.Request, c.ClientIP())
+		})
 	}
 
 	// Static files
@@ -223,14 +237,31 @@ func AccessLog(l Logger) gin.HandlerFunc {
 	}
 }
 
-// AuthMiddleware returns a middleware that validates the Authorization header
-func AuthMiddleware(authToken string, l Logger) func(HandlerFuncWithError) HandlerFuncWithError {
+// TokenValidator checks OAuth2 access tokens; *oauth.Server is one.
+type TokenValidator interface {
+	ValidAccessToken(ctx context.Context, access string) bool
+}
+
+// tokenValidator is o as a TokenValidator, or nil when o is nil.
+func tokenValidator(o *oauth.Server) TokenValidator {
+	if o == nil {
+		return nil
+	}
+	return o
+}
+
+// AuthMiddleware returns a middleware that checks the Authorization header
+// for an OAuth2 access token that tokens accepts, or the static authToken
+// (AUTH_TOKEN, deprecated by ADR 14). An empty authToken is never accepted,
+// and a nil tokens accepts no access token; with neither, every request is
+// refused with 500.
+func AuthMiddleware(authToken string, tokens TokenValidator, l Logger) func(HandlerFuncWithError) HandlerFuncWithError {
 	l = logging.OrStd(l)
 	return func(inner HandlerFuncWithError) HandlerFuncWithError {
 		return func(c *gin.Context) error {
 
-			if authToken == "" {
-				l.Warningf("AUTH_TOKEN is not set")
+			if authToken == "" && tokens == nil {
+				l.Warningf("AUTH_TOKEN is not set and OAuth is off")
 				return httperror.ReturnWithHTTPStatus(
 					errors.New("authentication is not configured"),
 					http.StatusInternalServerError,
@@ -255,7 +286,8 @@ func AuthMiddleware(authToken string, l Logger) func(HandlerFuncWithError) Handl
 			}
 
 			// Use constant time comparison to prevent timing attacks
-			if subtle.ConstantTimeCompare([]byte(token), []byte(authToken)) != 1 {
+			static := authToken != "" && subtle.ConstantTimeCompare([]byte(token), []byte(authToken)) == 1
+			if !static && (tokens == nil || !tokens.ValidAccessToken(c.Request.Context(), token)) {
 				l.Warningf("unauthorized request: %s %s from %s: invalid authorization token", c.Request.Method, c.Request.URL.Path, c.ClientIP())
 				return httperror.ReturnWithHTTPStatus(
 					fmt.Errorf("invalid authorization token"),

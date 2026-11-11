@@ -30,7 +30,7 @@ _sn() {
         cword=$COMP_CWORD
     fi
 
-    local commands="new show edit append ls search links backlinks projects pin unpin rename autolink export import rm history diff restore deleted undelete completion version help"
+    local commands="new show edit append ls search links backlinks projects pin unpin rename autolink export import rm history diff restore deleted undelete completion version login logout help"
 
     if [[ $cword -eq 1 ]]; then
         COMPREPLY=( $(compgen -W "$commands" -- "$cur") )

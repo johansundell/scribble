@@ -40,8 +40,8 @@ func TestAPILevelHeaderOnEveryResponse(t *testing.T) {
 	for _, path := range []string{"/", "/healthz", "/notes", "/nope", "/assets/x"} {
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
-		if got := w.Header().Get("X-Scribble-API"); got != "6" {
-			t.Errorf("%s: X-Scribble-API = %q, want the default level 6", path, got)
+		if got := w.Header().Get("X-Scribble-API"); got != "7" {
+			t.Errorf("%s: X-Scribble-API = %q, want the default level 7", path, got)
 		}
 	}
 

@@ -75,7 +75,7 @@ AUTH_TOKEN=change-me PORT=:8080 SQLITE_PATH=./scribble.db go run .
 # CLI: install the latest sn on Linux or macOS (needs no Go; sudo if
 # /usr/local/bin isn't writable), or build it here with make build-cli
 curl -fsSL https://raw.githubusercontent.com/johansundell/scribble/master/scripts/install-sn.sh | sh
-export SCRIBBLE_URL=http://localhost:8080 SCRIBBLE_TOKEN=change-me
+sn login               # server URL and a code from your authenticator app
 sn new "Ideas" "first thought"
 git log --oneline -5 | sn append "Work log"
 sn edit Ideas
@@ -83,10 +83,11 @@ sn projects            # every #project; `projects <name>` lists its notes
 sn export              # every note as <title>.md in scribble-notes-YYYY-MM-DD.zip
 sn import notes.zip    # skips titles that exist; --overwrite replaces them
 
-# GUI (same SCRIBBLE_URL / SCRIBBLE_TOKEN; optional SCRIBBLE_HOTKEY, default Ctrl+Alt+N,
-# and SCRIBBLE_SHOW_HOTKEY, default Ctrl+Alt+S).
-# Also read from a .env next to the scribble-gui binary; the environment wins.
-# File > Settings… (Ctrl+, / Cmd+,) writes the URL and token to that .env.
+# GUI: File > Settings… (Ctrl+, / Cmd+,) logs in with the server URL and a
+# code from your authenticator app, and saves the login to a .env next to
+# the scribble-gui binary. Optional SCRIBBLE_HOTKEY (default Ctrl+Alt+N) and
+# SCRIBBLE_SHOW_HOTKEY (default Ctrl+Alt+S) are read from it too; the
+# environment wins.
 make build-gui
 ./scribble-gui
 ```
@@ -177,7 +178,9 @@ does not answer.
 
 ## API
 
-All note endpoints need `Authorization: Bearer <AUTH_TOKEN>`. They are
+All note endpoints need `Authorization: Bearer <token>`: an OAuth2 access
+token (see [API login](#api-login)), or the deprecated static `AUTH_TOKEN`,
+which still works beside it. They are
 deliberately **not** request-logged (the template's request log stores full
 bodies, which would copy every note into it). Errors are plain-text status
 text, like the rest of the service.
@@ -298,9 +301,10 @@ it on a phone), and has no link to `/totp-setup`. Wrong codes never lock web
 login for everyone, so one visitor can't lock out the rest; the per-address
 limit stays. Never set it on a server with notes of your own.
 
-- **Codes are for the browser only.** The API, the CLI and the desktop app
-  keep using `AUTH_TOKEN`, and the API never accepts a code. Whoever has the
-  authenticator can read and change every note, like the token.
+- **Codes also log in the apps.** The CLI and the desktop app trade a code
+  for OAuth2 tokens (see [API login](#api-login)); the note endpoints never
+  accept a code itself. Whoever has the authenticator can read and change
+  every note, like the token.
 - **Codes** change every 30 seconds. The server also takes the code before
   and after the current one, for a phone whose clock is a little off. A code
   logs in once: the same code, or an older one, is refused after a login.
@@ -509,12 +513,50 @@ Turn it on with `NOTES_REPLICA=filemaker`, `STORAGE=sqlite` and the `FMS_HOST`, 
 
 To browse and edit the notes inside FileMaker, add the layouts, scripts and privilege set from [docs/filemaker/editing.md](docs/filemaker/editing.md) (#67). Edits made there go to `PendingEdits`, never straight to `Notes`, and show up in the apps after the next sync.
 
+## API login
+
+With the web app on and `STORAGE=sqlite`, API clients log in with a code
+from the same authenticator app instead of the static `AUTH_TOKEN`
+([ADR 14](docs/adr/0014-oauth2-api-authentication.md), #184): `sn login`
+on the command line, File > Settings… in the desktop app. They use OAuth2's
+Resource Owner Password Credentials Grant at `POST /oauth/token`
+(form-encoded, as RFC 6749 has it):
+
+```sh
+curl -s https://notes.example.com/oauth/token \
+  -d grant_type=password -d client_id=scribble-cli \
+  -d username=me -d password=123456
+# {"access_token":"…","expires_in":86400,"refresh_token":"…","token_type":"Bearer"}
+
+curl -s https://notes.example.com/oauth/token \
+  -d grant_type=refresh_token -d client_id=scribble-cli -d refresh_token=…
+```
+
+- **Clients** are `scribble-cli` and `scribble-gui`, public, with no secret.
+  Others are refused with `invalid_client`.
+- **The password is the code.** The username is ignored. The code is checked
+  as the web login checks it: it logs in once, and wrong codes count towards
+  the same per-address limit, Login Alert and lock; while blocked, the
+  answer is **429**. A wrong code is **400** `invalid_grant`.
+- **Access tokens** last 24 hours, **refresh tokens** a year. A refresh
+  issues a new pair, ends the old one, and restarts the year. The tokens are
+  kept in the `oauth_tokens` table, so a restart or deploy logs nobody out;
+  restoring an older backup forgets the tokens issued since.
+- **Never request-logged**, like the web app: the log would copy codes and
+  tokens. API level 7 added the endpoint; it is a **404** while the web app
+  is off or `STORAGE` is not `sqlite`, and then only `AUTH_TOKEN` opens the
+  API.
+- **`AUTH_TOKEN` is deprecated** for the API, but still accepted, and still
+  opens `/totp-setup`.
+
 ## Layout
 
 ```
 main.go, service.go, config.go   service lifecycle (from the template)
 router/, handlers/, store/       routes, handlers, storage (notes: handlers/notes.go, store/notes.go)
 auth/                            the web app's TOTP login, session cookie and guessing limits
+oauth/                           OAuth2 token endpoint for API clients (code login, token refresh)
+envfile/                         edits .env files in place (the GUI's settings, sn login)
 replica/                         the FileMaker replica's sync (push, pull, conflicts)
 docs/filemaker/                  the FileMaker tables for the replica, and the layouts and scripts for editing in FileMaker
 tmpl/, assets/                   page templates (web app: app.html), CSS and scripts
@@ -523,7 +565,7 @@ client/                          Go API client
 offline/                         the GUI's local copy of the notes and its sync
 cmd/sn/                          CLI
 gui/                             Fyne GUI: windows and widgets
-cmd/scribble-gui/                GUI entry point (reads SCRIBBLE_URL / SCRIBBLE_TOKEN / SCRIBBLE_HOTKEY / SCRIBBLE_SHOW_HOTKEY)
+cmd/scribble-gui/                GUI entry point (reads SCRIBBLE_URL / SCRIBBLE_TOKEN / SCRIBBLE_REFRESH_TOKEN / SCRIBBLE_HOTKEY / SCRIBBLE_SHOW_HOTKEY)
 demo/notes/, scripts/demo-reset.sh  the public demo's sample notes and nightly reset (docs/demo.md)
 docs/service-template.md         the template's own docs
 GLOSSARY.md                      the words used for notes, sync, history and the replica

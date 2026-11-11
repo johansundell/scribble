@@ -8,11 +8,14 @@ TIMEOUT=15
 STORAGE=sqlite
 # optional path to sqlite database file (defaults to <binary dir>/<nameOfService>.db)
 SQLITE_PATH=""
-# leave empty to generate a temporary token on each start
+# opens /totp-setup; also a static API token, deprecated now that apps log
+# in with an authenticator code (sn login, ADR 14). Leave empty to generate a
+# temporary token on each start
 AUTH_TOKEN=""
 # web app at /: base32 secret for authenticator app (TOTP) login codes, at
 # least 26 characters: head -c 20 /dev/urandom | base32. Empty turns the web
-# app off. Add it to an app at /totp-setup with AUTH_TOKEN.
+# app off. Add it to an app at /totp-setup with AUTH_TOKEN. With
+# STORAGE=sqlite, sn and the desktop app log in with its codes too.
 WEB_TOTP_SECRET=""
 # signs the web session cookie; at least 32 characters: openssl rand -base64 33
 SESSION_SECRET=""

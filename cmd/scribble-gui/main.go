@@ -1,13 +1,16 @@
 // Command scribble-gui is the desktop client for a scribble server.
 //
 //	SCRIBBLE_URL          server address (default https://notes.sudde.net)
-//	SCRIBBLE_TOKEN        the server's AUTH_TOKEN
+//	SCRIBBLE_TOKEN        the access token of the saved login, or a static
+//	                      token: the server's AUTH_TOKEN (deprecated)
 //	SCRIBBLE_HOTKEY       global new-note shortcut (default Ctrl+Alt+N; "none" to disable)
 //	SCRIBBLE_SHOW_HOTKEY  global shortcut that only shows the window (default Ctrl+Alt+S; "none" to disable)
 //
-// They can also be set in a .env file next to the executable, which
-// File > Settings… writes SCRIBBLE_URL and SCRIBBLE_TOKEN to; variables
-// already in the environment win. The file is read before Fyne starts, so
+// They can also be set in a .env file next to the executable. File >
+// Settings… logs in with a code from the authenticator app and saves
+// SCRIBBLE_URL and the login (SCRIBBLE_TOKEN, SCRIBBLE_REFRESH_TOKEN and
+// SCRIBBLE_TOKEN_EXPIRY) there, renewing the tokens as they expire (#184);
+// variables already in the environment win. The file is read before Fyne starts, so
 // Fyne's own variables (such as FYNE_THEME=dark) work there too.
 //
 // It keeps a copy of the notes on disk (see offline.DefaultPath), so it
@@ -22,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -73,21 +77,23 @@ func main() {
 		if err != nil {
 			return err
 		}
-		return saveSettings(path, s)
+		_, err = login(path, ver, s)
+		return err
 	}
 	// start shows the notes, or the setup screen if there is no way to
-	// reach the server yet. Saving settings there starts again.
+	// reach the server yet. Logging in there starts again.
 	var start func(envErr error)
 	start = func(envErr error) {
-		current := gui.Settings{URL: client.ServerURL(), Token: os.Getenv("SCRIBBLE_TOKEN")}
+		current := gui.Settings{URL: client.ServerURL()}
+		tok := savedLogin(overridden)
 		retry := func() { start(nil) }
 		switch {
 		case envErr != nil:
 			w.SetContent(setupScreen(w, "Cannot read the .env file next to scribble-gui: "+envErr.Error(), current, overridden, save, retry))
-		case current.Token == "":
-			w.SetContent(setupScreen(w, "SCRIBBLE_TOKEN is not set. Enter the server's address and AUTH_TOKEN in Settings, or set them in the environment or in a .env file next to scribble-gui.", current, overridden, save, retry))
+		case tok.Access == "":
+			w.SetContent(setupScreen(w, "Not logged in. Choose Settings… and enter the server's address and a code from the authenticator app you set up for the web app.", current, overridden, save, retry))
 		default:
-			cleanup = append(cleanup, startUI(a, w, ver, current, overridden, save)...)
+			cleanup = append(cleanup, startUI(a, w, ver, current.URL, tok, overridden)...)
 		}
 	}
 	start(envErr)
@@ -98,11 +104,12 @@ func main() {
 	w.ShowAndRun()
 }
 
-// startUI opens the local copy of the notes on server s and shows them,
-// syncing in the background. File > Settings… notes which fields the
-// environment overrides. It returns what to undo when the app quits.
-func startUI(a fyne.App, w fyne.Window, ver string, s gui.Settings, overridden gui.Overridden, save func(gui.Settings) error) []func() {
-	cache, err := openCache(s.URL)
+// startUI opens the local copy of the notes on the server at url and shows
+// them, syncing in the background with the login tok. File > Settings…
+// notes which fields the environment overrides. It returns what to undo
+// when the app quits.
+func startUI(a fyne.App, w fyne.Window, ver, url string, tok client.Tokens, overridden gui.Overridden) []func() {
+	cache, err := openCache(url)
 	if err != nil {
 		var locked *offline.LockedError
 		if errors.As(err, &locked) {
@@ -120,10 +127,20 @@ func startUI(a fyne.App, w fyne.Window, ver string, s gui.Settings, overridden g
 		return nil
 	}
 	cleanup := []func(){func() { cache.Close() }}
-	c := client.New(s.URL, s.Token)
-	c.Name, c.Version = "gui", ver
+	c := newClient(url, ver, tok, envPathNextToExecutable)
 	ui := gui.New(w, c, cache)
-	ui.SaveSettings = save
+	// Logging in again to the same server takes effect at once.
+	ui.SaveSettings = func(s gui.Settings) error {
+		path, err := envPathNextToExecutable()
+		if err != nil {
+			return err
+		}
+		tok, err := login(path, ver, s)
+		if err == nil && strings.TrimRight(s.URL, "/") == c.BaseURL {
+			c.SetTokens(tok)
+		}
+		return err
+	}
 	ui.Overridden = overridden
 	ui.StartSync(syncInterval)
 	if desk, ok := a.(desktop.App); ok {
@@ -133,6 +150,26 @@ func startUI(a fyne.App, w fyne.Window, ver string, s gui.Settings, overridden g
 		cleanup = append(cleanup, func() { unregister() })
 	}
 	return cleanup
+}
+
+// newClient is the client for the server at url with the login tok. Tokens
+// it renews are saved to the .env file envPath names.
+func newClient(url, ver string, tok client.Tokens, envPath func() (string, error)) *client.Client {
+	c := client.New(url, "")
+	c.Name, c.Version, c.ClientID = "gui", ver, client.ClientGUI
+	c.SetTokens(tok)
+	if tok.Refresh != "" {
+		c.TokensChanged = func(tok client.Tokens) {
+			path, err := envPath()
+			if err == nil {
+				err = saveTokens(path, tok)
+			}
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "scribble-gui: cannot save the renewed login: %v\n", err)
+			}
+		}
+	}
+	return c
 }
 
 // newApp loads the .env file, then creates the app, so variables Fyne reads
