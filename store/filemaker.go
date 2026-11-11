@@ -38,13 +38,18 @@ var fileMakerSelectFields = func() string {
 	for i, f := range logTableFields {
 		names[i] = f.Name
 	}
-	return strings.Join(names, ",")
+	return fmsodata.QuoteFields(names...)
 }()
 
 // fileMakerTimeLayout writes CreatedAt as UTC without an offset: FileMaker
-// timestamps have no time zone, and an offset is read relative to the
-// server's zone.
+// timestamps have no time zone.
 const fileMakerTimeLayout = "2006-01-02T15:04:05"
+
+// fileMakerFilterTimeLayout writes a timestamp literal for $filter. Some
+// FileMaker Servers reject a literal without an offset, or with any offset but
+// Z. On triton, ...Z matched the stored timestamp as written, and the server
+// returns stored timestamps with a Z too (#187).
+const fileMakerFilterTimeLayout = fileMakerTimeLayout + "Z"
 
 // FileMakerStore keeps request logs in a FileMaker table through the OData API.
 type FileMakerStore struct {
@@ -210,9 +215,10 @@ func isPermanentStatus(code int) bool {
 func (s *FileMakerStore) GetLogs(ctx context.Context, from, to time.Time, page Page) ([]types.UsageLog, error) {
 	query := url.Values{}
 	query.Set("$select", fileMakerSelectFields)
-	query.Set("$filter", fmt.Sprintf("CreatedAt ge %s and CreatedAt lt %s",
-		from.UTC().Format(fileMakerTimeLayout), to.UTC().Format(fileMakerTimeLayout)))
-	query.Set("$orderby", "CreatedAt asc,ID asc")
+	createdAt, id := fmsodata.QuoteField("CreatedAt"), fmsodata.QuoteField("ID")
+	query.Set("$filter", fmt.Sprintf("%s ge %s and %s lt %s",
+		createdAt, from.UTC().Format(fileMakerFilterTimeLayout), createdAt, to.UTC().Format(fileMakerFilterTimeLayout)))
+	query.Set("$orderby", createdAt+" asc,"+id+" asc")
 	if page.Limit > 0 {
 		query.Set("$top", strconv.Itoa(page.Limit))
 	}

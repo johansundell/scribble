@@ -150,14 +150,14 @@ func (s *Syncer) Check(ctx context.Context) error {
 		fields []string
 	}{{t.Notes, noteFields}, {t.Pending, pendingFields}, {t.Info, infoFields}} {
 		q := url.Values{}
-		q.Set("$select", strings.Join(tf.fields, ","))
+		q.Set("$select", fmsodata.QuoteFields(tf.fields...))
 		q.Set("$top", "0")
 		if _, err := s.client.GetRecords(ctx, tf.table, q); err != nil {
 			return fmt.Errorf("check FileMaker table %q: %w", tf.table, err)
 		}
 	}
 	q := url.Values{}
-	q.Set("$select", strings.Join(infoFields, ","))
+	q.Set("$select", fmsodata.QuoteFields(infoFields...))
 	info, err := s.client.GetRecords(ctx, t.Info, q)
 	if err != nil {
 		return fmt.Errorf("read FileMaker table %q: %w", t.Info, err)
@@ -356,8 +356,8 @@ func (s *Syncer) upsert(ctx context.Context, n notes.Note) error {
 // cleanup failed is only cleaned up next time, never applied again.
 func (s *Syncer) pull(ctx context.Context) error {
 	q := url.Values{}
-	q.Set("$select", strings.Join(pendingFields, ","))
-	q.Set("$orderby", "ID asc")
+	q.Set("$select", fmsodata.QuoteFields(pendingFields...))
+	q.Set("$orderby", fmsodata.QuoteField("ID")+" asc")
 	rows, err := s.readAll(ctx, s.cfg.Tables.Pending, q)
 	if err != nil {
 		return fmt.Errorf("read FileMaker table %q: %w", s.cfg.Tables.Pending, err)

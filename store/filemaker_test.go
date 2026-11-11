@@ -173,7 +173,7 @@ func TestNewFileMaker_ChecksTableAndFields(t *testing.T) {
 	f := &fakeFileMaker{}
 	newTestFileMaker(t, f)
 
-	if got, want := f.lastQuery["$select"], "ID,Status,Method,Error,Endpoint,CreatedAt,Request,Response"; got != want {
+	if got, want := f.lastQuery["$select"], `"ID","Status","Method","Error","Endpoint","CreatedAt","Request","Response"`; got != want {
 		t.Errorf("expected startup check to select %q, got %q", want, got)
 	}
 	if f.lastQuery["$top"] != "0" {
@@ -317,10 +317,10 @@ func TestFileMaker_GetLogs(t *testing.T) {
 		t.Fatalf("GetLogs failed: %v", err)
 	}
 
-	if got, want := f.lastQuery["$filter"], "CreatedAt ge 2026-09-30T00:00:00 and CreatedAt lt 2026-10-01T00:00:00"; got != want {
+	if got, want := f.lastQuery["$filter"], `"CreatedAt" ge 2026-09-30T00:00:00Z and "CreatedAt" lt 2026-10-01T00:00:00Z`; got != want {
 		t.Errorf("expected filter %q, got %q", want, got)
 	}
-	if got := f.lastQuery["$orderby"]; got != "CreatedAt asc,ID asc" {
+	if got := f.lastQuery["$orderby"]; got != `"CreatedAt" asc,"ID" asc` {
 		t.Errorf("unexpected $orderby %q", got)
 	}
 

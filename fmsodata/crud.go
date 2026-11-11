@@ -17,7 +17,7 @@ func (c *Client) GetRecords(ctx context.Context, tableName string, query url.Val
 	if err != nil {
 		return nil, err
 	}
-	u.RawQuery = strings.ReplaceAll(query.Encode(), "+", "%20")
+	u.RawQuery = queryUnescaper.Replace(query.Encode())
 
 	var records []map[string]interface{}
 	seen := map[string]bool{}
@@ -154,4 +154,27 @@ const maxErrorBody = 64 << 10
 func (c *Client) handleError(resp *http.Response) error {
 	bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
 	return &StatusError{StatusCode: resp.StatusCode, Body: string(bodyBytes)}
+}
+
+// queryUnescaper undoes the escaping that some FileMaker Servers do not
+// decode: a system query option sent as %24select is ignored or rejected,
+// and %3A and %2C inside one are a syntax error (#187). All three are legal
+// unescaped in a URL query. Spaces go as %20, not '+'.
+var queryUnescaper = strings.NewReplacer("+", "%20", "%24", "$", "%3A", ":", "%2C", ",")
+
+// QuoteField puts a field name in double quotes for a query option such as
+// $filter or $orderby, so a name FileMaker treats as a keyword, such as ID,
+// still parses.
+func QuoteField(name string) string {
+	return `"` + name + `"`
+}
+
+// QuoteFields returns a comma-separated list of quoted field names for
+// $select.
+func QuoteFields(names ...string) string {
+	quoted := make([]string, len(names))
+	for i, n := range names {
+		quoted[i] = QuoteField(n)
+	}
+	return strings.Join(quoted, ",")
 }
