@@ -300,6 +300,7 @@ func TestGetRecords_SystemQueryOptionsUnescaped(t *testing.T) {
 }
 
 func TestQuoteFields(t *testing.T) {
+	assert.Equal(t, `"ID"`, QuoteField("ID"))
 	assert.Equal(t, `"ID"`, QuoteFields("ID"))
 	assert.Equal(t, `"ID","Status","CreatedAt"`, QuoteFields("ID", "Status", "CreatedAt"))
 }

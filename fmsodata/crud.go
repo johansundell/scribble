@@ -17,7 +17,7 @@ func (c *Client) GetRecords(ctx context.Context, tableName string, query url.Val
 	if err != nil {
 		return nil, err
 	}
-	u.RawQuery = encodeQuery(query)
+	u.RawQuery = queryUnescaper.Replace(query.Encode())
 
 	var records []map[string]interface{}
 	seen := map[string]bool{}
@@ -162,16 +162,19 @@ func (c *Client) handleError(resp *http.Response) error {
 // unescaped in a URL query. Spaces go as %20, not '+'.
 var queryUnescaper = strings.NewReplacer("+", "%20", "%24", "$", "%3A", ":", "%2C", ",")
 
-func encodeQuery(query url.Values) string {
-	return queryUnescaper.Replace(query.Encode())
+// QuoteField puts a field name in double quotes for a query option such as
+// $filter or $orderby, so a name FileMaker treats as a keyword, such as ID,
+// still parses.
+func QuoteField(name string) string {
+	return `"` + name + `"`
 }
 
-// QuoteFields returns field names for $select, each in double quotes so a
-// name FileMaker treats as a keyword, such as ID, still parses.
+// QuoteFields returns a comma-separated list of quoted field names for
+// $select.
 func QuoteFields(names ...string) string {
 	quoted := make([]string, len(names))
 	for i, n := range names {
-		quoted[i] = `"` + n + `"`
+		quoted[i] = QuoteField(n)
 	}
 	return strings.Join(quoted, ",")
 }

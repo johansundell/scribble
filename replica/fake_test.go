@@ -85,15 +85,16 @@ func (f *fakeFM) GetRecords(ctx context.Context, table string, q url.Values) ([]
 		for _, k := range strings.Split(s, ",") {
 			name, ok := unquote(k)
 			if !ok {
-				return nil, &fmsodata.StatusError{StatusCode: http.StatusBadRequest, Body: "parse failure at " + k}
+				return nil, parseFailure(k)
 			}
 			sel[name] = nil
 		}
 	}
 	if s := q.Get("$orderby"); s != "" {
 		for _, k := range strings.Split(s, ",") {
-			if _, ok := unquote(strings.Fields(k)[0]); !ok {
-				return nil, &fmsodata.StatusError{StatusCode: http.StatusBadRequest, Body: "parse failure at " + k}
+			name, _, _ := strings.Cut(k, " ")
+			if _, ok := unquote(name); !ok {
+				return nil, parseFailure(k)
 			}
 		}
 	}
@@ -207,6 +208,10 @@ func errOn(op, table string) func(string, string, map[string]any) error {
 		}
 		return nil
 	}
+}
+
+func parseFailure(at string) error {
+	return &fmsodata.StatusError{StatusCode: http.StatusBadRequest, Body: "parse failure at " + at}
 }
 
 // unquote strips the double quotes around a field name in a query.

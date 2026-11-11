@@ -357,7 +357,7 @@ func (s *Syncer) upsert(ctx context.Context, n notes.Note) error {
 func (s *Syncer) pull(ctx context.Context) error {
 	q := url.Values{}
 	q.Set("$select", fmsodata.QuoteFields(pendingFields...))
-	q.Set("$orderby", `"ID" asc`)
+	q.Set("$orderby", fmsodata.QuoteField("ID")+" asc")
 	rows, err := s.readAll(ctx, s.cfg.Tables.Pending, q)
 	if err != nil {
 		return fmt.Errorf("read FileMaker table %q: %w", s.cfg.Tables.Pending, err)

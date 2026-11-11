@@ -68,7 +68,7 @@ type Store interface {
 
 `STORAGE` (`sqlite`, `mysql` or `filemaker`) selects the backend. Each backend has a constructor that opens and owns its connection (`store.NewSQLite(path)`, `store.NewMySQL(settings.MySQL)`, `store.NewFileMaker(ctx, settings.FileMaker)`); the service looks the constructor up by `STORAGE` in one map, checked by a test against `types.StorageBackends`, opens the configured store, `defer`s `Close()` immediately, then pings it (using `FMS_TIMEOUT` for FileMaker, or a short deadline otherwise) before building the router.
 
-`store.FileMakerStore` keeps logs in a FileMaker table created by a FileMaker developer. Its constructor fails unless a `$select` of every field with `$top=0` succeeds, so setup mistakes surface at deploy time. `LogRequests` sends one `$batch` change set with `Prefer: return=minimal`; 4xx responses (except 408 and 429) and 501 are wrapped with `store.Permanent`. `CreatedAt` is written as UTC without an offset and read back as UTC wall-clock time.
+`store.FileMakerStore` keeps logs in a FileMaker table created by a FileMaker developer. Its constructor fails unless a `$select` of every field with `$top=0` succeeds, so setup mistakes surface at deploy time. `LogRequests` sends one `$batch` change set with `Prefer: return=minimal`; 4xx responses (except 408 and 429) are wrapped with `store.Permanent`. `CreatedAt` is written as UTC without an offset and read back as UTC wall-clock time.
 
 Store timestamps in UTC so ranges compare correctly on any server. SQLite keeps `created_at` as text, so write it in a fixed-width UTC layout; the driver's default RFC3339Nano varies in length and does not sort as a string.
 
