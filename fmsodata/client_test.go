@@ -279,6 +279,31 @@ func TestGetRecords_FilterWithPlusOffset(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestGetRecords_SystemQueryOptionsUnescaped(t *testing.T) {
+	// Some FileMaker Servers ignore or reject system query options sent as
+	// %24select, and do not decode %3A or %2C inside them (#187).
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t,
+			`$filter=%22CreatedAt%22%20ge%202026-09-30T00:00:00Z&$orderby=%22CreatedAt%22%20asc,%22ID%22%20asc&$select=%22ID%22,%22Status%22&$top=0`,
+			r.URL.RawQuery)
+		json.NewEncoder(w).Encode(map[string]interface{}{"value": []map[string]interface{}{}})
+	}))
+	defer server.Close()
+
+	query := url.Values{}
+	query.Set("$select", QuoteFields("ID", "Status"))
+	query.Set("$filter", `"CreatedAt" ge 2026-09-30T00:00:00Z`)
+	query.Set("$orderby", `"CreatedAt" asc,"ID" asc`)
+	query.Set("$top", "0")
+	_, err := newTestClient(server.URL).GetRecords(context.Background(), "Logs", query)
+	assert.NoError(t, err)
+}
+
+func TestQuoteFields(t *testing.T) {
+	assert.Equal(t, `"ID"`, QuoteFields("ID"))
+	assert.Equal(t, `"ID","Status","CreatedAt"`, QuoteFields("ID", "Status", "CreatedAt"))
+}
+
 func TestCreateRecord_NoContent(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)

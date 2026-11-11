@@ -78,10 +78,23 @@ func stored(rec map[string]any) map[string]any {
 func (f *fakeFM) GetRecords(ctx context.Context, table string, q url.Values) ([]map[string]any, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	// Like some FileMaker Servers (#187), field names in $select and
+	// $orderby must be quoted, or a name such as ID fails to parse.
 	sel := map[string]any{}
 	if s := q.Get("$select"); s != "" {
 		for _, k := range strings.Split(s, ",") {
-			sel[k] = nil
+			name, ok := unquote(k)
+			if !ok {
+				return nil, &fmsodata.StatusError{StatusCode: http.StatusBadRequest, Body: "parse failure at " + k}
+			}
+			sel[name] = nil
+		}
+	}
+	if s := q.Get("$orderby"); s != "" {
+		for _, k := range strings.Split(s, ",") {
+			if _, ok := unquote(strings.Fields(k)[0]); !ok {
+				return nil, &fmsodata.StatusError{StatusCode: http.StatusBadRequest, Body: "parse failure at " + k}
+			}
 		}
 	}
 	if err := f.check("GET", table, sel); err != nil {
@@ -194,4 +207,12 @@ func errOn(op, table string) func(string, string, map[string]any) error {
 		}
 		return nil
 	}
+}
+
+// unquote strips the double quotes around a field name in a query.
+func unquote(name string) (string, bool) {
+	if len(name) < 2 || name[0] != '"' || name[len(name)-1] != '"' {
+		return name, false
+	}
+	return name[1 : len(name)-1], true
 }
