@@ -9,14 +9,19 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/johansundell/scribble/client"
 )
 
 // config is the server and token sn uses, and the file they were read
-// from ("" when none was).
+// from ("" when none was). After sn login (#184), Token is an OAuth2 access
+// token that expires at Expiry and Refresh renews; with a static token
+// (AUTH_TOKEN) Refresh is "" and Expiry zero.
 type config struct {
 	URL, Token, Source string
+	Refresh            string
+	Expiry             time.Time
 }
 
 // configFiles are the files sn reads its settings from, first found wins
@@ -54,13 +59,18 @@ func resolveConfig(getenv func(string) string, files []string) (config, error) {
 		cfg.Source = path
 		cfg.URL = setting(vars, "scribble_url", "url")
 		cfg.Token = setting(vars, "scribble_token", "token")
+		cfg.Refresh = setting(vars, "scribble_refresh_token", "refresh_token")
+		// An unreadable expiry is zero: the token is used until refused.
+		cfg.Expiry, _ = time.Parse(time.RFC3339, setting(vars, "scribble_token_expiry", "token_expiry"))
 		break
 	}
 	if v := getenv("SCRIBBLE_URL"); v != "" {
 		cfg.URL = v
 	}
 	if v := getenv("SCRIBBLE_TOKEN"); v != "" {
-		cfg.Token = v
+		// A token from the environment is static: the saved login's
+		// refresh token doesn't belong to it.
+		cfg.Token, cfg.Refresh, cfg.Expiry = v, "", time.Time{}
 	}
 	if cfg.URL == "" {
 		cfg.URL = client.DefaultURL

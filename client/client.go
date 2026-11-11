@@ -24,7 +24,7 @@ import (
 // APILevel is the server API level this client is written for. The CLI and
 // the GUI share it. Raise it with the server's when the client starts using
 // what a new level adds (ADR 8).
-const APILevel = 6
+const APILevel = 7
 
 // ReleasesURL is where the latest release can be downloaded.
 const ReleasesURL = "https://github.com/johansundell/scribble/releases/latest"

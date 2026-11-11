@@ -70,6 +70,8 @@ Usage:
   sn undelete <title>          bring back a deleted note
   sn completion [bash]         output shell completion script
   sn version                   print the client's and the server's versions
+  sn login [<url>]             log in with a code from your authenticator app
+  sn logout                    forget the saved login
 
 Examples:
   sn history "Work log"        see its versions
@@ -81,11 +83,13 @@ Examples:
 
 Environment:
   SCRIBBLE_URL    server address (default https://notes.sudde.net)
-  SCRIBBLE_TOKEN  the server's AUTH_TOKEN
+  SCRIBBLE_TOKEN  a static token: the server's AUTH_TOKEN (deprecated;
+                  use sn login instead)
 
   Settings not in the environment are read from ~/.scribble, or else from
   scribble/.env in your config folder, as KEY=VALUE lines (url=, token= also
-  work). sn version shows which file was used.
+  work). sn login saves its tokens there and renews them as they expire.
+  sn version shows which file was used.
 `
 
 func main() {
@@ -99,7 +103,7 @@ func main() {
 func errorLine(err error) string {
 	switch {
 	case client.IsUnauthorized(err):
-		err = fmt.Errorf("the server rejected SCRIBBLE_TOKEN")
+		err = fmt.Errorf("the server rejected the token; run sn login")
 	case client.IsUpgradeRequired(err):
 		err = fmt.Errorf("this version (%s) is too old for the server; download the latest from %s%s",
 			Version, client.ReleasesURL, installHint(runtime.GOOS, " or run: "))
@@ -124,14 +128,28 @@ func runWith(stdout io.Writer, args []string) error {
 		return err
 	}
 	c := client.New(cfg.URL, cfg.Token)
-	c.Name, c.Version = "cli", Version
+	c.Name, c.Version, c.ClientID = "cli", Version, client.ClientCLI
+	c.RefreshToken, c.Expiry = cfg.Refresh, cfg.Expiry
+	if cfg.Refresh != "" {
+		// Save renewed tokens for the next run (#184).
+		c.TokensChanged = func(tok client.Tokens) {
+			if err := saveTokens(cfg.Source, tok); err != nil {
+				fmt.Fprintf(os.Stderr, "sn: cannot save the renewed login to %s: %v\n", sourceLabel(cfg.Source), err)
+			}
+		}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	if args[0] == "version" {
+	switch args[0] {
+	case "version":
 		return cmdVersion(ctx, c, stdout, cfg.Source) // /healthz needs no token
+	case "login":
+		return cmdLogin(ctx, cfg, stdin, stdout, args[1:])
+	case "logout":
+		return cmdLogout(cfg, stdout)
 	}
 	if cfg.Token == "" {
-		return fmt.Errorf("SCRIBBLE_TOKEN is not set (set it in the environment or in ~/.scribble)")
+		return fmt.Errorf("not logged in: run sn login, or set SCRIBBLE_TOKEN (in the environment or in ~/.scribble)")
 	}
 
 	cmd, rest := args[0], args[1:]
