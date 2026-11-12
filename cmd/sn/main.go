@@ -252,15 +252,15 @@ func cmdVersion(ctx context.Context, c *client.Client, w io.Writer, source strin
 	fmt.Fprintf(w, "server %s (API level %d%s)\n", h.Version, h.API, schema)
 	// An expired access token is renewed first, so the expiries shown are
 	// those the next command will use; TokensChanged saves them.
-	refused := false
+	// Any failed renewal reads as expired; the reason goes to stderr.
+	failed := false
 	if tok := c.Tokens(); tok.Refresh != "" && expired(tok.Expiry, time.Now()) {
-		if err := c.Refresh(ctx); client.IsUnauthorized(err) {
-			refused = true
-		} else if err != nil {
+		if err := c.Refresh(ctx); err != nil {
+			failed = true
 			fmt.Fprintf(os.Stderr, "sn: cannot renew the login: %v\n", err)
 		}
 	}
-	fmt.Fprintf(w, "url: %s\n%sconfig: %s\n", c.BaseURL, tokenStatus(c.Tokens(), time.Now(), refused), sourceLabel(source))
+	fmt.Fprintf(w, "url: %s\n%sconfig: %s\n", c.BaseURL, tokenStatus(c.Tokens(), time.Now(), failed), sourceLabel(source))
 	if client.NewerRelease(Version, h.Version) {
 		fmt.Fprintf(w, "update available: %s\n", client.ReleasesURL)
 		if h := installHint(runtime.GOOS, "run: "); h != "" {
@@ -272,14 +272,14 @@ func cmdVersion(ctx context.Context, c *client.Client, w io.Writer, source strin
 
 // tokenStatus is what sn version says about tok at now: no token, a static
 // one, or when an OAuth2 login's access and refresh tokens expire (#193).
-// refused is the server refusing the refresh token.
-func tokenStatus(tok client.Tokens, now time.Time, refused bool) string {
+// failed is renewing an expired access token failing.
+func tokenStatus(tok client.Tokens, now time.Time, failed bool) string {
 	switch {
 	case tok.Access == "":
 		return "token: (not logged in)\n"
 	case tok.Refresh == "":
 		return "token: static (never expires)\n"
-	case refused || expired(tok.RefreshExpiry, now):
+	case failed || expired(tok.RefreshExpiry, now):
 		return "access token: expired\nrefresh token: expired (run sn login to re-authenticate)\n"
 	}
 	access := "access token expires: " + expiryText(tok.Expiry, now) + "\n"

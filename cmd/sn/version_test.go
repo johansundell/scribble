@@ -208,17 +208,17 @@ func TestTokenStatus(t *testing.T) {
 	expired := login
 	expired.Expiry = now.Add(-time.Minute)
 	cases := []struct {
-		name    string
-		tok     client.Tokens
-		refused bool
-		want    string
+		name   string
+		tok    client.Tokens
+		failed bool
+		want   string
 	}{
 		{"not logged in", client.Tokens{}, false, "token: (not logged in)\n"},
 		{"static", client.Tokens{Access: "secret"}, false, "token: static (never expires)\n"},
 		{"oauth", login, false,
 			"access token expires: 2026-11-13 09:30:00 UTC (in 23 hours)\n" +
 				"refresh token expires: 2027-11-11 11:00:00 UTC (in 364 days)\n"},
-		{"refresh refused", expired, true,
+		{"renewal failed", expired, true,
 			"access token: expired\nrefresh token: expired (run sn login to re-authenticate)\n"},
 		{"refresh token past its expiry", client.Tokens{Access: "a", Refresh: "r", Expiry: now.Add(-time.Hour), RefreshExpiry: now.Add(-time.Minute)}, false,
 			"access token: expired\nrefresh token: expired (run sn login to re-authenticate)\n"},
@@ -235,7 +235,7 @@ func TestTokenStatus(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := tokenStatus(tc.tok, now, tc.refused); got != tc.want {
+			if got := tokenStatus(tc.tok, now, tc.failed); got != tc.want {
 				t.Errorf("got\n%s\nwant\n%s", got, tc.want)
 			}
 		})
@@ -303,6 +303,31 @@ func TestVersionRefusedRefreshToken(t *testing.T) {
 	path := loggedIn(t)
 	setInDotfile(t, path, "SCRIBBLE_TOKEN_EXPIRY", time.Now().Add(-time.Hour).UTC().Format(time.RFC3339))
 	setInDotfile(t, path, "SCRIBBLE_REFRESH_TOKEN", "not-a-refresh-token")
+	var out bytes.Buffer
+	if err := runWith(&out, []string{"version"}); err != nil {
+		t.Fatal(err)
+	}
+	if want := "\naccess token: expired\nrefresh token: expired (run sn login to re-authenticate)\nconfig: "; !strings.Contains(out.String(), want) {
+		t.Errorf("printed\n%s\nwant it to contain %q", out.String(), want)
+	}
+}
+
+// Any failed renewal, not only a refused one, reads as expired (#193).
+func TestVersionFailedRefresh(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == client.TokenPath {
+			http.Error(w, "down", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"version":"v0.0.12","api":2}`)
+	}))
+	t.Cleanup(srv.Close)
+	clearEnv(t)
+	path := dotfile(t)
+	writeFile(t, path, "SCRIBBLE_URL="+srv.URL+"\nSCRIBBLE_TOKEN=a\nSCRIBBLE_REFRESH_TOKEN=r\n"+
+		"SCRIBBLE_TOKEN_EXPIRY="+time.Now().Add(-time.Hour).UTC().Format(time.RFC3339)+"\n"+
+		"SCRIBBLE_REFRESH_EXPIRY="+time.Now().Add(24*time.Hour).UTC().Format(time.RFC3339)+"\n")
 	var out bytes.Buffer
 	if err := runWith(&out, []string{"version"}); err != nil {
 		t.Fatal(err)

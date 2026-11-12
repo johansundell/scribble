@@ -485,7 +485,7 @@ The login is shown as one of:
 | none | `token: (not logged in)` |
 | a static token (`SCRIBBLE_TOKEN` in the environment, or `AUTH_TOKEN`) | `token: static (never expires)` |
 | `sn login` | `access token expires: 2026-11-13 09:30:00 UTC (in 23 hours)`<br>`refresh token expires: 2027-11-12 09:30:00 UTC (in 364 days)` |
-| `sn login`, and the server refuses the refresh token or it has expired | `access token: expired`<br>`refresh token: expired (run sn login to re-authenticate)` |
+| `sn login`, and renewing the expired access token fails, or the refresh token has expired | `access token: expired`<br>`refresh token: expired (run sn login to re-authenticate)` |
 
 When the access token has expired, `sn version` first renews it with the
 refresh token and saves the new tokens, as any command would. A login saved
