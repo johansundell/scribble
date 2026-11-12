@@ -16,12 +16,14 @@ import (
 
 // config is the server and token sn uses, and the file they were read
 // from ("" when none was). After sn login (#184), Token is an OAuth2 access
-// token that expires at Expiry and Refresh renews; with a static token
-// (AUTH_TOKEN) Refresh is "" and Expiry zero.
+// token that expires at Expiry and Refresh, which expires at RefreshExpiry
+// (#193), renews; with a static token (AUTH_TOKEN) Refresh is "" and both
+// expiries zero.
 type config struct {
 	URL, Token, Source string
 	Refresh            string
 	Expiry             time.Time
+	RefreshExpiry      time.Time
 }
 
 // configFiles are the files sn reads its settings from, first found wins
@@ -62,6 +64,7 @@ func resolveConfig(getenv func(string) string, files []string) (config, error) {
 		cfg.Refresh = setting(vars, "scribble_refresh_token", "refresh_token")
 		// An unreadable expiry is zero: the token is used until refused.
 		cfg.Expiry, _ = time.Parse(time.RFC3339, setting(vars, "scribble_token_expiry", "token_expiry"))
+		cfg.RefreshExpiry, _ = time.Parse(time.RFC3339, setting(vars, "scribble_refresh_expiry", "refresh_expiry"))
 		break
 	}
 	if v := getenv("SCRIBBLE_URL"); v != "" {
@@ -70,7 +73,7 @@ func resolveConfig(getenv func(string) string, files []string) (config, error) {
 	if v := getenv("SCRIBBLE_TOKEN"); v != "" {
 		// A token from the environment is static: the saved login's
 		// refresh token doesn't belong to it.
-		cfg.Token, cfg.Refresh, cfg.Expiry = v, "", time.Time{}
+		cfg.Token, cfg.Refresh, cfg.Expiry, cfg.RefreshExpiry = v, "", time.Time{}, time.Time{}
 	}
 	if cfg.URL == "" {
 		cfg.URL = client.DefaultURL

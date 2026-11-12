@@ -19,6 +19,7 @@ ADR 5 used a single static token, `AUTH_TOKEN`, shared across all API clients (`
   - OAuth2 tokens are persisted in the SQLite database (`oauth_tokens` table) to survive server restarts and deployments.
   - **Access tokens** are short-lived (e.g. 24 hours).
   - **Refresh tokens** are long-lived (e.g. 365 days) and automatically renewed.
+  - The token response carries `refresh_token_expires_in` beside `expires_in` (#193), so clients can show when the login runs out; clients assume 365 days when a server omits it.
 - **Client Lifecycles**:
   - **CLI (`sn`)**: Adds `sn login` which prompts for the server URL and authenticator code, acquires OAuth tokens, and writes them to `~/.scribble` (mode `0600`). Expired access tokens are refreshed transparently in the background using the refresh token. `sn logout` removes local tokens.
   - **Desktop GUI (`scribble-gui`)**: The connection dialog prompts for the server URL and authenticator code, acquires tokens, and stores them in the GUI configuration directory.

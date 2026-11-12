@@ -48,9 +48,11 @@ type Client struct {
 	// request; after that use SetTokens.
 	Token string
 	// RefreshToken renews Token when it expires or is refused; "" when
-	// Token is AUTH_TOKEN. Expiry is when Token expires; zero when unknown.
-	RefreshToken string
-	Expiry       time.Time
+	// Token is AUTH_TOKEN. Expiry is when Token expires and RefreshExpiry
+	// when RefreshToken does; zero when unknown.
+	RefreshToken  string
+	Expiry        time.Time
+	RefreshExpiry time.Time
 	// ClientID is the OAuth2 client: ClientCLI or ClientGUI.
 	ClientID string
 	// TokensChanged, when set, is called with the new tokens after a
@@ -65,8 +67,8 @@ type Client struct {
 	APILevel int
 	Version  string
 
-	// authMu guards Token, RefreshToken and Expiry once requests start,
-	// and lets one request at a time refresh them.
+	// authMu guards Token, RefreshToken, Expiry and RefreshExpiry once
+	// requests start, and lets one request at a time refresh them.
 	authMu sync.Mutex
 
 	mu            sync.Mutex

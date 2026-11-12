@@ -53,6 +53,7 @@ Logged in to https://notes.example.com; saved in ~/.scribble
 | `SCRIBBLE_TOKEN` | none (required) | the access token `sn login` saved, or a static token: the server's `AUTH_TOKEN` (deprecated) |
 | `SCRIBBLE_REFRESH_TOKEN` | none | renews the access token; only read from the config file |
 | `SCRIBBLE_TOKEN_EXPIRY` | none | when the access token expires; only read from the config file |
+| `SCRIBBLE_REFRESH_EXPIRY` | none | when the refresh token expires (RFC 3339, UTC); only read from the config file |
 
 `SCRIBBLE_TOKEN` in the environment still works with a server's
 `AUTH_TOKEN`, but it is deprecated and wins over the saved login:
@@ -67,7 +68,8 @@ export SCRIBBLE_TOKEN=change-me
 Instead of exporting the variables in every shell, put them in
 `~/.scribble`, one `KEY=VALUE` per line. Blank lines and lines starting
 with `#` are ignored, values may be quoted, and the keys may also be
-written `url`, `token`, `refresh_token` and `token_expiry`, in any case.
+written `url`, `token`, `refresh_token`, `token_expiry` and
+`refresh_expiry`, in any case.
 `sn login` writes it for you:
 
 ```sh
@@ -467,21 +469,36 @@ It does not revoke them on the server, where they expire.
 
 Prints the CLI's version and API level, then the server's (with the
 server's database schema version when it has one), followed by the
-server URL and token in use and the config file they were read from
-(`config: none (environment / defaults)` when none was), and says
-`update available` when the server
+server URL, the state of the login (never the token itself) and the
+config file they were read from (`config: none (environment / defaults)`
+when none was), and says `update available` when the server
 runs a newer release, with the command that installs it on Linux and
 macOS. `dev` builds never say so. It asks `/healthz`, so it does not need
-`SCRIBBLE_TOKEN` (printing `token: (not set)` when unset).
+`SCRIBBLE_TOKEN`.
 It is the only command that checks for a newer release, so scripts using
 the others see no extra output.
+
+The login is shown as one of:
+
+| Login | Shown |
+| --- | --- |
+| none | `token: (not logged in)` |
+| a static token (`SCRIBBLE_TOKEN` in the environment, or `AUTH_TOKEN`) | `token: static (never expires)` |
+| `sn login` | `access token expires: 2026-11-13 09:30:00 UTC (in 23 hours)`<br>`refresh token expires: 2027-11-12 09:30:00 UTC (in 364 days)` |
+| `sn login`, and renewing the expired access token fails, or the refresh token has expired | `access token: expired`<br>`refresh token: expired (run sn login to re-authenticate)` |
+
+When the access token has expired, `sn version` first renews it with the
+refresh token and saves the new tokens, as any command would. A login saved
+by an older `sn`, without the refresh token's expiry, shows it as
+`unknown` until the next renewal.
 
 ```sh
 $ sn version
 client v0.0.11 (API level 1)
 server v0.0.12 (API level 2, schema 3)
 url: https://notes.sudde.net
-token: change-me
+access token expires: 2026-11-13 09:30:00 UTC (in 23 hours)
+refresh token expires: 2027-11-12 09:30:00 UTC (in 364 days)
 config: ~/.scribble
 update available: https://github.com/johansundell/scribble/releases/latest
 run: curl -fsSL https://raw.githubusercontent.com/johansundell/scribble/master/scripts/install-sn.sh | sh

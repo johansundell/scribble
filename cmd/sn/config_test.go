@@ -163,7 +163,7 @@ func TestRunReadsTheDotfile(t *testing.T) {
 	if err := runWith(&out, []string{"version"}); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"url: " + srvURL + "\n", "token: tok\n", "config: " + filepath.Join("~", ".scribble") + "\n"} {
+	for _, want := range []string{"url: " + srvURL + "\n", "token: static (never expires)\n", "config: " + filepath.Join("~", ".scribble") + "\n"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("version printed\n%s\nwant it to contain %q", out.String(), want)
 		}

@@ -120,6 +120,14 @@ func New(cfg Config) (*Server, error) {
 		}
 		return userID, nil
 	})
+	// Clients show when the login runs out (#193), so the answer says
+	// when the refresh token expires as well as the access token.
+	srv.SetExtensionFieldsHandler(func(ti oauth2.TokenInfo) map[string]interface{} {
+		if ti.GetRefresh() == "" {
+			return nil
+		}
+		return map[string]interface{}{"refresh_token_expires_in": int64(ti.GetRefreshExpiresIn() / time.Second)}
+	})
 	srv.SetInternalErrorHandler(func(err error) *errors.Response {
 		switch {
 		case stderrors.Is(err, auth.ErrRateLimited):

@@ -526,7 +526,7 @@ Resource Owner Password Credentials Grant at `POST /oauth/token`
 curl -s https://notes.example.com/oauth/token \
   -d grant_type=password -d client_id=scribble-cli \
   -d username=me -d password=123456
-# {"access_token":"…","expires_in":86400,"refresh_token":"…","token_type":"Bearer"}
+# {"access_token":"…","expires_in":86400,"refresh_token":"…","refresh_token_expires_in":31536000,"token_type":"Bearer"}
 
 curl -s https://notes.example.com/oauth/token \
   -d grant_type=refresh_token -d client_id=scribble-cli -d refresh_token=…
@@ -539,7 +539,9 @@ curl -s https://notes.example.com/oauth/token \
   the same per-address limit, Login Alert and lock; while blocked, the
   answer is **429**. A wrong code is **400** `invalid_grant`.
 - **Access tokens** last 24 hours, **refresh tokens** a year. A refresh
-  issues a new pair, ends the old one, and restarts the year. The tokens are
+  issues a new pair, ends the old one, and restarts the year. The answer
+  gives both lifetimes in seconds: `expires_in` and
+  `refresh_token_expires_in` (#193). The tokens are
   kept in the `oauth_tokens` table, so a restart or deploy logs nobody out;
   restoring an older backup forgets the tokens issued since.
 - **Never request-logged**, like the web app: the log would copy codes and

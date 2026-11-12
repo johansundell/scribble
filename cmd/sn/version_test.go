@@ -6,14 +6,18 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/johansundell/scribble/client"
+	"github.com/johansundell/scribble/envfile"
 	"github.com/johansundell/scribble/handlers"
+	"github.com/johansundell/scribble/oauth"
 	"github.com/johansundell/scribble/router"
 	"github.com/johansundell/scribble/store"
 	"github.com/johansundell/scribble/types"
@@ -106,7 +110,7 @@ func TestCmdVersion(t *testing.T) {
 			want := "client " + tc.client + " (API level 7)\n" +
 				"server " + tc.server + " (API level 2, schema 8)\n" +
 				"url: " + srvURL + "\n" +
-				"token: tok\n" +
+				"token: static (never expires)\n" +
 				"config: none (environment / defaults)\n" +
 				tc.extra
 			if out.String() != want {
@@ -131,7 +135,7 @@ func TestCmdVersionWithoutSchema(t *testing.T) {
 	if err := runWith(&out, []string{"version"}); err != nil {
 		t.Fatal(err)
 	}
-	if want := "client v0.0.12 (API level 7)\nserver v0.0.12 (API level 2)\nurl: " + srv.URL + "\ntoken: (not set)\nconfig: none (environment / defaults)\n"; out.String() != want {
+	if want := "client v0.0.12 (API level 7)\nserver v0.0.12 (API level 2)\nurl: " + srv.URL + "\ntoken: (not logged in)\nconfig: none (environment / defaults)\n"; out.String() != want {
 		t.Errorf("printed %q, want %q", out.String(), want)
 	}
 }
@@ -145,7 +149,7 @@ func TestCmdVersionWithoutServer(t *testing.T) {
 	if err := runWith(&out, []string{"version"}); err == nil {
 		t.Error("want an error when the server cannot be reached")
 	}
-	if want := "client v0.0.9 (API level 7)\nurl: http://127.0.0.1:1\ntoken: (not set)\nconfig: none (environment / defaults)\n"; out.String() != want {
+	if want := "client v0.0.9 (API level 7)\nurl: http://127.0.0.1:1\ntoken: (not logged in)\nconfig: none (environment / defaults)\n"; out.String() != want {
 		t.Errorf("printed %q, want %q", out.String(), want)
 	}
 }
@@ -158,7 +162,8 @@ func TestCmdVersionWithoutServerCustomToken(t *testing.T) {
 	if err := runWith(&out, []string{"version"}); err == nil {
 		t.Error("want an error when the server cannot be reached")
 	}
-	if want := "client v0.0.9 (API level 7)\nurl: http://127.0.0.1:1\ntoken: secret-token\nconfig: none (environment / defaults)\n"; out.String() != want {
+	// The token itself is never printed (#193).
+	if want := "client v0.0.9 (API level 7)\nurl: http://127.0.0.1:1\ntoken: static (never expires)\nconfig: none (environment / defaults)\n"; out.String() != want {
 		t.Errorf("printed %q, want %q", out.String(), want)
 	}
 }
@@ -191,5 +196,143 @@ func TestHelpNamesTheDefaultServer(t *testing.T) {
 	}
 	if want := "SCRIBBLE_URL    server address (default https://notes.sudde.net)"; !strings.Contains(out.String(), want) {
 		t.Errorf("help does not contain %q:\n%s", want, out.String())
+	}
+}
+
+// tokenStatus never shows the token, only its kind and expiries (#193).
+func TestTokenStatus(t *testing.T) {
+	now := time.Date(2026, 11, 12, 10, 0, 0, 0, time.UTC)
+	login := client.Tokens{Access: "a", Refresh: "r",
+		Expiry:        now.Add(23*time.Hour + 30*time.Minute),
+		RefreshExpiry: now.Add(364*24*time.Hour + time.Hour)}
+	expired := login
+	expired.Expiry = now.Add(-time.Minute)
+	cases := []struct {
+		name   string
+		tok    client.Tokens
+		failed bool
+		want   string
+	}{
+		{"not logged in", client.Tokens{}, false, "token: (not logged in)\n"},
+		{"static", client.Tokens{Access: "secret"}, false, "token: static (never expires)\n"},
+		{"oauth", login, false,
+			"access token expires: 2026-11-13 09:30:00 UTC (in 23 hours)\n" +
+				"refresh token expires: 2027-11-11 11:00:00 UTC (in 364 days)\n"},
+		{"renewal failed", expired, true,
+			"access token: expired\nrefresh token: expired (run sn login to re-authenticate)\n"},
+		{"refresh token past its expiry", client.Tokens{Access: "a", Refresh: "r", Expiry: now.Add(-time.Hour), RefreshExpiry: now.Add(-time.Minute)}, false,
+			"access token: expired\nrefresh token: expired (run sn login to re-authenticate)\n"},
+		{"access expired, not renewed (server down)", expired, false,
+			"access token: expired\nrefresh token expires: 2027-11-11 11:00:00 UTC (in 364 days)\n"},
+		{"unknown expiries (saved before #193)", client.Tokens{Access: "a", Refresh: "r"}, false,
+			"access token expires: unknown\nrefresh token expires: unknown\n"},
+		{"minutes and singulars", client.Tokens{Access: "a", Refresh: "r", Expiry: now.Add(90 * time.Second), RefreshExpiry: now.Add(25 * time.Hour)}, false,
+			"access token expires: 2026-11-12 10:01:30 UTC (in 1 minute)\n" +
+				"refresh token expires: 2026-11-13 11:00:00 UTC (in 1 day)\n"},
+		{"under a minute", client.Tokens{Access: "a", Refresh: "r", Expiry: now.Add(30 * time.Second), RefreshExpiry: now.Add(3 * time.Hour)}, false,
+			"access token expires: 2026-11-12 10:00:30 UTC (in less than a minute)\n" +
+				"refresh token expires: 2026-11-12 13:00:00 UTC (in 3 hours)\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tokenStatus(tc.tok, now, tc.failed); got != tc.want {
+				t.Errorf("got\n%s\nwant\n%s", got, tc.want)
+			}
+		})
+	}
+}
+
+// loggedIn logs sn in to a new OAuth2 server and returns ~/.scribble.
+func loggedIn(t *testing.T) string {
+	t.Helper()
+	clearEnv(t)
+	srvURL := newOAuthServerURL(t, oauth.Config{})
+	path := dotfile(t)
+	withStdin(t, srvURL+"\n"+loginCode()+"\n")
+	if err := runWith(&bytes.Buffer{}, []string{"login"}); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// setInDotfile sets key to value in the file at path.
+func setInDotfile(t *testing.T, path, key, value string) {
+	t.Helper()
+	if err := envfile.Write(path, map[string]string{key: value}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// After sn login, version shows when both tokens expire, not the token.
+func TestVersionShowsLoginExpiry(t *testing.T) {
+	loggedIn(t)
+	var out bytes.Buffer
+	if err := runWith(&out, []string{"version"}); err != nil {
+		t.Fatal(err)
+	}
+	re := regexp.MustCompile("\naccess token expires: \\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d:\\d\\d UTC \\(in 23 hours\\)\n" +
+		"refresh token expires: \\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d:\\d\\d UTC \\(in 364 days\\)\nconfig: ")
+	if !re.MatchString(out.String()) {
+		t.Errorf("printed\n%s", out.String())
+	}
+	if strings.Contains(out.String(), "token: ") {
+		t.Errorf("printed a token line:\n%s", out.String())
+	}
+}
+
+// An expired access token is renewed before the expiry is shown, and the
+// renewed tokens are saved.
+func TestVersionRenewsAnExpiredAccessToken(t *testing.T) {
+	path := loggedIn(t)
+	before := readDotfile(t, path)
+	setInDotfile(t, path, "SCRIBBLE_TOKEN_EXPIRY", time.Now().Add(-time.Hour).UTC().Format(time.RFC3339))
+	var out bytes.Buffer
+	if err := runWith(&out, []string{"version"}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "(in 23 hours)\n") {
+		t.Errorf("printed\n%s", out.String())
+	}
+	if after := readDotfile(t, path); after["SCRIBBLE_TOKEN"] == before["SCRIBBLE_TOKEN"] {
+		t.Error("renewed tokens were not saved")
+	}
+}
+
+// A refresh token the server refuses is reported as expired.
+func TestVersionRefusedRefreshToken(t *testing.T) {
+	path := loggedIn(t)
+	setInDotfile(t, path, "SCRIBBLE_TOKEN_EXPIRY", time.Now().Add(-time.Hour).UTC().Format(time.RFC3339))
+	setInDotfile(t, path, "SCRIBBLE_REFRESH_TOKEN", "not-a-refresh-token")
+	var out bytes.Buffer
+	if err := runWith(&out, []string{"version"}); err != nil {
+		t.Fatal(err)
+	}
+	if want := "\naccess token: expired\nrefresh token: expired (run sn login to re-authenticate)\nconfig: "; !strings.Contains(out.String(), want) {
+		t.Errorf("printed\n%s\nwant it to contain %q", out.String(), want)
+	}
+}
+
+// Any failed renewal, not only a refused one, reads as expired (#193).
+func TestVersionFailedRefresh(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == client.TokenPath {
+			http.Error(w, "down", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"version":"v0.0.12","api":2}`)
+	}))
+	t.Cleanup(srv.Close)
+	clearEnv(t)
+	path := dotfile(t)
+	writeFile(t, path, "SCRIBBLE_URL="+srv.URL+"\nSCRIBBLE_TOKEN=a\nSCRIBBLE_REFRESH_TOKEN=r\n"+
+		"SCRIBBLE_TOKEN_EXPIRY="+time.Now().Add(-time.Hour).UTC().Format(time.RFC3339)+"\n"+
+		"SCRIBBLE_REFRESH_EXPIRY="+time.Now().Add(24*time.Hour).UTC().Format(time.RFC3339)+"\n")
+	var out bytes.Buffer
+	if err := runWith(&out, []string{"version"}); err != nil {
+		t.Fatal(err)
+	}
+	if want := "\naccess token: expired\nrefresh token: expired (run sn login to re-authenticate)\nconfig: "; !strings.Contains(out.String(), want) {
+		t.Errorf("printed\n%s\nwant it to contain %q", out.String(), want)
 	}
 }

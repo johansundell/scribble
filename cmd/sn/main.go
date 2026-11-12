@@ -131,7 +131,7 @@ func runWith(stdout io.Writer, args []string) error {
 	}
 	c := client.New(cfg.URL, cfg.Token)
 	c.Name, c.Version, c.ClientID = "cli", Version, client.ClientCLI
-	c.RefreshToken, c.Expiry = cfg.Refresh, cfg.Expiry
+	c.RefreshToken, c.Expiry, c.RefreshExpiry = cfg.Refresh, cfg.Expiry, cfg.RefreshExpiry
 	if cfg.Refresh != "" {
 		// Save renewed tokens for the next run (#184).
 		c.TokensChanged = func(tok client.Tokens) {
@@ -234,18 +234,15 @@ func runWith(stdout io.Writer, args []string) error {
 }
 
 // cmdVersion prints the client's and the server's versions and API levels,
-// the server URL and token in use and the config file they came from, and
-// says when the server runs a newer release. Only this command says so, so
+// the server URL, what kind of token is in use and when it expires (never
+// the token itself, #193), and the config file they came from, and says
+// when the server runs a newer release. Only this command says so, so
 // scripts using the others aren't affected.
 func cmdVersion(ctx context.Context, c *client.Client, w io.Writer, source string) error {
 	fmt.Fprintf(w, "client %s (API level %d)\n", Version, client.APILevel)
-	tok := c.Token
-	if tok == "" {
-		tok = "(not set)"
-	}
 	h, err := c.Health(ctx)
 	if err != nil {
-		fmt.Fprintf(w, "url: %s\ntoken: %s\nconfig: %s\n", c.BaseURL, tok, sourceLabel(source))
+		fmt.Fprintf(w, "url: %s\n%sconfig: %s\n", c.BaseURL, tokenStatus(c.Tokens(), time.Now(), false), sourceLabel(source))
 		return fmt.Errorf("cannot ask the server for its version: %w", err)
 	}
 	schema := ""
@@ -253,7 +250,17 @@ func cmdVersion(ctx context.Context, c *client.Client, w io.Writer, source strin
 		schema = fmt.Sprintf(", schema %d", h.Schema)
 	}
 	fmt.Fprintf(w, "server %s (API level %d%s)\n", h.Version, h.API, schema)
-	fmt.Fprintf(w, "url: %s\ntoken: %s\nconfig: %s\n", c.BaseURL, tok, sourceLabel(source))
+	// An expired access token is renewed first, so the expiries shown are
+	// those the next command will use; TokensChanged saves them.
+	// Any failed renewal reads as expired; the reason goes to stderr.
+	failed := false
+	if tok := c.Tokens(); tok.Refresh != "" && expired(tok.Expiry, time.Now()) {
+		if err := c.Refresh(ctx); err != nil {
+			failed = true
+			fmt.Fprintf(os.Stderr, "sn: cannot renew the login: %v\n", err)
+		}
+	}
+	fmt.Fprintf(w, "url: %s\n%sconfig: %s\n", c.BaseURL, tokenStatus(c.Tokens(), time.Now(), failed), sourceLabel(source))
 	if client.NewerRelease(Version, h.Version) {
 		fmt.Fprintf(w, "update available: %s\n", client.ReleasesURL)
 		if h := installHint(runtime.GOOS, "run: "); h != "" {
@@ -261,6 +268,59 @@ func cmdVersion(ctx context.Context, c *client.Client, w io.Writer, source strin
 		}
 	}
 	return nil
+}
+
+// tokenStatus is what sn version says about tok at now: no token, a static
+// one, or when an OAuth2 login's access and refresh tokens expire (#193).
+// failed is renewing an expired access token failing.
+func tokenStatus(tok client.Tokens, now time.Time, failed bool) string {
+	switch {
+	case tok.Access == "":
+		return "token: (not logged in)\n"
+	case tok.Refresh == "":
+		return "token: static (never expires)\n"
+	case failed || expired(tok.RefreshExpiry, now):
+		return "access token: expired\nrefresh token: expired (run sn login to re-authenticate)\n"
+	}
+	access := "access token expires: " + expiryText(tok.Expiry, now) + "\n"
+	if expired(tok.Expiry, now) {
+		access = "access token: expired\n"
+	}
+	return access + "refresh token expires: " + expiryText(tok.RefreshExpiry, now) + "\n"
+}
+
+// expired reports whether a token that expires at t has expired at now;
+// the zero time is never.
+func expired(t, now time.Time) bool {
+	return !t.IsZero() && !now.Before(t)
+}
+
+// expiryText is t in UTC and how long until then from now, or "unknown"
+// for the zero time.
+func expiryText(t, now time.Time) string {
+	if t.IsZero() {
+		return "unknown"
+	}
+	return fmt.Sprintf("%s (in %s)", t.UTC().Format("2006-01-02 15:04:05 UTC"), roughly(t.Sub(now)))
+}
+
+// roughly is d in whole days, hours or minutes, rounded down.
+func roughly(d time.Duration) string {
+	plural := func(n int64, unit string) string {
+		if n == 1 {
+			return "1 " + unit
+		}
+		return fmt.Sprintf("%d %ss", n, unit)
+	}
+	switch {
+	case d >= 24*time.Hour:
+		return plural(int64(d/(24*time.Hour)), "day")
+	case d >= time.Hour:
+		return plural(int64(d/time.Hour), "hour")
+	case d >= time.Minute:
+		return plural(int64(d/time.Minute), "minute")
+	}
+	return "less than a minute"
 }
 
 // withNote looks up the note named by args[0] and calls fn. want is the
