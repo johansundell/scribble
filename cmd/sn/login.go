@@ -20,18 +20,19 @@ var stdin io.Reader = os.Stdin
 
 // The variables sn login saves (#184, ADR 14). SCRIBBLE_TOKEN holds the
 // access token, so a saved login reads like a static token, plus the
-// refresh token and expiry that renew it.
+// refresh token that renews it and when each expires.
 const (
-	keyURL     = "SCRIBBLE_URL"
-	keyToken   = "SCRIBBLE_TOKEN"
-	keyRefresh = "SCRIBBLE_REFRESH_TOKEN"
-	keyExpiry  = "SCRIBBLE_TOKEN_EXPIRY"
+	keyURL           = "SCRIBBLE_URL"
+	keyToken         = "SCRIBBLE_TOKEN"
+	keyRefresh       = "SCRIBBLE_REFRESH_TOKEN"
+	keyExpiry        = "SCRIBBLE_TOKEN_EXPIRY"
+	keyRefreshExpiry = "SCRIBBLE_REFRESH_EXPIRY"
 )
 
 // tokenKeys are the names, in lower case, sn reads the token settings
 // under. Login and logout remove every spelling of them, so the saved
 // login is the only one.
-var tokenKeys = []string{"scribble_token", "token", "scribble_refresh_token", "refresh_token", "scribble_token_expiry", "token_expiry"}
+var tokenKeys = []string{"scribble_token", "token", "scribble_refresh_token", "refresh_token", "scribble_token_expiry", "token_expiry", "scribble_refresh_expiry", "refresh_expiry"}
 
 // loginFile is the file sn login writes: the one sn read its settings
 // from, else ~/.scribble.
@@ -146,6 +147,9 @@ func tokenVars(tok client.Tokens) map[string]string {
 	if !tok.Expiry.IsZero() {
 		vars[keyExpiry] = tok.Expiry.UTC().Format(time.RFC3339)
 	}
+	if !tok.RefreshExpiry.IsZero() {
+		vars[keyRefreshExpiry] = tok.RefreshExpiry.UTC().Format(time.RFC3339)
+	}
 	return vars
 }
 
@@ -166,7 +170,7 @@ func keysIn(path string, names []string) ([]string, error) {
 	for _, n := range names {
 		want[n] = true
 	}
-	canonical := map[string]bool{keyURL: true, keyToken: true, keyRefresh: true, keyExpiry: true}
+	canonical := map[string]bool{keyURL: true, keyToken: true, keyRefresh: true, keyExpiry: true, keyRefreshExpiry: true}
 	var keys []string
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
@@ -192,7 +196,7 @@ func cmdLogout(cfg config, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	remove = append(remove, keyToken, keyRefresh, keyExpiry)
+	remove = append(remove, keyToken, keyRefresh, keyExpiry, keyRefreshExpiry)
 	if err := envfile.Write(cfg.Source, nil, remove...); err != nil {
 		return err
 	}

@@ -80,21 +80,23 @@ func TestSaveLoginWritesDotEnvAndSetsTheEnvironment(t *testing.T) {
 	if err := os.WriteFile(path, []byte("SCRIBBLE_HOTKEY=none\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	for _, k := range []string{envURL, envToken, envRefresh, envExpiry} {
+	for _, k := range []string{envURL, envToken, envRefresh, envExpiry, envRefreshExpiry} {
 		t.Setenv(k, "")
 	}
 	exp := time.Date(2030, 1, 2, 3, 4, 5, 0, time.UTC)
+	refreshExp := time.Date(2031, 1, 2, 3, 4, 5, 0, time.UTC)
+	tok := client.Tokens{Access: "a", Refresh: "r", Expiry: exp, RefreshExpiry: refreshExp}
 
-	if err := saveLogin(path, "https://notes.example", client.Tokens{Access: "a", Refresh: "r", Expiry: exp}); err != nil {
+	if err := saveLogin(path, "https://notes.example", tok); err != nil {
 		t.Fatal(err)
 	}
 
 	env := readEnvFile(t, path)
-	want := map[string]string{envURL: "https://notes.example", envToken: "a", envRefresh: "r", envExpiry: "2030-01-02T03:04:05Z", "SCRIBBLE_HOTKEY": "none"}
+	want := map[string]string{envURL: "https://notes.example", envToken: "a", envRefresh: "r", envExpiry: "2030-01-02T03:04:05Z", envRefreshExpiry: "2031-01-02T03:04:05Z", "SCRIBBLE_HOTKEY": "none"}
 	if !maps.Equal(env, want) {
 		t.Errorf(".env holds %v, want %v", env, want)
 	}
-	if got := savedLogin(gui.Overridden{}); got != (client.Tokens{Access: "a", Refresh: "r", Expiry: exp}) {
+	if got := savedLogin(gui.Overridden{}); got != tok {
 		t.Errorf("the saved login in the environment for this run is %+v", got)
 	}
 }
@@ -105,13 +107,14 @@ func TestSavedLoginWithAnOverriddenToken(t *testing.T) {
 	t.Setenv(envToken, "static")
 	t.Setenv(envRefresh, "r")
 	t.Setenv(envExpiry, "2030-01-02T03:04:05Z")
+	t.Setenv(envRefreshExpiry, "2031-01-02T03:04:05Z")
 	if got := savedLogin(gui.Overridden{Token: true}); got != (client.Tokens{Access: "static"}) {
 		t.Errorf("savedLogin = %+v, want the static token only", got)
 	}
 }
 
 func TestLoginWithACode(t *testing.T) {
-	for _, k := range []string{envURL, envToken, envRefresh, envExpiry} {
+	for _, k := range []string{envURL, envToken, envRefresh, envExpiry, envRefreshExpiry} {
 		t.Setenv(k, "")
 	}
 	srvURL := newOAuthServerURL(t)
@@ -133,7 +136,7 @@ func TestLoginWithACode(t *testing.T) {
 		t.Fatal(err)
 	}
 	env := readEnvFile(t, path)
-	if env[envURL] != srvURL || env[envToken] != tok.Access || env[envRefresh] != tok.Refresh || tok.Refresh == "" {
+	if env[envURL] != srvURL || env[envToken] != tok.Access || env[envRefresh] != tok.Refresh || tok.Refresh == "" || env[envRefreshExpiry] == "" {
 		t.Fatalf(".env holds %v after logging in with %+v", env, tok)
 	}
 

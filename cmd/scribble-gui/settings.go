@@ -17,12 +17,13 @@ import (
 
 // The variables a login is saved in (#184, ADR 14). SCRIBBLE_TOKEN holds
 // the access token, as it held AUTH_TOKEN before, with the refresh token
-// and expiry that renew it beside it.
+// that renews it and when each expires beside it.
 const (
-	envURL     = "SCRIBBLE_URL"
-	envToken   = "SCRIBBLE_TOKEN"
-	envRefresh = "SCRIBBLE_REFRESH_TOKEN"
-	envExpiry  = "SCRIBBLE_TOKEN_EXPIRY"
+	envURL           = "SCRIBBLE_URL"
+	envToken         = "SCRIBBLE_TOKEN"
+	envRefresh       = "SCRIBBLE_REFRESH_TOKEN"
+	envExpiry        = "SCRIBBLE_TOKEN_EXPIRY"
+	envRefreshExpiry = "SCRIBBLE_REFRESH_EXPIRY"
 )
 
 // login logs in to s.URL with the authenticator code in s as
@@ -57,9 +58,12 @@ func saveTokens(path string, tok client.Tokens) error {
 }
 
 func tokenVars(tok client.Tokens) map[string]string {
-	vars := map[string]string{envToken: tok.Access, envRefresh: tok.Refresh, envExpiry: ""}
+	vars := map[string]string{envToken: tok.Access, envRefresh: tok.Refresh, envExpiry: "", envRefreshExpiry: ""}
 	if !tok.Expiry.IsZero() {
 		vars[envExpiry] = tok.Expiry.UTC().Format(time.RFC3339)
+	}
+	if !tok.RefreshExpiry.IsZero() {
+		vars[envRefreshExpiry] = tok.RefreshExpiry.UTC().Format(time.RFC3339)
 	}
 	return vars
 }
@@ -84,6 +88,7 @@ func savedLogin(overridden gui.Overridden) client.Tokens {
 		tok.Refresh = os.Getenv(envRefresh)
 		// An unreadable expiry is zero: the token is used until refused.
 		tok.Expiry, _ = time.Parse(time.RFC3339, os.Getenv(envExpiry))
+		tok.RefreshExpiry, _ = time.Parse(time.RFC3339, os.Getenv(envRefreshExpiry))
 	}
 	return tok
 }

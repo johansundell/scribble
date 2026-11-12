@@ -26,13 +26,18 @@ const (
 // so it doesn't expire on the way to the server.
 const refreshMargin = time.Minute
 
+// defaultRefreshTTL is how long a refresh token is assumed to last when
+// the server doesn't say (servers before #193): the server's default.
+const defaultRefreshTTL = 365 * 24 * time.Hour
+
 // Tokens is an OAuth2 login: the access token sent with each request, the
-// refresh token that renews it, and when the access token expires (zero
-// when unknown).
+// refresh token that renews it, when the access token expires and when the
+// refresh token does (zero when unknown).
 type Tokens struct {
-	Access  string
-	Refresh string
-	Expiry  time.Time
+	Access        string
+	Refresh       string
+	Expiry        time.Time
+	RefreshExpiry time.Time
 }
 
 // LoginError is the token endpoint refusing a login or a refresh.
@@ -82,14 +87,14 @@ func (c *Client) Login(ctx context.Context, code string) (Tokens, error) {
 func (c *Client) SetTokens(tok Tokens) {
 	c.authMu.Lock()
 	defer c.authMu.Unlock()
-	c.Token, c.RefreshToken, c.Expiry = tok.Access, tok.Refresh, tok.Expiry
+	c.Token, c.RefreshToken, c.Expiry, c.RefreshExpiry = tok.Access, tok.Refresh, tok.Expiry, tok.RefreshExpiry
 }
 
 // Tokens returns the tokens the client is using.
 func (c *Client) Tokens() Tokens {
 	c.authMu.Lock()
 	defer c.authMu.Unlock()
-	return Tokens{Access: c.Token, Refresh: c.RefreshToken, Expiry: c.Expiry}
+	return Tokens{Access: c.Token, Refresh: c.RefreshToken, Expiry: c.Expiry, RefreshExpiry: c.RefreshExpiry}
 }
 
 // tokenRequest posts form to the token endpoint and returns the tokens it
@@ -114,6 +119,7 @@ func (c *Client) tokenRequest(ctx context.Context, form url.Values) (Tokens, err
 		Access      string `json:"access_token"`
 		Refresh     string `json:"refresh_token"`
 		ExpiresIn   int64  `json:"expires_in"`
+		RefreshIn   int64  `json:"refresh_token_expires_in"`
 		Error       string `json:"error"`
 		Description string `json:"error_description"`
 	}
@@ -131,6 +137,11 @@ func (c *Client) tokenRequest(ctx context.Context, form url.Values) (Tokens, err
 	if body.ExpiresIn > 0 {
 		tok.Expiry = start.Add(time.Duration(body.ExpiresIn) * time.Second)
 	}
+	if body.RefreshIn > 0 {
+		tok.RefreshExpiry = start.Add(time.Duration(body.RefreshIn) * time.Second)
+	} else {
+		tok.RefreshExpiry = start.Add(defaultRefreshTTL)
+	}
 	return tok, nil
 }
 
@@ -144,6 +155,19 @@ func (c *Client) bearer(ctx context.Context) (string, error) {
 		}
 	}
 	return c.Token, nil
+}
+
+// Refresh trades the refresh token for new tokens now, whether or not the
+// access token has expired, and hands them to TokensChanged. Without a
+// refresh token, or when the server refuses it, the error is a 401 *Error,
+// which IsUnauthorized accepts.
+func (c *Client) Refresh(ctx context.Context) error {
+	c.authMu.Lock()
+	defer c.authMu.Unlock()
+	if c.RefreshToken == "" {
+		return &Error{Status: http.StatusUnauthorized, Message: "no refresh token; log in again"}
+	}
+	return c.refreshLocked(ctx)
 }
 
 // renew gets a new access token after the server refused used, and
@@ -177,9 +201,9 @@ func (c *Client) refreshLocked(ctx context.Context) error {
 		return err
 	}
 	if tok.Refresh == "" {
-		tok.Refresh = c.RefreshToken
+		tok.Refresh, tok.RefreshExpiry = c.RefreshToken, c.RefreshExpiry
 	}
-	c.Token, c.RefreshToken, c.Expiry = tok.Access, tok.Refresh, tok.Expiry
+	c.Token, c.RefreshToken, c.Expiry, c.RefreshExpiry = tok.Access, tok.Refresh, tok.Expiry, tok.RefreshExpiry
 	if c.TokensChanged != nil {
 		c.TokensChanged(tok)
 	}

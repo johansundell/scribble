@@ -2,6 +2,8 @@ package client_test
 
 import (
 	"context"
+	"io"
+	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
@@ -72,6 +74,13 @@ func TestLoginThenUseTheAPI(t *testing.T) {
 	}
 	if tok.Access == "" || tok.Refresh == "" || time.Until(tok.Expiry) < 23*time.Hour {
 		t.Fatalf("tokens = %+v", tok)
+	}
+	// The server says when the refresh token expires (#193).
+	if d := time.Until(tok.RefreshExpiry); d < 364*24*time.Hour || d > 365*24*time.Hour {
+		t.Errorf("refresh token expires in %v, want 365 days", d)
+	}
+	if !c.RefreshExpiry.Equal(tok.RefreshExpiry) {
+		t.Errorf("client RefreshExpiry %v, want %v", c.RefreshExpiry, tok.RefreshExpiry)
 	}
 	if got := c.Tokens(); got != tok {
 		t.Errorf("client holds %+v, want %+v", got, tok)
@@ -204,6 +213,57 @@ func TestStaticTokenNoRefresh(t *testing.T) {
 	c.Token = "wrong"
 	_, err := c.List(context.Background(), "")
 	if !client.IsUnauthorized(err) {
+		t.Fatalf("err = %v, want 401", err)
+	}
+}
+
+// A server from before #193 doesn't say when the refresh token expires;
+// the client assumes the default 365 days.
+func TestLoginOlderServerAssumesRefreshExpiry(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"access_token":"a","refresh_token":"r","expires_in":86400,"token_type":"Bearer"}`)
+	}))
+	t.Cleanup(srv.Close)
+	c := client.New(srv.URL, "")
+	c.ClientID = client.ClientCLI
+	tok, err := c.Login(context.Background(), "123456")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Until(tok.RefreshExpiry); d < 364*24*time.Hour || d > 365*24*time.Hour {
+		t.Errorf("refresh token expires in %v, want 365 days", d)
+	}
+}
+
+// Refresh renews the tokens on request, as sn version does for an expired
+// access token (#193), and hands them to TokensChanged.
+func TestRefresh(t *testing.T) {
+	ctx := context.Background()
+	c := client.New(startOAuthServer(t, oauth.Config{}), "")
+	c.ClientID = client.ClientCLI
+	first, err := c.Login(ctx, oauthCode())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved []client.Tokens
+	c.TokensChanged = func(tok client.Tokens) { saved = append(saved, tok) }
+	if err := c.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	got := c.Tokens()
+	if got.Access == first.Access || got.RefreshExpiry.IsZero() {
+		t.Fatalf("tokens after refresh = %+v", got)
+	}
+	if len(saved) != 1 || saved[0] != got {
+		t.Errorf("saved = %+v, want %+v", saved, got)
+	}
+}
+
+// Without a refresh token there is nothing to renew.
+func TestRefreshWithoutRefreshToken(t *testing.T) {
+	c := newClient(t)
+	if err := c.Refresh(context.Background()); !client.IsUnauthorized(err) {
 		t.Fatalf("err = %v, want 401", err)
 	}
 }

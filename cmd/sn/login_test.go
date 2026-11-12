@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/johansundell/scribble/auth"
+	"github.com/johansundell/scribble/client"
 	"github.com/johansundell/scribble/handlers"
 	"github.com/johansundell/scribble/oauth"
 	"github.com/johansundell/scribble/router"
@@ -105,6 +106,9 @@ func TestLoginSavesTokens(t *testing.T) {
 	if exp, err := time.Parse(time.RFC3339, env["SCRIBBLE_TOKEN_EXPIRY"]); err != nil || time.Until(exp) < 23*time.Hour {
 		t.Errorf("SCRIBBLE_TOKEN_EXPIRY = %q", env["SCRIBBLE_TOKEN_EXPIRY"])
 	}
+	if exp, err := time.Parse(time.RFC3339, env["SCRIBBLE_REFRESH_EXPIRY"]); err != nil || time.Until(exp) < 364*24*time.Hour {
+		t.Errorf("SCRIBBLE_REFRESH_EXPIRY = %q", env["SCRIBBLE_REFRESH_EXPIRY"])
+	}
 	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
 		t.Errorf("mode = %v, %v; want 0600", info.Mode().Perm(), err)
 	}
@@ -195,7 +199,7 @@ func TestLogoutRemovesTokens(t *testing.T) {
 	if env["SCRIBBLE_URL"] != srvURL {
 		t.Errorf("logout dropped the URL: %v", env)
 	}
-	for _, k := range []string{"SCRIBBLE_TOKEN", "SCRIBBLE_REFRESH_TOKEN", "SCRIBBLE_TOKEN_EXPIRY"} {
+	for _, k := range []string{"SCRIBBLE_TOKEN", "SCRIBBLE_REFRESH_TOKEN", "SCRIBBLE_TOKEN_EXPIRY", "SCRIBBLE_REFRESH_EXPIRY"} {
 		if _, ok := env[k]; ok {
 			t.Errorf("logout kept %s", k)
 		}
@@ -238,12 +242,12 @@ func TestRefreshedTokensAreSaved(t *testing.T) {
 // in the file is not used with it.
 func TestEnvTokenIgnoresSavedRefreshToken(t *testing.T) {
 	cfg, err := resolveConfig(envOf(map[string]string{"SCRIBBLE_TOKEN": "static"}), []string{
-		writeFile(t, filepath.Join(t.TempDir(), "dot"), "SCRIBBLE_TOKEN=a\nSCRIBBLE_REFRESH_TOKEN=r\nSCRIBBLE_TOKEN_EXPIRY=2030-01-01T00:00:00Z\n"),
+		writeFile(t, filepath.Join(t.TempDir(), "dot"), "SCRIBBLE_TOKEN=a\nSCRIBBLE_REFRESH_TOKEN=r\nSCRIBBLE_TOKEN_EXPIRY=2030-01-01T00:00:00Z\nSCRIBBLE_REFRESH_EXPIRY=2031-01-01T00:00:00Z\n"),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Token != "static" || cfg.Refresh != "" || !cfg.Expiry.IsZero() {
+	if cfg.Token != "static" || cfg.Refresh != "" || !cfg.Expiry.IsZero() || !cfg.RefreshExpiry.IsZero() {
 		t.Fatalf("cfg = %+v", cfg)
 	}
 }
@@ -257,5 +261,38 @@ func TestResolveConfigReadsOAuthTokens(t *testing.T) {
 	}
 	if cfg.Token != "a" || cfg.Refresh != "r" || !cfg.Expiry.Equal(time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)) {
 		t.Fatalf("cfg = %+v", cfg)
+	}
+}
+
+// The refresh token's expiry is read under its canonical name and the
+// lower-case ones (#193).
+func TestResolveConfigReadsRefreshExpiry(t *testing.T) {
+	want := time.Date(2031, 1, 1, 0, 0, 0, 0, time.UTC)
+	for _, key := range []string{"SCRIBBLE_REFRESH_EXPIRY", "scribble_refresh_expiry", "refresh_expiry"} {
+		cfg, err := resolveConfig(envOf(nil), []string{
+			writeFile(t, filepath.Join(t.TempDir(), "dot"), "SCRIBBLE_TOKEN=a\nSCRIBBLE_REFRESH_TOKEN=r\n"+key+"=2031-01-01T00:00:00Z\n"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !cfg.RefreshExpiry.Equal(want) {
+			t.Errorf("%s: RefreshExpiry = %v, want %v", key, cfg.RefreshExpiry, want)
+		}
+	}
+}
+
+// A login replaces a refresh expiry saved under another spelling.
+func TestLoginReplacesOtherRefreshExpirySpellings(t *testing.T) {
+	path := writeFile(t, filepath.Join(t.TempDir(), "dot"), "refresh_expiry=2020-01-01T00:00:00Z\n")
+	exp := time.Date(2031, 1, 1, 0, 0, 0, 0, time.UTC)
+	if err := saveLogin(path, "https://a", client.Tokens{Access: "a", Refresh: "r", RefreshExpiry: exp}); err != nil {
+		t.Fatal(err)
+	}
+	env := readDotfile(t, path)
+	if _, ok := env["refresh_expiry"]; ok {
+		t.Errorf("old spelling kept: %v", env)
+	}
+	if env["SCRIBBLE_REFRESH_EXPIRY"] != "2031-01-01T00:00:00Z" {
+		t.Errorf("SCRIBBLE_REFRESH_EXPIRY = %q", env["SCRIBBLE_REFRESH_EXPIRY"])
 	}
 }
