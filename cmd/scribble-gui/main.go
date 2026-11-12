@@ -9,7 +9,8 @@
 // They can also be set in a .env file next to the executable. File >
 // Settings… logs in with a code from the authenticator app and saves
 // SCRIBBLE_URL and the login (SCRIBBLE_TOKEN, SCRIBBLE_REFRESH_TOKEN,
-// SCRIBBLE_TOKEN_EXPIRY and SCRIBBLE_REFRESH_EXPIRY) there, renewing the tokens as they expire (#184);
+// SCRIBBLE_TOKEN_EXPIRY and SCRIBBLE_REFRESH_EXPIRY) there, renewing the
+// tokens as they expire (#184);
 // variables already in the environment win. The file is read before Fyne starts, so
 // Fyne's own variables (such as FYNE_THEME=dark) work there too.
 //

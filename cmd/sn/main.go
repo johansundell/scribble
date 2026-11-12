@@ -253,7 +253,7 @@ func cmdVersion(ctx context.Context, c *client.Client, w io.Writer, source strin
 	// An expired access token is renewed first, so the expiries shown are
 	// those the next command will use; TokensChanged saves them.
 	refused := false
-	if tok := c.Tokens(); tok.Refresh != "" && !tok.Expiry.IsZero() && time.Now().After(tok.Expiry) {
+	if tok := c.Tokens(); tok.Refresh != "" && expired(tok.Expiry, time.Now()) {
 		if err := c.Refresh(ctx); client.IsUnauthorized(err) {
 			refused = true
 		} else if err != nil {
@@ -279,14 +279,20 @@ func tokenStatus(tok client.Tokens, now time.Time, refused bool) string {
 		return "token: (not logged in)\n"
 	case tok.Refresh == "":
 		return "token: static (never expires)\n"
-	case refused || (!tok.RefreshExpiry.IsZero() && !now.Before(tok.RefreshExpiry)):
+	case refused || expired(tok.RefreshExpiry, now):
 		return "access token: expired\nrefresh token: expired (run sn login to re-authenticate)\n"
 	}
 	access := "access token expires: " + expiryText(tok.Expiry, now) + "\n"
-	if !tok.Expiry.IsZero() && !now.Before(tok.Expiry) {
+	if expired(tok.Expiry, now) {
 		access = "access token: expired\n"
 	}
 	return access + "refresh token expires: " + expiryText(tok.RefreshExpiry, now) + "\n"
+}
+
+// expired reports whether a token that expires at t has expired at now;
+// the zero time is never.
+func expired(t, now time.Time) bool {
+	return !t.IsZero() && !now.Before(t)
 }
 
 // expiryText is t in UTC and how long until then from now, or "unknown"

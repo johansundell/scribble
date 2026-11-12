@@ -47,15 +47,14 @@ func newFixture(t *testing.T, mod func(*oauth.Config)) *fixture {
 }
 
 type tokenAnswer struct {
-	Status    int
-	Access    string  `json:"access_token"`
-	Refresh   string  `json:"refresh_token"`
-	Type      string  `json:"token_type"`
-	ExpiresIn float64 `json:"expires_in"`
-	// RefreshIn is refresh_token_expires_in (#193).
-	RefreshIn   float64 `json:"refresh_token_expires_in"`
-	Error       string  `json:"error"`
-	Description string  `json:"error_description"`
+	Status           int
+	Access           string  `json:"access_token"`
+	Refresh          string  `json:"refresh_token"`
+	Type             string  `json:"token_type"`
+	ExpiresIn        float64 `json:"expires_in"`
+	RefreshExpiresIn float64 `json:"refresh_token_expires_in"`
+	Error            string  `json:"error"`
+	Description      string  `json:"error_description"`
 }
 
 func (f *fixture) post(t *testing.T, addr string, form url.Values) tokenAnswer {
@@ -98,8 +97,8 @@ func TestPasswordGrantIssuesTokens(t *testing.T) {
 	if a.Type != "Bearer" || a.ExpiresIn != (24*time.Hour).Seconds() {
 		t.Errorf("type %q expires_in %v, want Bearer and 24h", a.Type, a.ExpiresIn)
 	}
-	if a.RefreshIn != (365 * 24 * time.Hour).Seconds() {
-		t.Errorf("refresh_token_expires_in %v, want 365 days", a.RefreshIn)
+	if a.RefreshExpiresIn != (365 * 24 * time.Hour).Seconds() {
+		t.Errorf("refresh_token_expires_in %v, want 365 days", a.RefreshExpiresIn)
 	}
 	if !f.valid(a.Access) {
 		t.Error("issued access token is not valid")
@@ -182,8 +181,8 @@ func TestRefreshGrantRollsTokens(t *testing.T) {
 	if second.Status != http.StatusOK || second.Access == "" || second.Refresh == "" {
 		t.Fatalf("refresh: %+v", second)
 	}
-	if second.RefreshIn != (365 * 24 * time.Hour).Seconds() {
-		t.Errorf("refresh_token_expires_in %v after a refresh, want 365 days", second.RefreshIn)
+	if second.RefreshExpiresIn != (365 * 24 * time.Hour).Seconds() {
+		t.Errorf("refresh_token_expires_in %v after a refresh, want 365 days", second.RefreshExpiresIn)
 	}
 	if second.Access == first.Access || second.Refresh == first.Refresh {
 		t.Error("refresh did not issue new tokens")

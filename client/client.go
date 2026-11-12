@@ -67,8 +67,8 @@ type Client struct {
 	APILevel int
 	Version  string
 
-	// authMu guards Token, RefreshToken, Expiry and RefreshExpiry once requests start,
-	// and lets one request at a time refresh them.
+	// authMu guards Token, RefreshToken, Expiry and RefreshExpiry once
+	// requests start, and lets one request at a time refresh them.
 	authMu sync.Mutex
 
 	mu            sync.Mutex

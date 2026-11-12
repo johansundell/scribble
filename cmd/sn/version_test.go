@@ -5,7 +5,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/johansundell/scribble/client"
+	"github.com/johansundell/scribble/envfile"
 	"github.com/johansundell/scribble/handlers"
 	"github.com/johansundell/scribble/oauth"
 	"github.com/johansundell/scribble/router"
@@ -199,12 +199,13 @@ func TestHelpNamesTheDefaultServer(t *testing.T) {
 	}
 }
 
+// tokenStatus never shows the token, only its kind and expiries (#193).
 func TestTokenStatus(t *testing.T) {
 	now := time.Date(2026, 11, 12, 10, 0, 0, 0, time.UTC)
-	oauth := client.Tokens{Access: "a", Refresh: "r",
+	login := client.Tokens{Access: "a", Refresh: "r",
 		Expiry:        now.Add(23*time.Hour + 30*time.Minute),
 		RefreshExpiry: now.Add(364*24*time.Hour + time.Hour)}
-	expired := oauth
+	expired := login
 	expired.Expiry = now.Add(-time.Minute)
 	cases := []struct {
 		name    string
@@ -214,7 +215,7 @@ func TestTokenStatus(t *testing.T) {
 	}{
 		{"not logged in", client.Tokens{}, false, "token: (not logged in)\n"},
 		{"static", client.Tokens{Access: "secret"}, false, "token: static (never expires)\n"},
-		{"oauth", oauth, false,
+		{"oauth", login, false,
 			"access token expires: 2026-11-13 09:30:00 UTC (in 23 hours)\n" +
 				"refresh token expires: 2027-11-11 11:00:00 UTC (in 364 days)\n"},
 		{"refresh refused", expired, true,
@@ -254,14 +255,15 @@ func loggedIn(t *testing.T) string {
 	return path
 }
 
-// setInDotfile replaces key's value in the file at path.
+// setInDotfile sets key to value in the file at path.
 func setInDotfile(t *testing.T, path, key, value string) {
 	t.Helper()
-	old := readDotfile(t, path)[key]
-	raw, _ := os.ReadFile(path)
-	writeFile(t, path, strings.Replace(string(raw), old, value, 1))
+	if err := envfile.Write(path, map[string]string{key: value}); err != nil {
+		t.Fatal(err)
+	}
 }
 
+// After sn login, version shows when both tokens expire, not the token.
 func TestVersionShowsLoginExpiry(t *testing.T) {
 	loggedIn(t)
 	var out bytes.Buffer
@@ -296,6 +298,7 @@ func TestVersionRenewsAnExpiredAccessToken(t *testing.T) {
 	}
 }
 
+// A refresh token the server refuses is reported as expired.
 func TestVersionRefusedRefreshToken(t *testing.T) {
 	path := loggedIn(t)
 	setInDotfile(t, path, "SCRIBBLE_TOKEN_EXPIRY", time.Now().Add(-time.Hour).UTC().Format(time.RFC3339))
