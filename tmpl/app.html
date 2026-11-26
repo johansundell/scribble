@@ -62,7 +62,7 @@
 	{{- end}}
 	{{template "content" .}}
 	<footer class="app-footer">
-		Scribble {{.Version}}
+		<span>Scribble {{.Version}} · © Johan Sundell</span>
 		{{- if .LoggedIn}}
 		<button type="button" class="link-button" data-shortcuts-open hidden>Keyboard shortcuts</button>
 		<a class="link-button" href="/export-notes">Export notes</a>

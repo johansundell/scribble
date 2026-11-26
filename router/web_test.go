@@ -649,6 +649,7 @@ func TestWebHeader_BrandAndTagline(t *testing.T) {
 			`<span class="app-logo" aria-hidden="true"></span>`,
 			`<span class="app-name">Scribble</span>`,
 			`<span class="app-tagline">a note is never alone</span>`,
+			`© Johan Sundell`,
 		)
 	}
 
