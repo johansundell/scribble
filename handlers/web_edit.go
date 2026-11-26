@@ -63,6 +63,11 @@ type noteEditor struct {
 	// note, or with unsaved text (save first, like the desktop app).
 	// editor.js hides it once the text is changed.
 	Rename string
+	// Public marks an edit link's editor (#197): its Preview posts to
+	// Preview, and it has no Link to note, nor help for [[links]] and
+	// #project tags, which need the login.
+	Public  bool
+	Preview string
 }
 
 func newNoteEditor() *noteEditor {

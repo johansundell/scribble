@@ -101,6 +101,7 @@ func GetRoutes(handler *handlers.Handler) Routes {
 		Route{Name: "EditShared", Method: "GET", Pattern: handlers.EditSharedPath(":token"), HandlerFunc: handler.EditShared, Web: true},
 		Route{Name: "EditSharedForm", Method: "GET", Pattern: handlers.EditSharedEditPath(":token"), HandlerFunc: handler.EditSharedForm, Web: true},
 		Route{Name: "EditSharedSave", Method: "POST", Pattern: handlers.EditSharedEditPath(":token"), HandlerFunc: handler.EditSharedSave, Web: true, AllowCrossOrigin: true},
+		Route{Name: "EditSharedPreview", Method: "POST", Pattern: handlers.EditSharedPreviewPath(":token"), HandlerFunc: handler.EditSharedPreview, Web: true, AllowCrossOrigin: true},
 		Route{Name: "EditSharedHistory", Method: "GET", Pattern: handlers.EditSharedHistoryPath(":token"), HandlerFunc: handler.EditSharedHistory, Web: true},
 		Route{Name: "AppNew", Method: "GET", Pattern: handlers.NewPath, HandlerFunc: handler.AppNew, Web: true, UseSession: true},
 		Route{Name: "AppPreview", Method: "POST", Pattern: handlers.PreviewPath, HandlerFunc: handler.AppPreview, Web: true, UseSession: true},

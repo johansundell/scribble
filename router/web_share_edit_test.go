@@ -174,7 +174,7 @@ func TestWebShareEdit_Editor(t *testing.T) {
 		`href="/e/`+tok+`"`, // Cancel
 	)
 	wantPublicHeaders(t, w)
-	wantNot(t, w.Body.String(), "/rename", "/note/", "app.js")
+	wantNot(t, w.Body.String(), "/rename", "/note/")
 
 	// No session and no Origin needed: the token is the key.
 	req := postForm(path, url.Values{"body": {"# Shared\nsecond"}, "revision": {"1"}, "action": {"save"}})

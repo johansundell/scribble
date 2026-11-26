@@ -15,6 +15,10 @@ history in place of the note. */}}<!DOCTYPE html>
 	<title>{{.Title}} – Scribble</title>
 	{{/* The code blocks' Copy buttons (#160). */}}
 	<script src="/assets/js/copy.js" defer></script>
+	{{- if .Editor}}
+	{{/* The Markdown toolbar and Preview tab (#197). */}}
+	<script type="module" src="/assets/js/app.js"></script>
+	{{- end}}
 </head>
 
 <body class="web">

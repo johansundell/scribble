@@ -28,6 +28,12 @@ func EditSharedEditPath(token string) string {
 	return EditSharedPath(token) + "/edit"
 }
 
+// EditSharedPreviewPath is where the editor behind edit link token posts
+// its Preview tab (#197).
+func EditSharedPreviewPath(token string) string {
+	return EditSharedPath(token) + "/preview"
+}
+
 // EditSharedHistoryPath is the history behind edit link token.
 func EditSharedHistoryPath(token string) string {
 	return EditSharedPath(token) + "/history"
@@ -81,7 +87,8 @@ func (h *Handler) EditShared(c *gin.Context) error {
 
 // sharedEditor is the editor behind edit link token.
 func sharedEditor(n *notes.Note, token string) *noteEditor {
-	return &noteEditor{ID: n.ID, Action: EditSharedEditPath(token), Cancel: EditSharedPath(token)}
+	return &noteEditor{ID: n.ID, Action: EditSharedEditPath(token), Cancel: EditSharedPath(token),
+		Public: true, Preview: EditSharedPreviewPath(token)}
 }
 
 // EditSharedForm shows the editor behind an edit link.
@@ -107,7 +114,8 @@ func (h *Handler) EditSharedSave(c *gin.Context) error {
 	ns, n, sh, err := h.editLinkNote(c)
 	if errors.Is(err, store.ErrNoteNotFound) {
 		tok := c.Param("token")
-		ed := &noteEditor{Action: EditSharedEditPath(tok), Cancel: EditSharedPath(tok), Body: body, Dirty: true, Error: msgLinkGone}
+		ed := &noteEditor{Action: EditSharedEditPath(tok), Cancel: EditSharedPath(tok), Body: body, Dirty: true, Error: msgLinkGone,
+			Public: true, Preview: EditSharedPreviewPath(tok)}
 		return h.renderShared(c, http.StatusNotFound, sharedPage{Title: "Edit link", Editor: ed})
 	}
 	if err != nil {
@@ -149,6 +157,26 @@ func (h *Handler) EditSharedSave(c *gin.Context) error {
 		return noteError(err)
 	}
 	return h.renderShared(c, status, sharedPage{Title: n.Title, Editor: ed})
+}
+
+// EditSharedPreview answers the edit link's Preview tab (#197) with the
+// posted text rendered as the link's page renders it, as an HTML fragment:
+// [[links]] go through the login and none is marked missing. It saves
+// nothing.
+func (h *Handler) EditSharedPreview(c *gin.Context) error {
+	if _, _, _, err := h.editLinkNote(c); err != nil {
+		return err
+	}
+	body, err := formBody(c)
+	if err != nil {
+		return err
+	}
+	out, err := renderSharedNote(body)
+	if err != nil {
+		return httperror.ReturnWithHTTPStatus(err, http.StatusInternalServerError)
+	}
+	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(out))
+	return nil
 }
 
 // EditSharedHistory shows the versions of the note made since its edit link
