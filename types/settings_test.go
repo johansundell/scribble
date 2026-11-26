@@ -17,20 +17,6 @@ func TestAppSettingsValidate(t *testing.T) {
 		{"unknown storage", AppSettings{Port: ":8080", Timeout: 10 * time.Second, Storage: "postgres"}, true},
 		{"missing port", AppSettings{Port: "", Timeout: 10 * time.Second, Storage: StorageSQLite}, true},
 		{"invalid timeout", AppSettings{Port: ":8080", Timeout: 0, Storage: StorageSQLite}, true},
-		{"mysql missing fields", AppSettings{Port: ":8080", Timeout: 10 * time.Second, Storage: StorageMySQL, MySQL: struct {
-			Username string `json:"username"`
-			Password string `json:"password"`
-			Host     string `json:"host"`
-			Port     string `json:"port"`
-			Database string `json:"database"`
-		}{}}, true},
-		{"mysql provided", AppSettings{Port: ":8080", Timeout: 10 * time.Second, Storage: StorageMySQL, MySQL: struct {
-			Username string `json:"username"`
-			Password string `json:"password"`
-			Host     string `json:"host"`
-			Port     string `json:"port"`
-			Database string `json:"database"`
-		}{Username: "u", Host: "localhost", Database: "db"}}, false},
 	}
 
 	for _, tc := range tests {
@@ -40,6 +26,17 @@ func TestAppSettingsValidate(t *testing.T) {
 				t.Fatalf("Validate() error = %v, wantErr %v", err, tc.wantErr)
 			}
 		})
+	}
+}
+
+// STORAGE=mysql was removed in v2.7.0 (#202); startup names the
+// replacement.
+func TestAppSettingsValidate_MySQLRemoved(t *testing.T) {
+	s := AppSettings{Port: ":8080", Timeout: 10 * time.Second, Storage: "mysql"}
+	err := s.Validate()
+	want := "STORAGE=mysql was removed in v2.7.0; use sqlite"
+	if err == nil || err.Error() != want {
+		t.Fatalf("Validate() = %v, want %q", err, want)
 	}
 }
 
@@ -93,7 +90,7 @@ func TestAppSettingsValidate_Replica(t *testing.T) {
 	}{
 		{"valid", func(*AppSettings) {}, ""},
 		{"off needs nothing", func(s *AppSettings) { s.Replica = ReplicaSettings{}; s.FileMaker = FileMakerSettings{} }, ""},
-		{"unknown mode", func(s *AppSettings) { s.Replica.Mode = "mysql" }, "NOTES_REPLICA"},
+		{"unknown mode", func(s *AppSettings) { s.Replica.Mode = "postgres" }, "NOTES_REPLICA"},
 		{"not sqlite", func(s *AppSettings) {
 			s.Storage = StorageFileMaker
 			s.FileMaker.LogTable = "Logs"

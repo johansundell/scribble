@@ -31,7 +31,7 @@ Tomboy-NG (cross-platform rewrite, runs on Windows), Gnote, Joplin (has a CLI, R
 | Conflicts | Optimistic concurrency: PUT carries `base_revision`; stale gives **412** | Simple and safe for one user on several devices |
 | Sync | Global `seq` counter plus `GET /changes?since=N`; deletes leave tombstones | Lets a client cache work offline and sync incrementally |
 | Server base | The template at https://github.com/johansundell/template-service (Gin, kardianos/service, token auth, Docker, SQLite via ncruces) | Reuse proven plumbing |
-| Storage | Notes on **SQLite only**; on `mysql`/`filemaker` the notes endpoints return 501 and a startup warning is logged | The template's `Store` is built around request logs; supporting every backend wasn't worth it |
+| Storage | Notes on **SQLite only**; on `filemaker` the notes endpoints return 501 and a startup warning is logged | The template's `Store` is built around request logs; supporting every backend wasn't worth it |
 | Request logging | Notes routes are **not** request-logged | The template's log stores full request/response bodies, which would copy every note into it |
 | GUI toolkit | Fyne | One language; wiki-links are easy because the editor stays plain text (see findings) |
 
@@ -47,7 +47,7 @@ Tomboy-NG (cross-platform rewrite, runs on Windows), Gnote, Joplin (has a CLI, R
 
 ### The template
 - Requires **Go 1.27.1**. Its README has the rename recipe (module path, service name, `.agents/skills` left alone).
-- Architecture: `main.go` (service CLI), `service.go` (lifecycle), `router/` (route table plus middleware: Wrap, Auth, Logger), `handlers/` (error-returning handlers using `httperror.ReturnWithHTTPStatus`), `store/` (interface plus SQLite/MySQL/FileMaker). Errors go out as plain-text status text.
+- Architecture: `main.go` (service CLI), `service.go` (lifecycle), `router/` (route table plus middleware: Wrap, Auth, Logger), `handlers/` (error-returning handlers using `httperror.ReturnWithHTTPStatus`), `store/` (interface plus SQLite/FileMaker). Errors go out as plain-text status text.
 - `router.NewRouter` refuses to build if a route has `UseAuth` but no `AUTH_TOKEN`. When the token is unset, the service generates a random one and logs it.
 - **Gotcha:** kardianos/service treats a process whose parent is PID 1 as a system service and logs to syslog. Launching the binary through a double-forked background shell therefore fails with "Unix syslog delivery error". Start it as a normal child process.
 - `gox ./...` in the template's Makefile builds every `main` package to the same output name. It would have overwritten the server with the CLI, so the Makefile now builds the server and CLI separately.

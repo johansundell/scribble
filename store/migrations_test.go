@@ -60,11 +60,6 @@ func TestSQLStore_SchemaVersion(t *testing.T) {
 	if v, ok := s.SchemaVersion(); !ok || v != len(migrations) {
 		t.Errorf("SQLite: got (%d, %v), want (%d, true)", v, ok, len(migrations))
 	}
-
-	// MySQL has no migrations, so no schema version.
-	if v, ok := (&SQLStore{}).SchemaVersion(); ok {
-		t.Errorf("MySQL: got (%d, true), want no schema version", v)
-	}
 }
 
 func TestNewSQLite_UpgradesUnversionedDatabase(t *testing.T) {
@@ -287,10 +282,5 @@ func TestSQLStore_DatabaseID(t *testing.T) {
 	}
 	if other, _ := newTestSQLite(t).DatabaseID(); other == id {
 		t.Errorf("two databases share the ID %q", id)
-	}
-
-	// MySQL holds no notes, so it has no ID.
-	if id, ok := (&SQLStore{}).DatabaseID(); ok {
-		t.Errorf("MySQL: got (%q, true), want no ID", id)
 	}
 }

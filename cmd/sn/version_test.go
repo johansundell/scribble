@@ -121,7 +121,7 @@ func TestCmdVersion(t *testing.T) {
 }
 
 // TestCmdVersionWithoutSchema reads as before when the server sends no
-// schema version (MySQL, FileMaker, or a server from before #103).
+// schema version (FileMaker, or a server from before #103).
 func TestCmdVersionWithoutSchema(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

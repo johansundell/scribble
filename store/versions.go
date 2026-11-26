@@ -57,7 +57,7 @@ func scanVersion(r rowScanner) (*notes.Version, error) {
 // younger than versionMergeWindow, and not the note's only version.
 // Call it in the transaction that changed the note.
 func (s *SQLStore) recordVersion(ctx context.Context, x dbx, now time.Time, id int64, reason string) error {
-	ts := s.timeArg(now)
+	ts := timeArg(now)
 	if reason == reasonEdit {
 		var rev, count int64
 		var lastReason, created string
@@ -84,9 +84,6 @@ func (s *SQLStore) recordVersion(ctx context.Context, x dbx, now time.Time, id i
 // NoteVersions returns note id's versions, newest first, without bodies.
 // A deleted note has them too.
 func (s *SQLStore) NoteVersions(ctx context.Context, id int64) ([]notes.Version, error) {
-	if err := s.checkNotes(); err != nil {
-		return nil, err
-	}
 	var exists bool
 	if err := s.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM notes WHERE id = ?)`, id).Scan(&exists); err != nil {
 		return nil, err
@@ -114,9 +111,6 @@ func (s *SQLStore) NoteVersions(ctx context.Context, id int64) ([]notes.Version,
 // NoteVersion returns the version of note id at revision rev, with its
 // body, or ErrVersionNotFound when that revision was not kept.
 func (s *SQLStore) NoteVersion(ctx context.Context, id, rev int64) (*notes.Version, error) {
-	if err := s.checkNotes(); err != nil {
-		return nil, err
-	}
 	return scanVersion(s.db.QueryRowContext(ctx,
 		`SELECT `+versionCols+` FROM note_versions WHERE note_id = ? AND revision = ?`, id, rev))
 }
@@ -125,9 +119,6 @@ func (s *SQLStore) NoteVersion(ctx context.Context, id, rev int64) (*notes.Versi
 // revision. baseRev works as in UpdateNote; a deleted note gives
 // ErrNoteDeleted.
 func (s *SQLStore) RestoreVersion(ctx context.Context, id, rev, baseRev int64) (*notes.Note, error) {
-	if err := s.checkNotes(); err != nil {
-		return nil, err
-	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -160,9 +151,6 @@ func (s *SQLStore) RestoreVersion(ctx context.Context, id, rev, baseRev int64) (
 
 // DeletedNotes returns the deleted notes, most recently deleted first.
 func (s *SQLStore) DeletedNotes(ctx context.Context) ([]notes.DeletedNote, error) {
-	if err := s.checkNotes(); err != nil {
-		return nil, err
-	}
 	// A delete sets updated_at to its version's created_at, and nothing
 	// touches a deleted note after; for notes deleted before history
 	// existed it is the only time there is.
@@ -189,9 +177,6 @@ func (s *SQLStore) DeletedNotes(ctx context.Context) ([]notes.DeletedNote, error
 // ErrNoteNotFound when id is not a deleted note, and ErrTitleTaken when a
 // live note has its title.
 func (s *SQLStore) UndeleteNote(ctx context.Context, id int64) (*notes.Note, error) {
-	if err := s.checkNotes(); err != nil {
-		return nil, err
-	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -199,7 +184,7 @@ func (s *SQLStore) UndeleteNote(ctx context.Context, id int64) (*notes.Note, err
 	defer tx.Rollback()
 	now := time.Now()
 	res, err := tx.ExecContext(ctx, `UPDATE notes SET deleted = 0, revision = revision + 1,
-		seq = `+nextSeq+`, updated_at = ? WHERE id = ? AND deleted = 1`, s.timeArg(now), id)
+		seq = `+nextSeq+`, updated_at = ? WHERE id = ? AND deleted = 1`, timeArg(now), id)
 	if isUniqueViolation(err) {
 		return nil, ErrTitleTaken
 	}

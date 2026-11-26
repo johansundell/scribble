@@ -77,11 +77,11 @@ func newShareToken() string {
 }
 
 // expiryArg is the driver argument for an expiry column: NULL for never.
-func (s *SQLStore) expiryArg(t *time.Time) any {
+func expiryArg(t *time.Time) any {
 	if t == nil {
 		return nil
 	}
-	return s.timeArg(*t)
+	return timeArg(*t)
 }
 
 // parseExpiry reads an expiry column back; NULL is never.
@@ -96,13 +96,10 @@ func parseExpiry(v sql.NullString) *time.Time {
 // share gives note id link l, keeping a live token (and its creation time),
 // sets its expiry and returns the token.
 func (s *SQLStore) share(ctx context.Context, l shareLink, id int64, expires *time.Time) (string, error) {
-	if err := s.checkNotes(); err != nil {
-		return "", err
-	}
-	now := s.timeArg(time.Now())
+	now := timeArg(time.Now())
 	keep := l.token + ` IS NOT NULL AND ` + l.live()
 	set := l.token + ` = CASE WHEN ` + keep + ` THEN ` + l.token + ` ELSE ? END, ` + l.expires + ` = ?`
-	args := []any{now, newShareToken(), s.expiryArg(expires)}
+	args := []any{now, newShareToken(), expiryArg(expires)}
 	if l.created != "" {
 		// SET reads the row as it was, so keep sees the old token.
 		set = l.created + ` = CASE WHEN ` + keep + ` THEN ` + l.created + ` ELSE ? END, ` + set
@@ -119,9 +116,6 @@ func (s *SQLStore) share(ctx context.Context, l shareLink, id int64, expires *ti
 
 // unshare revokes note id's link l.
 func (s *SQLStore) unshare(ctx context.Context, l shareLink, id int64) error {
-	if err := s.checkNotes(); err != nil {
-		return err
-	}
 	res, err := s.db.ExecContext(ctx, `UPDATE notes SET `+l.clear()+` WHERE id = ? AND deleted = 0`, id)
 	if err != nil {
 		return err
@@ -134,13 +128,10 @@ func (s *SQLStore) unshare(ctx context.Context, l shareLink, id int64) error {
 
 // noteShare is note id's live link l, or the zero Share.
 func (s *SQLStore) noteShare(ctx context.Context, l shareLink, id int64) (Share, error) {
-	if err := s.checkNotes(); err != nil {
-		return Share{}, err
-	}
 	var tok, exp, created sql.NullString
 	var live bool
 	err := s.db.QueryRowContext(ctx, `SELECT `+l.token+`, `+l.expires+`, `+l.createdCol()+`, `+l.live()+`
-		FROM notes WHERE id = ? AND deleted = 0`, s.timeArg(time.Now()), id).Scan(&tok, &exp, &created, &live)
+		FROM notes WHERE id = ? AND deleted = 0`, timeArg(time.Now()), id).Scan(&tok, &exp, &created, &live)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Share{}, ErrNoteNotFound
 	}
@@ -161,15 +152,12 @@ func shareOf(tok string, exp, created sql.NullString) Share {
 
 // sharedNote is the live note whose live link l has token, read in x.
 func (s *SQLStore) sharedNote(ctx context.Context, x dbx, l shareLink, token string) (*notes.Note, Share, error) {
-	if err := s.checkNotes(); err != nil {
-		return nil, Share{}, err
-	}
 	if token == "" {
 		return nil, Share{}, ErrNoteNotFound
 	}
 	var exp, created sql.NullString
 	r := x.QueryRowContext(ctx, `SELECT `+noteCols+`, `+l.expires+`, `+l.createdCol()+` FROM notes
-		WHERE `+l.token+` = ? AND deleted = 0 AND `+l.live(), token, s.timeArg(time.Now()))
+		WHERE `+l.token+` = ? AND deleted = 0 AND `+l.live(), token, timeArg(time.Now()))
 	n, err := scanNote(scanFunc(func(dest ...any) error { return r.Scan(append(dest, &exp, &created)...) }))
 	if err != nil {
 		return nil, Share{}, err
@@ -211,9 +199,6 @@ func (s *SQLStore) GetEditSharedNote(ctx context.Context, token string) (*notes.
 }
 
 func (s *SQLStore) UpdateEditSharedNote(ctx context.Context, token, body string, baseRev int64) (*notes.Note, error) {
-	if err := s.checkNotes(); err != nil {
-		return nil, err
-	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err

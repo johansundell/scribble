@@ -58,8 +58,6 @@ func noteError(err error) error {
 		return httperror.ReturnWithHTTPStatus(err, http.StatusConflict)
 	case errors.Is(err, store.ErrNoTitle):
 		return httperror.ReturnWithHTTPStatus(err, http.StatusBadRequest)
-	case errors.Is(err, store.ErrNotesUnsupported):
-		return httperror.ReturnWithHTTPStatus(err, http.StatusNotImplemented)
 	}
 	return httperror.ReturnWithHTTPStatus(err, http.StatusInternalServerError)
 }

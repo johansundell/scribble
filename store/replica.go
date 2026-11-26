@@ -94,9 +94,6 @@ func (s *SQLStore) PushBacklog(ctx context.Context) (int, error) {
 // and nothing changes, so a row is never applied twice. Only database
 // failures are errors; an edit that can't be applied is an outcome.
 func (s *SQLStore) ApplyPendingEdit(ctx context.Context, e PendingEdit) (PendingOutcome, error) {
-	if err := s.checkNotes(); err != nil {
-		return PendingOutcome{}, err
-	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return PendingOutcome{}, err

@@ -189,8 +189,8 @@ text, like the rest of the service.
 API level (`"api"`), the database schema version (`"schema"`, the number of
 migrations the database has run) and the storage status, as JSON when the
 request sends `Accept: application/json`, and answers **503** when the
-storage does not respond. Only SQLite has a schema version; with MySQL or
-FileMaker the `"schema"` key is left out.
+storage does not respond. Only SQLite has a schema version; with FileMaker
+the `"schema"` key is left out.
 
 ### API level and old clients
 
@@ -249,8 +249,8 @@ available".
 | GET | `/export` | every live note as a ZIP archive (`application/zip`, `scribble-notes-YYYY-MM-DD.zip`); see [Export and import](#export-and-import) |
 | POST | `/import` | `multipart/form-data` with the archive as `file` and optional `overwrite=true`; returns `{"imported": 2, "skipped": 1}`. **400** if it isn't a ZIP archive or a file in it is over 4 MB, **413** over 64 MB |
 
-Notes need `STORAGE=sqlite` (the default). With `mysql` or `filemaker`, request
-logs still work but the notes endpoints answer **501**, and the service logs a
+Notes need `STORAGE=sqlite` (the default). With `filemaker`, request logs
+still work but the notes endpoints answer **501**, and the service logs a
 warning at startup. With `filemaker`, `FMS_CREATE_LOG_TABLE=true` lets
 startup create the log table when it is missing
 ([ADR 12](docs/adr/0012-service-may-create-the-filemaker-log-table.md)).

@@ -107,49 +107,6 @@ func TestLoadSettings_NoDefaultAuthToken(t *testing.T) {
 	loadSettings()
 }
 
-func TestLoadSettings_MySQLPort(t *testing.T) {
-	testPort := func(t *testing.T, content string) string {
-		defer unsetEnv("MYSQL_PORT")()
-		tmpEnv, err := os.CreateTemp("", ".env.*")
-		if err != nil {
-			t.Fatalf("Failed to create temp env file: %v", err)
-		}
-		defer os.Remove(tmpEnv.Name())
-
-		if _, err := tmpEnv.WriteString(content); err != nil {
-			t.Fatalf("Failed to write to temp env file: %v", err)
-		}
-		tmpEnv.Close()
-
-		loadSettings(tmpEnv.Name())
-		return settings.MySQL.Port
-	}
-
-	t.Run("port with leading colon", func(t *testing.T) {
-		got := testPort(t, "MYSQL_PORT=:3306\n")
-		if got != "3306" {
-			t.Errorf("expected settings.MySQL.Port '3306', got %q", got)
-		}
-	})
-
-	t.Run("port without leading colon", func(t *testing.T) {
-		got := testPort(t, "MYSQL_PORT=3307\n")
-		if got != "3307" {
-			t.Errorf("expected settings.MySQL.Port '3307', got %q", got)
-		}
-	})
-
-	t.Run("default port when unset", func(t *testing.T) {
-		got := testPort(t, "DEBUG=true\n")
-		if got != "3306" {
-			t.Errorf("expected default settings.MySQL.Port '3306', got %q", got)
-		}
-	})
-
-	// Restore original settings
-	loadSettings()
-}
-
 func TestLoadSettings_SqlitePath(t *testing.T) {
 	testPath := func(t *testing.T, content string) string {
 		defer unsetEnv("SQLITE_PATH")()
@@ -207,8 +164,8 @@ func TestLoadSettings_Storage(t *testing.T) {
 	if got := loadWith(t, "PORT=:9999\n"); got != types.StorageSQLite {
 		t.Errorf("expected default storage %q, got %q", types.StorageSQLite, got)
 	}
-	if got := loadWith(t, "STORAGE= MySQL \n"); got != types.StorageMySQL {
-		t.Errorf("expected STORAGE to be trimmed and lower-cased to %q, got %q", types.StorageMySQL, got)
+	if got := loadWith(t, "STORAGE= FileMaker \n"); got != types.StorageFileMaker {
+		t.Errorf("expected STORAGE to be trimmed and lower-cased to %q, got %q", types.StorageFileMaker, got)
 	}
 	if got := loadWith(t, "STORAGE=postgres\n"); got != "postgres" {
 		t.Errorf("expected unknown storage to be kept for validation, got %q", got)

@@ -133,7 +133,7 @@ func TestRunReplicaResync(t *testing.T) {
 			t.Errorf("replica %q: exit %d, want 2", args, code)
 		}
 	}
-	if code := runReplica([]string{"resync"}, types.AppSettings{Storage: types.StorageMySQL}, &out, &errOut); code != 1 {
-		t.Errorf("resync with STORAGE=mysql: exit %d, want 1", code)
+	if code := runReplica([]string{"resync"}, types.AppSettings{Storage: types.StorageFileMaker}, &out, &errOut); code != 1 {
+		t.Errorf("resync with STORAGE=filemaker: exit %d, want 1", code)
 	}
 }

@@ -124,7 +124,7 @@ func TestHealthCheck_StorageDownReturns503(t *testing.T) {
 	}
 }
 
-// noSchemaStore is a store without a schema version, like MySQL and FileMaker.
+// noSchemaStore is a store without a schema version, like FileMaker.
 type noSchemaStore struct{ store.Store }
 
 func TestHealthCheck_SchemaVersion(t *testing.T) {

@@ -50,18 +50,12 @@ func IsPermanent(err error) bool {
 	return errors.As(err, &p)
 }
 
-// SQLStore keeps request logs in a SQL database (SQLite or MySQL).
+// SQLStore keeps request logs and notes in a SQLite database.
 type SQLStore struct {
 	db *sql.DB
-	// timeArg converts a timestamp into the driver argument for created_at.
-	timeArg func(time.Time) any
-	// noLimit is the LIMIT value meaning "all rows", needed with OFFSET.
-	noLimit int64
-	// notesEnabled is true when the notes table exists (SQLite only).
-	notesEnabled bool
-	// schema is the SQLite schema version once migrated; 0 for MySQL.
+	// schema is the schema version once migrated.
 	schema int
-	// databaseID is the SQLite database's ID (#167); "" for MySQL.
+	// databaseID is the database's ID (#167).
 	databaseID string
 }
 
@@ -73,8 +67,7 @@ type SchemaVersioner interface {
 	SchemaVersion() (int, bool)
 }
 
-// SchemaVersion returns the SQLite schema version read at open; MySQL has
-// none.
+// SchemaVersion returns the SQLite schema version read at open.
 func (s *SQLStore) SchemaVersion() (int, bool) {
 	return s.schema, s.schema > 0
 }
@@ -88,7 +81,7 @@ type DatabaseIdentifier interface {
 	DatabaseID() (string, bool)
 }
 
-// DatabaseID returns the SQLite database's ID; MySQL has none.
+// DatabaseID returns the SQLite database's ID.
 func (s *SQLStore) DatabaseID() (string, bool) {
 	return s.databaseID, s.databaseID != ""
 }
@@ -119,7 +112,7 @@ func (s *SQLStore) LogRequests(ctx context.Context, entries []types.UsageLog) er
 	defer stmt.Close()
 
 	for _, e := range entries {
-		if _, err := stmt.ExecContext(ctx, e.Status, e.Method, e.Error, e.Endpoint, s.timeArg(e.CreatedAt), string(e.Response), string(e.Request)); err != nil {
+		if _, err := stmt.ExecContext(ctx, e.Status, e.Method, e.Error, e.Endpoint, timeArg(e.CreatedAt), string(e.Response), string(e.Request)); err != nil {
 			return fmt.Errorf("insert request log: %w", err)
 		}
 	}
@@ -128,13 +121,13 @@ func (s *SQLStore) LogRequests(ctx context.Context, entries []types.UsageLog) er
 
 func (s *SQLStore) GetLogs(ctx context.Context, from, to time.Time, page Page) ([]types.UsageLog, error) {
 	query := `SELECT id, status, method, error, endpoint, created_at, response, request FROM request_logs WHERE created_at >= ? AND created_at < ? ORDER BY created_at, id`
-	args := []any{s.timeArg(from), s.timeArg(to)}
+	args := []any{timeArg(from), timeArg(to)}
 	if page.Limit > 0 {
 		query += ` LIMIT ? OFFSET ?`
 		args = append(args, page.Limit, max(page.Offset, 0))
 	} else if page.Offset > 0 {
 		query += ` LIMIT ? OFFSET ?`
-		args = append(args, s.noLimit, page.Offset)
+		args = append(args, -1, page.Offset) // a negative LIMIT means no limit
 	}
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
