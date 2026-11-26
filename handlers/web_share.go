@@ -28,10 +28,13 @@ func SharedPath(token string) string {
 	return "/s/" + token
 }
 
-// What the share pane's buttons send as "action".
+// What the share pane's buttons send as "action": the view link's and,
+// with -edit, the edit link's (#195).
 const (
-	actionShare   = "share"
-	actionUnshare = "unshare"
+	actionShare       = "share"
+	actionUnshare     = "unshare"
+	actionShareEdit   = "share-edit"
+	actionUnshareEdit = "unshare-edit"
 )
 
 var (
@@ -70,57 +73,89 @@ func expiresText(t *time.Time) string {
 	return "Expires on " + t.UTC().Format("2006-01-02 15:04 UTC")
 }
 
-// shareForm is the share pane of one note. URL is "" while it isn't shared;
-// Expires is nil for a link that never expires.
+// shareForm is the share pane of one note: its view link and its edit link.
 type shareForm struct {
-	ID      int64
-	Action  string
-	Cancel  string
+	ID     int64
+	Action string
+	Cancel string
+	View   shareLinkView
+	Edit   shareLinkView
+}
+
+// shareLinkView is one link in the share pane. URL is "" while there is
+// none; Expires is nil for a link that never expires.
+type shareLinkView struct {
 	URL     string
 	QR      template.HTML
 	Expires *time.Time
 }
 
-// AppShareForm shows the share pane: the link, its QR code and Revoke when
-// the note is shared, and the button that shares it when it isn't.
+// linkView is the pane's view of link sh, served at path(token).
+func linkView(r *http.Request, sh store.Share, path func(string) string) (shareLinkView, error) {
+	v := shareLinkView{Expires: sh.ExpiresAt}
+	if sh.Token == "" {
+		return v, nil
+	}
+	v.URL = siteURL(r) + path(sh.Token)
+	var err error
+	if v.QR, err = qrSVG(v.URL); err != nil {
+		return v, httperror.ReturnWithHTTPStatus(err, http.StatusInternalServerError)
+	}
+	return v, nil
+}
+
+// AppShareForm shows the share pane: for each link, the link, its QR code
+// and Revoke when there is one, and the button that makes it when not.
 func (h *Handler) AppShareForm(c *gin.Context) error {
 	p, ns, n, err := h.webNote(c)
 	if err != nil || n == nil {
 		return err
 	}
-	sh, err := ns.NoteShare(c.Request.Context(), n.ID)
+	ctx := c.Request.Context()
+	view, err := ns.NoteShare(ctx, n.ID)
+	if err != nil {
+		return noteError(err)
+	}
+	edit, err := ns.NoteEditShare(ctx, n.ID)
 	if err != nil {
 		return noteError(err)
 	}
 	p.Title = "Share " + n.Title
-	p.Share = &shareForm{ID: n.ID, Action: SharePath(n.ID) + p.Filter(), Cancel: NotePath(n.ID) + p.Filter(),
-		Expires: sh.ExpiresAt}
-	if sh.Token != "" {
-		p.Share.URL = siteURL(c.Request) + SharedPath(sh.Token)
-		if p.Share.QR, err = qrSVG(p.Share.URL); err != nil {
-			return httperror.ReturnWithHTTPStatus(err, http.StatusInternalServerError)
-		}
+	p.Share = &shareForm{ID: n.ID, Action: SharePath(n.ID) + p.Filter(), Cancel: NotePath(n.ID) + p.Filter()}
+	if p.Share.View, err = linkView(c.Request, view, SharedPath); err != nil {
+		return err
+	}
+	if p.Share.Edit, err = linkView(c.Request, edit, EditSharedPath); err != nil {
+		return err
 	}
 	return h.renderNotes(c, http.StatusOK, p)
 }
 
-// AppShare shares the note for the chosen ttl (keeping its link if it has
-// a live one) or revokes its link, and goes back to the share pane.
+// AppShare shares the note with a view or edit link for the chosen ttl
+// (keeping the link if it is live) or revokes one, and goes back to the
+// share pane.
 func (h *Handler) AppShare(c *gin.Context) error {
 	p, ns, n, err := h.webNote(c)
 	if err != nil || n == nil {
 		return err
 	}
 	ctx := c.Request.Context()
-	switch c.PostForm("action") {
-	case actionShare:
+	action := c.PostForm("action")
+	switch action {
+	case actionShare, actionShareEdit:
 		expires, terr := shareExpiry(c.PostForm("ttl"))
 		if terr != nil {
 			return httperror.ReturnWithHTTPStatus(terr, http.StatusBadRequest)
 		}
-		_, err = ns.ShareNote(ctx, n.ID, expires)
+		if action == actionShare {
+			_, err = ns.ShareNote(ctx, n.ID, expires)
+		} else {
+			_, err = ns.ShareNoteEdit(ctx, n.ID, expires)
+		}
 	case actionUnshare:
 		err = ns.UnshareNote(ctx, n.ID)
+	case actionUnshareEdit:
+		err = ns.UnshareNoteEdit(ctx, n.ID)
 	default:
 		return httperror.ReturnWithHTTPStatus(errUnknownAction, http.StatusBadRequest)
 	}
@@ -132,14 +167,6 @@ func (h *Handler) AppShare(c *gin.Context) error {
 	}
 	c.Redirect(http.StatusSeeOther, SharePath(n.ID)+p.Filter())
 	return nil
-}
-
-// sharedPage is the data of a shared note's public page.
-type sharedPage struct {
-	Title    string
-	NoteHTML template.HTML
-	Updated  string
-	Expires  string
 }
 
 // Shared shows the note shared with :token to anyone, with no session and
@@ -158,24 +185,12 @@ func (h *Handler) Shared(c *gin.Context) error {
 	if err != nil {
 		return httperror.ReturnWithHTTPStatus(err, http.StatusInternalServerError)
 	}
-	tmpl, err := template.ParseFS(h.templates, "tmpl/shared.html")
-	if err != nil {
-		return httperror.ReturnWithHTTPStatus(err, http.StatusInternalServerError)
-	}
-	// The token is in the URL: never send it to the sites the note links to.
-	c.Header("Referrer-Policy", "no-referrer")
-	c.Header("X-Robots-Tag", "noindex")
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	c.Status(http.StatusOK)
-	if err := tmpl.Execute(c.Writer, sharedPage{
+	return h.renderShared(c, http.StatusOK, sharedPage{
 		Title:    n.Title,
 		NoteHTML: out,
 		Updated:  n.UpdatedAt.UTC().Format("2006-01-02 15:04 UTC"),
 		Expires:  expiresText(expires),
-	}); err != nil {
-		return httperror.ReturnWithHTTPStatus(err, http.StatusInternalServerError)
-	}
-	return nil
+	})
 }
 
 // siteURL is the scheme and host r was sent to, as the browser sees them.

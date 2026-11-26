@@ -108,7 +108,7 @@ func TestCmdVersion(t *testing.T) {
 				t.Fatal(err)
 			}
 			want := "client " + tc.client + " (API level 7)\n" +
-				"server " + tc.server + " (API level 2, schema 8)\n" +
+				"server " + tc.server + " (API level 2, schema 9)\n" +
 				"url: " + srvURL + "\n" +
 				"token: static (never expires)\n" +
 				"config: none (environment / defaults)\n" +

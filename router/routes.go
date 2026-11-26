@@ -94,6 +94,14 @@ func GetRoutes(handler *handlers.Handler) Routes {
 		Route{Name: "AppImport", Method: "POST", Pattern: handlers.ImportPath, HandlerFunc: handler.AppImport, Web: true, UseSession: true},
 		// A shared note's public page (#83): no session, the token is the key.
 		Route{Name: "Shared", Method: "GET", Pattern: handlers.SharedPath(":token"), HandlerFunc: handler.Shared, Web: true},
+		// A note's edit link (#195, ADR 15): no session either. Its save needs
+		// no same-origin check: the token in the path is the key, not a
+		// cookie a cross-site form could ride on, and the page's no-referrer
+		// policy makes browsers send "Origin: null".
+		Route{Name: "EditShared", Method: "GET", Pattern: handlers.EditSharedPath(":token"), HandlerFunc: handler.EditShared, Web: true},
+		Route{Name: "EditSharedForm", Method: "GET", Pattern: handlers.EditSharedEditPath(":token"), HandlerFunc: handler.EditSharedForm, Web: true},
+		Route{Name: "EditSharedSave", Method: "POST", Pattern: handlers.EditSharedEditPath(":token"), HandlerFunc: handler.EditSharedSave, Web: true, AllowCrossOrigin: true},
+		Route{Name: "EditSharedHistory", Method: "GET", Pattern: handlers.EditSharedHistoryPath(":token"), HandlerFunc: handler.EditSharedHistory, Web: true},
 		Route{Name: "AppNew", Method: "GET", Pattern: handlers.NewPath, HandlerFunc: handler.AppNew, Web: true, UseSession: true},
 		Route{Name: "AppPreview", Method: "POST", Pattern: handlers.PreviewPath, HandlerFunc: handler.AppPreview, Web: true, UseSession: true},
 		Route{Name: "AppCreate", Method: "POST", Pattern: handlers.NewPath, HandlerFunc: handler.AppCreate, Web: true, UseSession: true},

@@ -36,13 +36,17 @@ type Note struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// Share is a note's public, read-only share link (ADR 11) as the API sends
-// it: the zero Share while the note is private. ExpiresAt is nil for a link
-// that never expires.
+// Share is a note's public share links as the API sends them: the
+// read-only view link (ADR 11) and the edit link (#195, ADR 15), each
+// empty while the note has none. An expiry is nil for a link that never
+// expires.
 type Share struct {
 	Token     string     `json:"token"`
 	URL       string     `json:"url"`
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	// The edit link has no API to make or revoke it yet.
+	EditURL       string     `json:"edit_url"`
+	EditExpiresAt *time.Time `json:"edit_expires_at,omitempty"`
 }
 
 // Version is one kept state of a note in its history: a full copy of its

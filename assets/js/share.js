@@ -1,10 +1,10 @@
-// The share pane's Copy link (#83). Without JavaScript the button stays
+// The share pane's Copy link buttons (#83, #195), one per link. Without JavaScript the button stays
 // hidden and the link is copied from its text field.
 (function () {
 	"use strict";
 	document.querySelectorAll("[data-copy]").forEach(function (button) {
 		var field = document.getElementById(button.dataset.copy);
-		var status = document.querySelector("[data-copied]");
+		var status = document.querySelector('[data-copied="' + button.dataset.copy + '"]');
 		if (!field) return;
 		button.hidden = false;
 		button.addEventListener("click", function () {

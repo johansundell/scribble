@@ -801,6 +801,29 @@ body.web:has(.app-main) {
 	margin: 0.25rem 0 0.75rem;
 }
 
+/* The share pane's view link and edit link (#195), a section each. */
+.share-link {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+	padding-top: 0.75rem;
+	border-top: 1px solid var(--border);
+}
+
+.share-link h2 {
+	margin: 0;
+	font-size: 1.125rem;
+}
+
+.share-link p {
+	margin: 0;
+}
+
+.share-warning {
+	color: var(--error);
+	font-weight: 600;
+}
+
 /* The note view's revision line (#110). */
 .note-meta {
 	margin: 0 0 0.75rem;
@@ -907,6 +930,17 @@ body.web:has(.app-main) {
 	margin: 0 auto;
 	padding: 1.5rem 1rem;
 	overflow-wrap: anywhere;
+}
+
+/* An edit link's page (#195): Edit and History above the note, and the
+   editor without the app's pane around it. */
+.shared > .editor-buttons {
+	margin-bottom: 1rem;
+}
+
+.shared .note-view {
+	padding: 0;
+	overflow-y: visible;
 }
 
 .draft-label {
