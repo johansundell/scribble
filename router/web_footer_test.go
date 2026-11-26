@@ -3,11 +3,13 @@ package router_test
 import (
 	"net/http"
 	"testing"
+
+	"github.com/johansundell/scribble/handlers"
 )
 
 // The footer links "Scribble" to the repo and carries the copyright (#206).
 func TestWebFooter(t *testing.T) {
-	const link = `<a class="footer-link" href="https://github.com/johansundell/scribble" target="_blank" rel="noopener">Scribble</a>`
+	const link = `<a class="footer-link" href="` + handlers.RepoURL + `" target="_blank" rel="noopener">Scribble</a>`
 	e := newWebEnv(t)
 	c := e.login(t)
 	n := e.note(t, "# Shared")
