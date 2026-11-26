@@ -118,9 +118,55 @@ body.web {
 	background: var(--surface);
 }
 
+.app-brand {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	min-width: 0;
+}
+
+.app-brand-link {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	color: inherit;
+	text-decoration: none;
+	flex-shrink: 0;
+}
+
+.app-brand-link:hover .app-name {
+	color: var(--accent);
+}
+
+.app-logo {
+	display: inline-block;
+	width: 28px;
+	height: 28px;
+	background: url("/assets/img/icon.svg") no-repeat center / contain;
+	border-radius: 6px;
+	flex-shrink: 0;
+}
+
 .app-name {
 	font-weight: 700;
 	font-size: 1.25rem;
+	line-height: 1.2;
+	transition: color 0.15s ease;
+}
+
+.app-tagline {
+	color: var(--muted);
+	font-size: 0.875rem;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.app-tagline::before {
+	content: "·";
+	margin-right: 0.75rem;
+	color: var(--muted);
+	font-weight: 700;
 }
 
 .header-actions {
@@ -980,6 +1026,10 @@ body.web:has(.app-main) {
 /* Phones (#65): one pane at a time, the note pane with a top bar, and the
    editor's actions in a bar stuck to the bottom of the screen. */
 @media (width < 700px) {
+	.app-tagline {
+		display: none;
+	}
+
 	body.web:has(.app-main) {
 		height: auto;
 	}
