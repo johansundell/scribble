@@ -160,26 +160,42 @@ func (h *Handler) importUpload(c *gin.Context) (ImportResult, error) {
 	return importNotes(c.Request.Context(), ns, list, overwrite)
 }
 
-// importImages stores each image, checked as an upload is, and refuses one
-// whose name isn't the one its bytes give it.
+// importImages checks every image as an upload is checked, refusing one
+// whose name isn't the one its bytes give it, and only then stores them, so
+// a bad archive leaves nothing behind. Each is read twice rather than all
+// held in memory at once.
 func importImages(ctx context.Context, is store.ImageStore, imgs []notes.ZipImage) error {
 	for _, zi := range imgs {
-		data, err := zi.Data()
-		if err != nil {
-			return httperror.ReturnWithHTTPStatus(err, http.StatusBadRequest)
+		if _, err := checkedImage(zi); err != nil {
+			return err
 		}
-		img, err := images.Prepare(data)
-		if err == nil && img.FileName() != zi.FileName {
-			err = errors.New("the name doesn't match the image")
-		}
+	}
+	for _, zi := range imgs {
+		img, err := checkedImage(zi)
 		if err != nil {
-			return httperror.ReturnWithHTTPStatus(fmt.Errorf("%s%s: %w", notes.ImageDir, zi.FileName, err), http.StatusBadRequest)
+			return err
 		}
 		if err := is.PutImage(ctx, img); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// checkedImage reads zi and prepares it as an upload, or answers 400.
+func checkedImage(zi notes.ZipImage) (images.Image, error) {
+	data, err := zi.Data()
+	if err != nil {
+		return images.Image{}, httperror.ReturnWithHTTPStatus(err, http.StatusBadRequest)
+	}
+	img, err := images.Prepare(data)
+	if err == nil && img.FileName() != zi.FileName {
+		err = errors.New("the name doesn't match the image")
+	}
+	if err != nil {
+		return images.Image{}, httperror.ReturnWithHTTPStatus(fmt.Errorf("%s%s: %w", notes.ImageDir, zi.FileName, err), http.StatusBadRequest)
+	}
+	return img, nil
 }
 
 // importNotes creates each note. One whose title is taken is skipped, or

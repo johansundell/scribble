@@ -312,8 +312,12 @@ func TestImages_ExportImport(t *testing.T) {
 		"images/" + svgName:           "<svg></svg>",
 		"images/" + other.ID + ".jpg": string(other.Data),
 	} {
-		w := api(uploadRequest(t, "/import", zipOf(t, map[string]string{"Beta.md": "# Beta", name: data}), nil))
+		good := "images/" + prepared(t, pngOf(t, 8)).FileName()
+		w := api(uploadRequest(t, "/import", zipOf(t, map[string]string{"Beta.md": "# Beta", name: data, good: string(pngOf(t, 8))}), nil))
 		wantBody(t, w, http.StatusBadRequest)
+		if list, _ := e.store.ListImages(ctx); len(list) != 1 {
+			t.Errorf("%s: a refused import stored %d images, want only the first", name, len(list))
+		}
 		if _, err := e.store.GetNoteByTitle(ctx, "Beta"); err == nil {
 			t.Errorf("%s: the import went ahead", name)
 		}

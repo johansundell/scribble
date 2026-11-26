@@ -18,6 +18,8 @@ const MaxBytes = 10 << 20
 // PathPrefix starts an image's URL.
 const PathPrefix = "/images/"
 
+// Errors returned by Prepare; the upload handlers answer them with 413 and
+// 415.
 var (
 	ErrTooLarge    = errors.New("the image is larger than 10 MB")
 	ErrUnsupported = errors.New("only PNG, JPEG, GIF and WebP images can be added")

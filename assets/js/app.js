@@ -195,6 +195,8 @@ function uploadImage(form, file) {
 	var text = editorText(form);
 	var alt = altText(file);
 	var mark = "![Uploading " + alt + "…]()";
+	// A new upload clears an earlier one's error.
+	form.querySelector(".editor-error").hidden = true;
 	text.focus();
 	insert(text, mark);
 	var data = new FormData();
