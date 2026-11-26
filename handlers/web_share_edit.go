@@ -85,10 +85,18 @@ func (h *Handler) EditShared(c *gin.Context) error {
 	})
 }
 
-// sharedEditor is the editor behind edit link token.
+// sharedEditor is the editor of note n behind edit link token.
 func sharedEditor(n *notes.Note, token string) *noteEditor {
-	return &noteEditor{ID: n.ID, Action: EditSharedEditPath(token), Cancel: EditSharedPath(token),
-		Public: true, Preview: EditSharedPreviewPath(token)}
+	ed := linkEditor(token)
+	ed.ID = n.ID
+	return ed
+}
+
+// linkEditor is the editor behind edit link token, for a note it may no
+// longer reach.
+func linkEditor(token string) *noteEditor {
+	return &noteEditor{Action: EditSharedEditPath(token), Cancel: EditSharedPath(token),
+		EditLink: true, Preview: EditSharedPreviewPath(token)}
 }
 
 // EditSharedForm shows the editor behind an edit link.
@@ -113,9 +121,8 @@ func (h *Handler) EditSharedSave(c *gin.Context) error {
 	}
 	ns, n, sh, err := h.editLinkNote(c)
 	if errors.Is(err, store.ErrNoteNotFound) {
-		tok := c.Param("token")
-		ed := &noteEditor{Action: EditSharedEditPath(tok), Cancel: EditSharedPath(tok), Body: body, Dirty: true, Error: msgLinkGone,
-			Public: true, Preview: EditSharedPreviewPath(tok)}
+		ed := linkEditor(c.Param("token"))
+		ed.Body, ed.Dirty, ed.Error = body, true, msgLinkGone
 		return h.renderShared(c, http.StatusNotFound, sharedPage{Title: "Edit link", Editor: ed})
 	}
 	if err != nil {

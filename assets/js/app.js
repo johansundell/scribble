@@ -91,8 +91,9 @@ function loadPreview(form, body, preview) {
 		if (run !== previewRun) return;
 		preview.textContent = UNAVAILABLE;
 	};
-	// An edit link's editor previews under its token (#197).
-	fetch(form.dataset.preview || "/preview", {
+	// The editor names where it previews: an edit link's under its token
+	// (#197).
+	fetch(form.dataset.preview, {
 		method: "POST",
 		body: new URLSearchParams({ body: body }),
 		credentials: "same-origin",

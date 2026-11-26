@@ -38,7 +38,7 @@ func TestWebEdit_MarkdownHelp(t *testing.T) {
 			"data-note-link",
 		)
 		// The app's own editor previews at /preview.
-		wantNot(t, w.Body.String(), "data-preview=")
+		wantBody(t, w, http.StatusOK, `data-preview="/preview"`)
 	}
 }
 
@@ -58,6 +58,7 @@ func TestWebShareEdit_Preview(t *testing.T) {
 		"<h1>Draft</h1>", "<strong>bold</strong>",
 		`<a href="/login?next=/title/Other">Other</a>`,
 		`<a href="/login?next=/title/Private%2520Plans">Private Plans</a>`,
+		`<a href="/login?next=/%3Fproject%3Dwork">#work</a>`,
 		"&lt;script&gt;",
 	)
 	wantNot(t, w.Body.String(), `class="missing"`, "<script>alert", "<html")
