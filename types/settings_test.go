@@ -90,7 +90,7 @@ func TestAppSettingsValidate_Replica(t *testing.T) {
 	}{
 		{"valid", func(*AppSettings) {}, ""},
 		{"off needs nothing", func(s *AppSettings) { s.Replica = ReplicaSettings{}; s.FileMaker = FileMakerSettings{} }, ""},
-		{"unknown mode", func(s *AppSettings) { s.Replica.Mode = "mysql" }, "NOTES_REPLICA"},
+		{"unknown mode", func(s *AppSettings) { s.Replica.Mode = "postgres" }, "NOTES_REPLICA"},
 		{"not sqlite", func(s *AppSettings) {
 			s.Storage = StorageFileMaker
 			s.FileMaker.LogTable = "Logs"

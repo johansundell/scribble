@@ -77,7 +77,7 @@ func newShareToken() string {
 }
 
 // expiryArg is the driver argument for an expiry column: NULL for never.
-func (s *SQLStore) expiryArg(t *time.Time) any {
+func expiryArg(t *time.Time) any {
 	if t == nil {
 		return nil
 	}
@@ -99,7 +99,7 @@ func (s *SQLStore) share(ctx context.Context, l shareLink, id int64, expires *ti
 	now := timeArg(time.Now())
 	keep := l.token + ` IS NOT NULL AND ` + l.live()
 	set := l.token + ` = CASE WHEN ` + keep + ` THEN ` + l.token + ` ELSE ? END, ` + l.expires + ` = ?`
-	args := []any{now, newShareToken(), s.expiryArg(expires)}
+	args := []any{now, newShareToken(), expiryArg(expires)}
 	if l.created != "" {
 		// SET reads the row as it was, so keep sees the old token.
 		set = l.created + ` = CASE WHEN ` + keep + ` THEN ` + l.created + ` ELSE ? END, ` + set
