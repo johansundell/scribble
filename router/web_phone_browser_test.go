@@ -158,6 +158,25 @@ func checkPhone(t *testing.T, d *webDriver, srv string, n *notes.Note) {
 	if !d.visible(".back-link") {
 		t.Error("rename: no back link")
 	}
+
+	// A share link's page, with its footer link to the repo (#206). Each
+	// run shares the note again only if an earlier one hasn't.
+	d.open(fmt.Sprintf("%s/note/%d/share", srv, n.ID))
+	if d.visible(`button[value="share"]`) {
+		d.click(`button[value="share"]`)
+		d.waitFor(`return !!document.getElementById("share-url")`)
+	}
+	var link string
+	d.execInto(&link, `return document.getElementById("share-url").value`)
+	i := strings.Index(link, "/s/")
+	if i < 0 {
+		t.Fatalf("share link %q", link)
+	}
+	d.open(srv + link[i:])
+	d.checkPage("share link")
+	if !d.visible(".app-footer .footer-link") {
+		t.Error("share link: no footer link")
+	}
 }
 
 // newPhoneServer serves the web app over HTTP to the browser, with

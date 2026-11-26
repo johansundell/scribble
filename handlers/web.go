@@ -342,8 +342,12 @@ func (h *Handler) renderLogin(c *gin.Context, status int, msg string) error {
 	return h.renderWeb(c, status, "login.html", p)
 }
 
+// RepoURL is Scribble's source repository, linked from the web footer (#206).
+const RepoURL = "https://github.com/johansundell/scribble"
+
 // webFuncs are the functions web templates may call.
 var webFuncs = template.FuncMap{
+	"repoURL":         func() string { return RepoURL },
 	"notePath":        NotePath,
 	"editPath":        EditPath,
 	"renamePath":      RenamePath,

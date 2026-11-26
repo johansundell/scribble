@@ -231,6 +231,19 @@ a.button {
 	text-align: center;
 }
 
+/* A footer line wraps between items, not inside one (#206). */
+.footer-item {
+	white-space: nowrap;
+}
+
+/* The footer's link to the repo (#206), tall enough to tap. */
+.footer-link {
+	display: inline-flex;
+	align-items: center;
+	min-height: 44px;
+	color: var(--accent);
+}
+
 /* A button that looks like a link, tall enough to tap. */
 .link-button {
 	display: inline-flex;
@@ -250,7 +263,8 @@ a.button {
 	display: none;
 }
 
-.link-button:focus-visible {
+.link-button:focus-visible,
+.footer-link:focus-visible {
 	outline: 3px solid var(--accent);
 	outline-offset: 2px;
 }

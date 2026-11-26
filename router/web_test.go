@@ -227,7 +227,7 @@ func TestWeb_LoginPage(t *testing.T) {
 		`inputmode="numeric"`, `autocomplete="one-time-code"`, `pattern="[0-9]{3} ?[0-9]{3}"`, `maxlength="7"`,
 		`href="/totp-setup"`, "Set up authenticator",
 		`name="next" value="/note/1"`,
-		"Scribble v9.8.7",
+		"v9.8.7",
 	)
 	if strings.Contains(w.Body.String(), "Log out") {
 		t.Error("the login page shows a Log out button")
@@ -338,7 +338,7 @@ func TestWeb_AppPage(t *testing.T) {
 
 	w := e.do(get("/", c))
 	wantBody(t, w, http.StatusOK,
-		"Scribble v9.8.7", `action="/logout"`, "Log out",
+		"v9.8.7", `action="/logout"`, "Log out",
 		`<meta name="viewport"`, `/assets/css/app.css`,
 	)
 	if got := w.Header().Get("Cache-Control"); got != "no-store" {
@@ -348,9 +348,11 @@ func TestWeb_AppPage(t *testing.T) {
 		t.Error("Login Alert shown without wrong codes")
 	}
 
-	// No external fonts or scripts.
+	// No external fonts or scripts. The footer's link to the repo (#206)
+	// loads nothing.
+	page := strings.Replace(w.Body.String(), `href="`+handlers.RepoURL+`"`, "", 1)
 	for _, external := range []string{`src="http`, `href="http`, `src="//`, `href="//`} {
-		if strings.Contains(w.Body.String(), external) {
+		if strings.Contains(page, external) {
 			t.Errorf("page loads something external: %q", external)
 		}
 	}
