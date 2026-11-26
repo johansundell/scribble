@@ -638,3 +638,33 @@ func TestSameOrigin(t *testing.T) {
 		})
 	}
 }
+
+func TestWebHeader_BrandAndTagline(t *testing.T) {
+	e := newWebEnv(t)
+	c := e.login(t)
+	for _, req := range []*http.Request{get("/", c), get("/login")} {
+		w := e.do(req)
+		wantBody(t, w, http.StatusOK,
+			`<div class="app-brand">`,
+			`<span class="app-logo" aria-hidden="true"></span>`,
+			`<span class="app-name">Scribble</span>`,
+			`<span class="app-tagline">a note is never alone</span>`,
+		)
+	}
+
+	// The stylesheet defines the logo background and hides the tagline on phones.
+	css := e.do(get("/assets/css/app.css")).Body.String()
+	wantBody(t, httptest.NewRecorder(), http.StatusOK)
+	for _, needle := range []string{
+		".app-brand",
+		".app-logo",
+		`background: url("/assets/img/icon.svg")`,
+		".app-tagline",
+		"display: none",
+	} {
+		if !strings.Contains(css, needle) {
+			t.Errorf("app.css is missing %q", needle)
+		}
+	}
+}
+
