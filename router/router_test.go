@@ -205,11 +205,14 @@ func TestGetRoutes(t *testing.T) {
 		"Shared": {method: "GET", pattern: "/s/:token", web: true},
 		// An edit link's pages (#195): no session either, and the save takes
 		// its token, not a cookie, so it needs no same-origin check.
-		"EditShared":        {method: "GET", pattern: "/e/:token", web: true},
-		"EditSharedForm":    {method: "GET", pattern: "/e/:token/edit", web: true},
-		"EditSharedSave":    {method: "POST", pattern: "/e/:token/edit", web: true, allowCross: true},
-		"EditSharedPreview": {method: "POST", pattern: "/e/:token/preview", web: true, allowCross: true},
-		"EditSharedHistory": {method: "GET", pattern: "/e/:token/history", web: true},
+		"EditShared":            {method: "GET", pattern: "/e/:token", web: true},
+		"EditSharedForm":        {method: "GET", pattern: "/e/:token/edit", web: true},
+		"EditSharedSave":        {method: "POST", pattern: "/e/:token/edit", web: true, allowCross: true},
+		"EditSharedPreview":     {method: "POST", pattern: "/e/:token/preview", web: true, allowCross: true},
+		"Image":                 {method: "GET", pattern: "/images/:file", web: true},
+		"AppUploadImage":        {method: "POST", pattern: "/app/images", web: true, useSession: true},
+		"EditSharedUploadImage": {method: "POST", pattern: "/e/:token/images", web: true, allowCross: true},
+		"EditSharedHistory":     {method: "GET", pattern: "/e/:token/history", web: true},
 		// With the web app off, the root goes to the health check.
 		"RootToHealth": {method: "GET", pattern: "/", webOff: true},
 		"Healthz":      {method: "GET", pattern: "/healthz", useLogger: false, useAuth: false},

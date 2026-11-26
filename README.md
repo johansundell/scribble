@@ -247,7 +247,16 @@ available".
 | GET | `/notes/deleted` | deleted notes, most recently deleted first: `id, title, deleted_at` |
 | POST | `/notes/:id/undelete` | brings a deleted note back with its last text and returns it. **409** if a live note has its title, **404** if the id isn't a deleted note |
 | GET | `/export` | every live note as a ZIP archive (`application/zip`, `scribble-notes-YYYY-MM-DD.zip`); see [Export and import](#export-and-import) |
-| POST | `/import` | `multipart/form-data` with the archive as `file` and optional `overwrite=true`; returns `{"imported": 2, "skipped": 1}`. **400** if it isn't a ZIP archive or a file in it is over 4 MB, **413** over 64 MB |
+| POST | `/import` | `multipart/form-data` with the archive as `file` and optional `overwrite=true`; returns `{"imported": 2, "skipped": 1}`. **400** if it isn't a ZIP archive, a note in it is over 4 MB or an image in it is refused (see [Images](#images)), **413** over 512 MB |
+
+The web app adds these, which are 404 while it is off (#201, see
+[Images](#images)):
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/images/<sha256>.<ext>` | an image, with no login. Sent with `Cache-Control: public, max-age=31536000, immutable`, `X-Content-Type-Options: nosniff`, `X-Robots-Tag: noindex` and `Content-Security-Policy: sandbox`. **404** if unknown, or if the extension isn't the image's type |
+| POST | `/app/images` | the web app's upload, with its session: `multipart/form-data` with the image as `file`; returns `{"url": "/images/<sha256>.<ext>"}`. **415** if it isn't PNG, JPEG, GIF or WebP, **413** over 10 MB, each with `{"error": "…"}` |
+| POST | `/e/<token>/images` | the same through an edit link, with no session; **404** once the link is revoked or expired |
 
 Notes need `STORAGE=sqlite` (the default). With `filemaker`, request logs
 still work but the notes endpoints answer **501**, and the service logs a
@@ -389,6 +398,7 @@ limit stays. Never set it on a server with notes of your own.
   restore, rename, delete, pin or share. Each save is its own version,
   labelled "Edited via link" in the history. The two links are independent;
   deleting the note clears both. (#195, ADR 15)
+- **Images:** see [Images](#images).
 - **Pinned notes:** **Pin note** on a note (under **⋯** on phones) keeps it
   at the top of the list, marked 📌; **Unpin note** lets it sort by date
   again. Pinning isn't an edit, so it doesn't change the note's revision or
@@ -416,6 +426,29 @@ limit stays. Never set it on a server with notes of your own.
 Why it works this way: [ADR 4](docs/adr/0004-web-app-is-server-rendered.md)
 and [ADR 5](docs/adr/0005-web-pin-login-and-shared-api-token.md).
 
+## Images
+
+The web editor adds images to a note (#201,
+[ADR 16](docs/adr/0016-images-live-in-the-database.md)): with the **Image**
+button in its toolbar, by dropping a file on the text, or by pasting one,
+such as a screenshot. Each works behind an edit link too. While the image
+uploads, `![Uploading <name>…]()` holds its place at the cursor; then it
+becomes `![<file name>](/images/<sha256>.<ext>)`. If the upload fails, the
+placeholder goes and the editor says why.
+
+- PNG, JPEG, GIF and WebP up to 10 MB. The type is read from the file's
+  bytes, not its name; SVG and anything else is refused. A JPEG loses its
+  EXIF and XMP data, such as where the photo was taken, before it is stored.
+- Each image is stored once in the SQLite database (table `images`), under
+  the SHA-256 of its bytes, so backups hold it. Nothing deletes images.
+- **Anyone with an image's URL can open it,** without logging in: the hash
+  can't be guessed, which is what keeps it private. So an image in a shared
+  note stays reachable for whoever saw it after the link is revoked.
+- Notes may show images from `http(s)` URLs and from `/images/`; any other
+  source is shown as its text. Images are never wider than the note.
+- The desktop app, `sn`, offline copies and the FileMaker replica show the
+  `![…](/images/…)` text as it is.
+
 ## Export and import
 
 Every note can be exported to a ZIP archive and imported from one (#117),
@@ -426,10 +459,15 @@ dialog with a file picker and the overwrite box). All of them go through
 the server's `GET /export` and `POST /import`; the web app uses
 `/export-notes` and `/import-notes` with its session.
 
-- **The archive** is flat: one `<title>.md` per note holding its Markdown
+- **The archive** has one `<title>.md` per note holding its Markdown
   as it is. In file names, `/ \ : * ? " < > |` become `_`, and titles that
   make the same name (ignoring case) get `-2`, `-3`, ...; the oldest note
-  keeps the plain name. The default name is `scribble-notes-YYYY-MM-DD.zip`.
+  keeps the plain name. Every [image](#images) is in `images/<sha256>.<ext>`.
+  The default name is `scribble-notes-YYYY-MM-DD.zip`.
+- **Images** in an `images` folder whose names are `<sha256>.<ext>` are
+  checked as an upload is, and must have the name their bytes give them;
+  one that doesn't fails the import before any note is added. Other files
+  there are ignored. Up to 10 MB per image, and 512 MB per archive.
 - **Importing** reads every `.md` and `.txt` file as Markdown and every
   `.note` file as Tomboy XML, in any folder of the archive; other files are
   ignored. A text file that doesn't start with a heading gets its file name

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"mime/multipart"
 	"net/http"
 	"slices"
 	"strconv"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/johansundell/scribble/httperror"
+	"github.com/johansundell/scribble/images"
 	"github.com/johansundell/scribble/notes"
 	"github.com/johansundell/scribble/store"
 )
@@ -28,8 +28,8 @@ const (
 	ImportPath = "/import-notes"
 )
 
-// maxImportBytes caps an uploaded archive.
-const maxImportBytes = 64 << 20
+// maxImportBytes caps an uploaded archive, which may hold images (#201).
+const maxImportBytes = 512 << 20
 
 // ImportResult is what an import did: Imported notes were created or
 // overwritten, Skipped ones already existed, were unchanged or had no
@@ -53,11 +53,35 @@ func (h *Handler) ExportNotes(c *gin.Context) error {
 	// Oldest first, so the oldest of two notes whose titles make the same
 	// file name keeps the plain one.
 	slices.SortFunc(list, func(a, b notes.Note) int { return int(a.ID - b.ID) })
+	imgs, err := h.zipImages(c.Request.Context())
+	if err != nil {
+		return err
+	}
 	c.Header("Content-Type", "application/zip")
 	c.Header("Content-Disposition", `attachment; filename="`+notes.ZipFileName(time.Now())+`"`)
 	c.Status(http.StatusOK)
 	// Headers are sent by now, so a failure can only cut the download short.
-	return notes.WriteZip(c.Writer, list)
+	return notes.WriteZip(c.Writer, list, imgs...)
+}
+
+// zipImages is every stored image, each read as the archive is written.
+func (h *Handler) zipImages(ctx context.Context) ([]notes.ZipImage, error) {
+	is, err := h.imageStore()
+	if err != nil {
+		return nil, err
+	}
+	list, err := is.ListImages(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]notes.ZipImage, len(list))
+	for i, img := range list {
+		out[i] = notes.ZipImage{FileName: img.FileName(), Data: func() ([]byte, error) {
+			got, err := is.GetImage(ctx, img.ID)
+			return got.Data, err
+		}}
+	}
+	return out, nil
 }
 
 // ImportNotes handles POST /import: a multipart upload of a ZIP archive as
@@ -112,9 +136,22 @@ func (h *Handler) importUpload(c *gin.Context) (ImportResult, error) {
 		}
 		return ImportResult{}, httperror.ReturnWithHTTPStatus(errors.New("no file uploaded"), http.StatusBadRequest)
 	}
-	list, err := readUpload(fh)
+	is, err := h.imageStore()
+	if err != nil {
+		return ImportResult{}, err
+	}
+	f, err := fh.Open()
+	if err != nil {
+		return ImportResult{}, err
+	}
+	defer f.Close()
+	list, imgs, err := notes.ReadArchive(f, fh.Size)
 	if err != nil {
 		return ImportResult{}, httperror.ReturnWithHTTPStatus(err, http.StatusBadRequest)
+	}
+	// Images first, so a bad one stops the import before any note.
+	if err := importImages(c.Request.Context(), is, imgs); err != nil {
+		return ImportResult{}, err
 	}
 	overwrite, _ := strconv.ParseBool(c.Request.FormValue("overwrite"))
 	if c.Request.FormValue("overwrite") == "on" { // an HTML checkbox
@@ -123,13 +160,26 @@ func (h *Handler) importUpload(c *gin.Context) (ImportResult, error) {
 	return importNotes(c.Request.Context(), ns, list, overwrite)
 }
 
-func readUpload(fh *multipart.FileHeader) ([]notes.Note, error) {
-	f, err := fh.Open()
-	if err != nil {
-		return nil, err
+// importImages stores each image, checked as an upload is, and refuses one
+// whose name isn't the one its bytes give it.
+func importImages(ctx context.Context, is store.ImageStore, imgs []notes.ZipImage) error {
+	for _, zi := range imgs {
+		data, err := zi.Data()
+		if err != nil {
+			return httperror.ReturnWithHTTPStatus(err, http.StatusBadRequest)
+		}
+		img, err := images.Prepare(data)
+		if err == nil && img.FileName() != zi.FileName {
+			err = errors.New("the name doesn't match the image")
+		}
+		if err != nil {
+			return httperror.ReturnWithHTTPStatus(fmt.Errorf("%s%s: %w", notes.ImageDir, zi.FileName, err), http.StatusBadRequest)
+		}
+		if err := is.PutImage(ctx, img); err != nil {
+			return err
+		}
 	}
-	defer f.Close()
-	return notes.ReadZip(f, fh.Size)
+	return nil
 }
 
 // importNotes creates each note. One whose title is taken is skipped, or

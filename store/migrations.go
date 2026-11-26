@@ -151,6 +151,19 @@ ALTER TABLE notes ADD COLUMN share_edit_expires_at TEXT;
 ALTER TABLE notes ADD COLUMN share_edit_created_at TEXT;
 `,
 	},
+	{
+		// Images in notes (#201, ADR 16), kept once each under the
+		// SHA-256 of their bytes. Nothing deletes them.
+		name: "images",
+		sql: `
+CREATE TABLE images (
+	id TEXT NOT NULL PRIMARY KEY,
+	mime TEXT NOT NULL,
+	data BLOB NOT NULL,
+	created_at TEXT NOT NULL
+);
+`,
+	},
 }
 
 // migrate applies the migrations the database's user_version has not yet

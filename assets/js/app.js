@@ -46,6 +46,9 @@ function setup() {
 		});
 	}
 	var text = editorText(form);
+	// A pasted image is uploaded (#201). It goes first, so the pastes below
+	// never see it.
+	text.addEventListener("paste", pasteImage);
 	// Only the two pastes from #53, as in the desktop app (#54): a URL over
 	// selected text, and spreadsheet cells.
 	installLink(text);
@@ -168,6 +171,115 @@ function codeBlock(text) {
 	var at = start + open.length;
 	text.setSelectionRange(at, at + sel.length);
 }
+
+// Images (#201): the Image button, a dropped file and a pasted one all go
+// through uploadImage, which holds the image's place at the cursor with
+// "![Uploading <name>…]()" until the server answers with its URL.
+var IMAGE_UNREACHABLE = "The server can't be reached, so the image wasn't added. Try again.";
+var IMAGE_SESSION = "Your session has ended, so the image wasn't added. Log in again, then add it.";
+
+// altText is file's name as an image description: no brackets, backslashes
+// or line breaks, which would end it early, and "image" when it has none.
+function altText(file) {
+	var name = (file.name || "").replace(/[[\]\\\r\n]/g, "").trim();
+	return name || "image";
+}
+
+function uploadImages(form, files) {
+	Array.prototype.forEach.call(files, function (file) {
+		uploadImage(form, file);
+	});
+}
+
+function uploadImage(form, file) {
+	var text = editorText(form);
+	var alt = altText(file);
+	var mark = "![Uploading " + alt + "…]()";
+	text.focus();
+	insert(text, mark);
+	var data = new FormData();
+	data.append("file", file);
+	fetch(form.dataset.images, { method: "POST", body: data, credentials: "same-origin" })
+		.then(function (res) {
+			// A post from an ended session is sent to the login.
+			if (res.redirected) throw new Error(IMAGE_SESSION);
+			return res.json().catch(function () {
+				return {};
+			}).then(function (body) {
+				if (!res.ok || !body.url) {
+					throw new Error(body.error || "Adding the image failed (" + res.status + "). Try again.");
+				}
+				return body.url;
+			});
+		}, function () {
+			throw new Error(IMAGE_UNREACHABLE);
+		})
+		.then(function (url) {
+			replaceMark(text, mark, "![" + alt + "](" + url + ")");
+		}, function (err) {
+			replaceMark(text, mark, "");
+			var shown = form.querySelector(".editor-error");
+			shown.textContent = err.message;
+			shown.hidden = false;
+		});
+}
+
+// replaceMark puts s in place of the first mark, keeping the cursor where
+// it is: after s when it was at or in the mark. ("preserve" would select s,
+// and the next upload would type over it.) A mark the user removed is left
+// removed.
+function replaceMark(text, mark, s) {
+	var at = text.value.indexOf(mark);
+	if (at < 0) return;
+	var after = at + mark.length;
+	var moved = function (p) {
+		if (p >= after) return p + s.length - mark.length;
+		return p > at ? at + s.length : p;
+	};
+	var start = moved(text.selectionStart);
+	var end = moved(text.selectionEnd);
+	text.setRangeText(s, at, after);
+	text.setSelectionRange(start, end);
+	text.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+// pasteImage uploads pasted files, such as a screenshot. A paste with text
+// is left alone: a spreadsheet's cells come with a picture of them too.
+function pasteImage(e) {
+	var cb = e.clipboardData;
+	if (!cb || !cb.files.length || Array.prototype.indexOf.call(cb.types, "text/plain") >= 0) return;
+	e.preventDefault();
+	e.stopImmediatePropagation();
+	uploadImages(e.target.form, cb.files);
+}
+
+// hasFiles reports whether a drag carries files.
+function hasFiles(e) {
+	return !!e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types, "Files") >= 0;
+}
+
+// dropTarget is the editor's textarea e is over, or null.
+function dropTarget(e) {
+	var text = e.target.closest && e.target.closest("form.editor #note-text");
+	return text && text.form.dataset.markdown ? text : null;
+}
+
+document.addEventListener("dragover", function (e) {
+	if (dropTarget(e) && hasFiles(e)) e.preventDefault();
+});
+
+document.addEventListener("drop", function (e) {
+	var text = dropTarget(e);
+	if (!text || !hasFiles(e) || !e.dataTransfer.files.length) return;
+	e.preventDefault();
+	uploadImages(text.form, e.dataTransfer.files);
+});
+
+document.addEventListener("change", function (e) {
+	if (!e.target.matches("form.editor [data-image-file]")) return;
+	uploadImages(e.target.form, e.target.files);
+	e.target.value = "";
+});
 
 // Link to note (#149): a picker over the other notes' titles that puts a
 // [[link]] to the chosen one in place of the selection, as one undo step.
@@ -311,6 +423,8 @@ document.addEventListener("click", function (e) {
 	if (tab) showTab(tab.form, tab.dataset.tab);
 	var code = e.target.closest("form.editor [data-code-block]");
 	if (code) codeBlock(editorText(code.form));
+	var image = e.target.closest("form.editor [data-image-button]");
+	if (image) image.form.querySelector("[data-image-file]").click();
 	var link = e.target.closest("form.editor [data-note-link]");
 	if (link) openPicker(link.form);
 	var option = e.target.closest("#note-link-list [role=option]");

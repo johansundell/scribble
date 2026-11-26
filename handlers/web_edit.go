@@ -69,10 +69,13 @@ type noteEditor struct {
 	// Preview is where the Preview tab posts: PreviewPath, or an edit
 	// link's own.
 	Preview string
+	// Images is where the editor uploads images (#201): ImagesUploadPath,
+	// or an edit link's own.
+	Images string
 }
 
 func newNoteEditor() *noteEditor {
-	return &noteEditor{Action: NewPath, Cancel: AppHome, Preview: PreviewPath}
+	return &noteEditor{Action: NewPath, Cancel: AppHome, Preview: PreviewPath, Images: ImagesUploadPath}
 }
 
 // AppNew shows an empty editor. With ?project= it starts with the #project
@@ -217,7 +220,7 @@ func (h *Handler) renderEditor(c *gin.Context, status int, p webPage, title stri
 }
 
 func editorFor(id int64) *noteEditor {
-	return &noteEditor{ID: id, Action: EditPath(id), Cancel: NotePath(id), Preview: PreviewPath}
+	return &noteEditor{ID: id, Action: EditPath(id), Cancel: NotePath(id), Preview: PreviewPath, Images: ImagesUploadPath}
 }
 
 // webNoteID is the :id of a web app note page, if it is one.
