@@ -46,13 +46,6 @@ var newSQLiteStore = func(path string) (store.Store, error) {
 	}
 	return s, nil
 }
-var newMySQLStore = func(cfg types.MySQLSettings) (store.Store, error) {
-	s, err := store.NewMySQL(cfg)
-	if err != nil {
-		return nil, err
-	}
-	return s, nil
-}
 var newFileMakerStore = func(ctx context.Context, cfg types.FileMakerSettings) (store.Store, error) {
 	s, err := store.NewFileMaker(ctx, cfg)
 	if err != nil {
@@ -251,10 +244,6 @@ var storeOpeners = map[string]func() (store.Store, time.Duration, error){
 		s, err := newSQLiteStore(settings.SqlitePath)
 		return s, 5 * time.Second, err
 	},
-	types.StorageMySQL: func() (store.Store, time.Duration, error) {
-		s, err := newMySQLStore(settings.MySQL)
-		return s, 5 * time.Second, err
-	},
 	types.StorageFileMaker: func() (store.Store, time.Duration, error) {
 		fm := settings.FileMaker
 		if fm.InsecureSkipVerify {
@@ -360,7 +349,7 @@ func newAPIOAuth(webAuth *auth.Authenticator, st store.Store) (*oauth.Server, er
 		return nil, nil
 	}
 	tokens, ok := st.(store.OAuthTokenStore)
-	if !ok || settings.Storage != types.StorageSQLite {
+	if !ok {
 		logWarning("STORAGE=%s cannot keep OAuth tokens, so sn login is off; API clients need AUTH_TOKEN", settings.Storage)
 		return nil, nil
 	}

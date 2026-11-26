@@ -11,22 +11,12 @@ import (
 // Storage backends selectable with STORAGE.
 const (
 	StorageSQLite    = "sqlite"
-	StorageMySQL     = "mysql"
 	StorageFileMaker = "filemaker"
 )
 
 // StorageBackends lists every valid STORAGE value. The service must have a
 // constructor for each (see openStore); a test checks that they match.
-var StorageBackends = []string{StorageSQLite, StorageMySQL, StorageFileMaker}
-
-// MySQLSettings configures STORAGE=mysql (MYSQL_* variables).
-type MySQLSettings struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-	Host     string `json:"host"`
-	Port     string `json:"port"`
-	Database string `json:"database"`
-}
+var StorageBackends = []string{StorageSQLite, StorageFileMaker}
 
 // FileMakerSettings configures STORAGE=filemaker (FMS_* variables).
 type FileMakerSettings struct {
@@ -97,7 +87,6 @@ type AppSettings struct {
 	SqlitePath          string            `json:"sqlitePath"`
 	BackupDir           string            `json:"backupDir"`
 	BackupRetentionDays int               `json:"backupRetentionDays"`
-	MySQL               MySQLSettings     `json:"mysql"`
 	FileMaker           FileMakerSettings `json:"filemaker"`
 	Replica             ReplicaSettings   `json:"replica"`
 	Web                 WebSettings       `json:"web"`
@@ -114,10 +103,8 @@ func (s AppSettings) Validate() error {
 	}
 	switch s.Storage {
 	case StorageSQLite:
-	case StorageMySQL:
-		if s.MySQL.Username == "" || s.MySQL.Host == "" || s.MySQL.Database == "" {
-			return fmt.Errorf("MYSQL_USERNAME, MYSQL_HOST and MYSQL_DATABASE must be set when STORAGE=mysql")
-		}
+	case "mysql":
+		return fmt.Errorf("STORAGE=mysql was removed in v2.7.0; use sqlite")
 	case StorageFileMaker:
 		if err := s.FileMaker.validateConnection("STORAGE=filemaker"); err != nil {
 			return err

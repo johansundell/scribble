@@ -37,22 +37,17 @@ type OAuthTokenStore interface {
 	DeleteOAuthTokenByRefresh(ctx context.Context, refresh string) error
 }
 
-var errNoOAuthTokens = errors.New("OAuth tokens need STORAGE=sqlite")
-
 func (s *SQLStore) SaveOAuthToken(ctx context.Context, t OAuthToken) error {
-	if !s.notesEnabled {
-		return errNoOAuthTokens
-	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `DELETE FROM oauth_tokens WHERE expires_at < ?`, s.timeArg(time.Now())); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM oauth_tokens WHERE expires_at < ?`, timeArg(time.Now())); err != nil {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT OR REPLACE INTO oauth_tokens (access, refresh, data, expires_at) VALUES (?, ?, ?, ?)`,
-		t.Access, t.Refresh, string(t.Data), s.timeArg(t.ExpiresAt)); err != nil {
+		t.Access, t.Refresh, string(t.Data), timeArg(t.ExpiresAt)); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -70,9 +65,6 @@ func (s *SQLStore) OAuthTokenByRefresh(ctx context.Context, refresh string) ([]b
 }
 
 func (s *SQLStore) oauthToken(ctx context.Context, query, key string) ([]byte, bool, error) {
-	if !s.notesEnabled {
-		return nil, false, errNoOAuthTokens
-	}
 	var data string
 	err := s.db.QueryRowContext(ctx, query, key).Scan(&data)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -96,9 +88,6 @@ func (s *SQLStore) DeleteOAuthTokenByRefresh(ctx context.Context, refresh string
 }
 
 func (s *SQLStore) deleteOAuthToken(ctx context.Context, query, key string) error {
-	if !s.notesEnabled {
-		return errNoOAuthTokens
-	}
 	_, err := s.db.ExecContext(ctx, query, key)
 	return err
 }

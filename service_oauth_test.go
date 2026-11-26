@@ -32,8 +32,8 @@ func TestNewAPIOAuth(t *testing.T) {
 	if o, err := newAPIOAuth(webAuth, sqlite); err != nil || o == nil {
 		t.Errorf("sqlite: %v, %v; want a server", o, err)
 	}
-	settings.Storage = types.StorageMySQL
-	if o, err := newAPIOAuth(webAuth, sqlite); err != nil || o != nil {
-		t.Errorf("mysql: %v, %v; want nil", o, err)
+	settings.Storage = types.StorageFileMaker
+	if o, err := newAPIOAuth(webAuth, &deadlineStore{}); err != nil || o != nil {
+		t.Errorf("filemaker: %v, %v; want nil", o, err)
 	}
 }

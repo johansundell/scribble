@@ -328,7 +328,8 @@ func WrapHandler(inner HandlerFuncWithError) gin.HandlerFunc {
 
 // maxRequestBodyBytes caps how much of a request body LoggerMiddleware reads
 // and stores; larger requests are rejected with 413.
-// Note: If raised, keep it under 16 MiB to safely fit within MySQL's MEDIUMTEXT limit.
+// The cap keeps request logs small rather than fitting a column type: SQLite
+// TEXT has no practical limit.
 const maxRequestBodyBytes = 1 << 20
 
 // LoggerMiddleware captures each request and response and hands the entry to

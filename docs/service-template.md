@@ -1,6 +1,6 @@
 # scribble-server
 
-A robust Go-based service template designed for quick bootstrapping of web services. It includes built-in support for system service management, request logging to SQLite, MySQL or FileMaker, authentication, and Docker deployment.
+A robust Go-based service template designed for quick bootstrapping of web services. It includes built-in support for system service management, request logging to SQLite or FileMaker, authentication, and Docker deployment.
 
 ## API Endpoints
 
@@ -75,7 +75,7 @@ The application can be installed as a system service.
 
 - **Web Server**: Built with [Gin](https://github.com/gin-gonic/gin) for high performance.
 - **Service Management**: Can be installed and managed as a system service (Windows Service, Systemd, etc.) using [kardianos/service](https://github.com/kardianos/service).
-- **Database Support**: Request logs in SQLite, MySQL or FileMaker (see [FileMaker storage](#filemaker-storage)).
+- **Database Support**: Request logs in SQLite or FileMaker (see [FileMaker storage](#filemaker-storage)).
 - **Authentication**: Simple token-based authentication for protected routes.
 - **Docker Ready**: Includes `Dockerfile` and `docker-compose.yml` for easy containerization.
 - **Asset Management**: Supports embedding assets or serving from the file system.
@@ -175,7 +175,7 @@ The application is configured via environment variables. You can set these in a 
 | `PORT` | string | `:8080` | The port the server listens on. |
 | `USE_FILE_SYSTEM` | bool | `false` | If true, serves assets and templates from the `assets` and `tmpl` folders next to the binary (edit them without rebuilding). If false, uses the embedded copies. Doesn't work with `go run .` (see [Running Locally](#running-locally)). |
 | `TIMEOUT` | int | `15` | Request timeout in seconds. |
-| `STORAGE` | string | `sqlite` | Storage backend for request logs: `sqlite`, `mysql` or `filemaker`. |
+| `STORAGE` | string | `sqlite` | Storage backend for request logs: `sqlite` or `filemaker` (`mysql` was removed in v2.7.0). |
 | `SQLITE_PATH` | string | `<binary dir>/<nameOfService>.db` | Path to SQLite database file (`STORAGE=sqlite`). Set it when using `go run .`, whose binary dir is temporary. |
 | `BACKUP_DIR` | string | `backups` beside the database | Where `scribble-server backup` stores its `scribble_<timestamp>.db.gz` archives. The `-dir` flag overrides it. |
 | `RETENTION_DAYS` | int | `7` | After each backup, `scribble-server backup` deletes archives older than this many days. The newest archive is always kept, however old. The `-retention-days` flag overrides it. |
@@ -187,11 +187,6 @@ The application is configured via environment variables. You can set these in a 
 | `PUBLIC_DEMO` | bool | `false` | Only for a public demo (#175): the login screen shows the authenticator secret, as a QR code, a link and text, so visitors need no `AUTH_TOKEN`, and wrong codes never lock web login for everyone or raise the Login Alert. The per-address limit stays. |
 | `TRUSTED_PROXIES` | string | none | Comma-separated IPs or CIDRs whose `X-Forwarded-For` is believed, for example `127.0.0.1` for nginx on the same host. With none, the client address is the TCP peer. It keys the web app's per-address limit on wrong codes. |
 | `COOKIE_SECURE` | bool | `true` | Marks the session cookie `Secure` (HTTPS only). Set `false` only for local testing over plain HTTP. |
-| `MYSQL_USERNAME` | string | - | MySQL username (required when `STORAGE=mysql`, as are `MYSQL_HOST` and `MYSQL_DATABASE`). |
-| `MYSQL_PASSWORD` | string | - | MySQL password. |
-| `MYSQL_HOST` | string | - | MySQL host address. |
-| `MYSQL_PORT` | string | `3306` | MySQL port. |
-| `MYSQL_DATABASE` | string | - | MySQL database name. |
 | `FMS_HOST` | string | - | FileMaker Server URL; must start with `https://` (required when `STORAGE=filemaker`, as are `FMS_DATABASE`, `FMS_USERNAME` and `FMS_PASSWORD`). |
 | `FMS_DATABASE` | string | - | FileMaker file (database) name. |
 | `FMS_USERNAME` | string | - | FileMaker account with the `fmodata` extended privilege. |

@@ -7,7 +7,6 @@ require (
 	github.com/alecthomas/chroma/v2 v2.27.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-oauth2/oauth2/v4 v4.5.4
-	github.com/go-sql-driver/mysql v1.10.1
 	github.com/joho/godotenv v1.5.1
 	github.com/kardianos/service v1.3.0
 	github.com/ncruces/go-sqlite3 v0.35.6
@@ -22,7 +21,6 @@ require (
 )
 
 require (
-	filippo.io/edwards25519 v1.2.0 // indirect
 	fyne.io/systray v1.12.3-0.20260810170012-af4e8e793ec4 // indirect
 	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/FyshOS/fancyfs v0.0.1 // indirect

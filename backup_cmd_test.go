@@ -108,7 +108,7 @@ func TestRetentionPeriod(t *testing.T) {
 }
 
 func TestRunBackupStorageNonSQLite(t *testing.T) {
-	for _, storage := range []string{types.StorageMySQL, types.StorageFileMaker, "postgres"} {
+	for _, storage := range []string{types.StorageFileMaker, "postgres"} {
 		t.Run(storage, func(t *testing.T) {
 			var stdout, stderr strings.Builder
 			s := types.AppSettings{

@@ -67,15 +67,6 @@ func loadSettings(filenames ...string) {
 	}
 	settings.AuthToken = os.Getenv("AUTH_TOKEN")
 
-	settings.MySQL.Username = os.Getenv("MYSQL_USERNAME")
-	settings.MySQL.Password = os.Getenv("MYSQL_PASSWORD")
-	settings.MySQL.Host = os.Getenv("MYSQL_HOST")
-	settings.MySQL.Port = strings.TrimPrefix(os.Getenv("MYSQL_PORT"), ":")
-	if settings.MySQL.Port == "" {
-		settings.MySQL.Port = "3306"
-	}
-	settings.MySQL.Database = os.Getenv("MYSQL_DATABASE")
-
 	settings.FileMaker.Host = os.Getenv("FMS_HOST")
 	settings.FileMaker.Database = os.Getenv("FMS_DATABASE")
 	settings.FileMaker.Username = os.Getenv("FMS_USERNAME")

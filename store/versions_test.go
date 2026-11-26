@@ -307,18 +307,3 @@ func TestNoteVersionsMigrationBackfillsExistingNotes(t *testing.T) {
 		t.Errorf("want 2 versions after a rerun, got %d", n)
 	}
 }
-
-func TestHistoryNeedsNotes(t *testing.T) {
-	ctx := context.Background()
-	s := &SQLStore{} // as under STORAGE=mysql
-	_, e1 := s.NoteVersions(ctx, 1)
-	_, e2 := s.NoteVersion(ctx, 1, 1)
-	_, e3 := s.RestoreVersion(ctx, 1, 1, 0)
-	_, e4 := s.DeletedNotes(ctx)
-	_, e5 := s.UndeleteNote(ctx, 1)
-	for i, err := range []error{e1, e2, e3, e4, e5} {
-		if !errors.Is(err, ErrNotesUnsupported) {
-			t.Errorf("call %d: want ErrNotesUnsupported, got %v", i+1, err)
-		}
-	}
-}

@@ -43,13 +43,15 @@ func NewSQLite(file string) (*SQLStore, error) {
 		return nil, fmt.Errorf("read database ID: %w", err)
 	}
 	return &SQLStore{
-		db:           db,
-		timeArg:      func(t time.Time) any { return t.UTC().Format(sqliteTimeLayout) },
-		noLimit:      -1, // SQLite: a negative LIMIT means no limit
-		notesEnabled: true,
-		schema:       schema,
-		databaseID:   dbID,
+		db:         db,
+		schema:     schema,
+		databaseID: dbID,
 	}, nil
+}
+
+// timeArg converts a timestamp into the SQLite text the time columns hold.
+func timeArg(t time.Time) string {
+	return t.UTC().Format(sqliteTimeLayout)
 }
 
 // openSQLite opens file and brings it to the schema version of ms.
