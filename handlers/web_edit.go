@@ -63,10 +63,16 @@ type noteEditor struct {
 	// note, or with unsaved text (save first, like the desktop app).
 	// editor.js hides it once the text is changed.
 	Rename string
+	// EditLink marks an edit link's editor (#197): no Link to note, nor
+	// help for [[links]] and #project tags, which need the login.
+	EditLink bool
+	// Preview is where the Preview tab posts: PreviewPath, or an edit
+	// link's own.
+	Preview string
 }
 
 func newNoteEditor() *noteEditor {
-	return &noteEditor{Action: NewPath, Cancel: AppHome}
+	return &noteEditor{Action: NewPath, Cancel: AppHome, Preview: PreviewPath}
 }
 
 // AppNew shows an empty editor. With ?project= it starts with the #project
@@ -211,7 +217,7 @@ func (h *Handler) renderEditor(c *gin.Context, status int, p webPage, title stri
 }
 
 func editorFor(id int64) *noteEditor {
-	return &noteEditor{ID: id, Action: EditPath(id), Cancel: NotePath(id)}
+	return &noteEditor{ID: id, Action: EditPath(id), Cancel: NotePath(id), Preview: PreviewPath}
 }
 
 // webNoteID is the :id of a web app note page, if it is one.

@@ -69,6 +69,36 @@ func TestWebShareEditBrowser(t *testing.T) {
 		d.click(`a[href$="/edit"]`)
 		d.waitPath(path + "/edit")
 
+		// The Markdown toolbar (#197), less Link to note.
+		if !d.visible("[data-md-bar]") || !d.visible("md-bold") || d.visible("[data-note-link]") {
+			t.Error("the toolbar is missing, or offers Link to note")
+		}
+		d.exec(`var t = document.getElementById("note-text"); t.focus(); t.setSelectionRange(t.value.length, t.value.length)`)
+		d.click("md-bold")
+		var bolded string
+		d.execInto(&bolded, `return document.getElementById("note-text").value`)
+		if !strings.Contains(bolded, "****") {
+			t.Errorf("Bold put in %q", bolded)
+		}
+		// Preview renders under the token, as the link's page does.
+		d.exec(`var t = document.getElementById("note-text"); t.value = "# Alpha\n**strong** and [[Elsewhere]]"; t.dispatchEvent(new Event("input"))`)
+		d.click(`[data-tab="preview"]`)
+		d.wantText("#note-preview strong", "strong")
+		var href string
+		d.execInto(&href, `var a = document.querySelector("#note-preview a"); return a ? a.getAttribute("href") + " " + a.className : ""`)
+		if href != "/login?next=/title/Elsewhere " {
+			t.Errorf("preview link %q, want it through the login and not marked missing", href)
+		}
+		d.click(`[data-tab="write"]`)
+		// The help opens and has no [[links]] row.
+		d.click(".md-help summary")
+		d.wantText(".md-help table", "**bold**")
+		var help string
+		d.execInto(&help, `return document.querySelector(".md-help").textContent`)
+		if strings.Contains(help, "[[") {
+			t.Errorf("help offers [[links]]: %q", help)
+		}
+
 		// A new title is refused, and the text stays.
 		d.exec(`var t = document.getElementById("note-text"); t.value = "# Renamed\nmine"; t.dispatchEvent(new Event("input"))`)
 		d.click(`button[value="save"]`)
@@ -94,5 +124,14 @@ func TestWebShareEditBrowser(t *testing.T) {
 		if strings.Contains(page, "secret before sharing") || strings.Contains(page, "Restore") {
 			t.Errorf("history shows too much:\n%s", page)
 		}
+	})
+
+	// On a phone the editor, its toolbar and the open help fit the screen.
+	t.Run("phone", func(t *testing.T) {
+		p := newDriver(t, wd, 375, 667, 2, true)
+		p.open(link + "/edit")
+		p.wantText(".md-help summary", "Markdown help")
+		p.exec(`document.querySelector(".md-help").open = true`)
+		p.checkPage("phone edit link editor")
 	})
 }

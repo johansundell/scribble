@@ -336,7 +336,9 @@ limit stays. Never set it on a server with notes of your own.
   Preview renders the text the way the saved note shows. Without
   JavaScript it is a plain textarea, and saving still works. The toolbar and
   paste come from GitHub's `markdown-toolbar-element` and `paste-markdown`
-  (MIT), vendored in `assets/js/vendor/`.
+  (MIT), vendored in `assets/js/vendor/`. **Markdown help** under the
+  editor's buttons opens a short table of the syntax, with `[[links]]` and
+  `#project` tags in the logged-in editor. (#197)
 - **Keyboard shortcuts** follow the desktop menu bar where browsers allow (on
   macOS, Ctrl is Cmd). Single keys work only when the focus isn't in a text
   field, so typing `n` or `/` into a note just types it. New, leaving the
@@ -380,7 +382,9 @@ limit stays. Never set it on a server with notes of your own.
 - **Edit links:** the Share pane has a second section, **Edit link**, with
   its own expiry, Copy link, QR code and Revoke. Anyone with an edit link
   (`/e/<token>`) can, without logging in, read the note, edit it in the web
-  editor, and see the versions made since the link was made. They can't
+  editor (with its Markdown toolbar, Preview and Markdown help, but no Link
+  to note; #197),
+  and see the versions made since the link was made. They can't
   change the title line (renaming would break `[[links]]` to the note),
   restore, rename, delete, pin or share. Each save is its own version,
   labelled "Edited via link" in the history. The two links are independent;

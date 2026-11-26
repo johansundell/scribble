@@ -91,7 +91,9 @@ function loadPreview(form, body, preview) {
 		if (run !== previewRun) return;
 		preview.textContent = UNAVAILABLE;
 	};
-	fetch("/preview", {
+	// The editor names where it previews: an edit link's under its token
+	// (#197).
+	fetch(form.dataset.preview, {
 		method: "POST",
 		body: new URLSearchParams({ body: body }),
 		credentials: "same-origin",
@@ -335,7 +337,8 @@ document.addEventListener("keydown", function (e) {
 		return;
 	}
 	if (e.target !== editorText(form)) return;
-	if (mod && e.shiftKey && !e.altKey && key === "k") {
+	// Not behind an edit link, whose editor has no Link to note (#197).
+	if (mod && e.shiftKey && !e.altKey && key === "k" && form.querySelector("[data-note-link]")) {
 		e.preventDefault();
 		openPicker(form);
 		return;

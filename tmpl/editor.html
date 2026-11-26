@@ -1,7 +1,7 @@
 {{/* editor is the note editor's form. A textarea drops one newline right
 after its start tag, so one is always written there to keep the note's own. */}}
 {{define "editor"}}
-		<form method="post" action="{{.Action}}" class="editor" data-filtered="editor"{{if or .Dirty .Draft}} data-dirty="true"{{end}}>
+		<form method="post" action="{{.Action}}" class="editor" data-filtered="editor"{{if or .Dirty .Draft}} data-dirty="true"{{end}} data-preview="{{.Preview}}">
 			{{- if .Revision}}
 			<input type="hidden" name="revision" value="{{.Revision}}" />
 			{{- end}}
@@ -39,8 +39,11 @@ after its start tag, so one is always written there to keep the note's own. */}}
 						{{/* Code block (#176): app.js puts in a fenced block. */}}
 						<button type="button" class="md-button" data-md-button="code-block" data-code-block aria-label="Code block" title="Code block"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="m11.28 3.22 4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.749.749 0 0 1-1.275-.326.749.749 0 0 1 .215-.734L13.94 8l-3.72-3.72a.749.749 0 0 1 .326-1.275.749.749 0 0 1 .734.215Zm-6.56 0a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042L2.06 8l3.72 3.72a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L.47 8.53a.75.75 0 0 1 0-1.06Z"></path></svg></button>
 						<md-link class="md-button" role="button" aria-label="Link" title="Link (Ctrl+K)"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"></path></svg></md-link>
-						{{/* Link to note (#149): app.js opens the picker. */}}
+						{{- if not .EditLink}}
+						{{/* Link to note (#149): app.js opens the picker. Not behind
+						an edit link (#197): it lists the notes. */}}
 						<button type="button" class="md-button" data-md-button="note-link" data-note-link aria-label="Link to note" title="Link to note (Ctrl+Shift+K)"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"></path></svg></button>
+						{{- end}}
 					</span>
 					<span class="md-group">
 						<md-unordered-list class="md-button" role="button" aria-label="Bulleted list" title="Bulleted list"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M5.75 2.5h8.5a.75.75 0 0 1 0 1.5h-8.5a.75.75 0 0 1 0-1.5Zm0 5h8.5a.75.75 0 0 1 0 1.5h-8.5a.75.75 0 0 1 0-1.5Zm0 5h8.5a.75.75 0 0 1 0 1.5h-8.5a.75.75 0 0 1 0-1.5ZM2 14a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm1-6a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM2 4a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"></path></svg></md-unordered-list>
@@ -60,6 +63,31 @@ after its start tag, so one is always written there to keep the note's own. */}}
 				<a class="button" href="{{.}}" data-filtered="rename" data-rename data-shortcut="rename">Rename</a>
 				{{- end}}
 			</div>
+			{{/* Markdown help (#197): closed until asked for, and it works
+			without JavaScript. [[Links]] and #project tags need the login, so
+			an edit link's editor leaves them out. */}}
+			<details class="md-help">
+				<summary>Markdown help</summary>
+				<table>
+					<thead><tr><th scope="col">Type</th><th scope="col">To get</th></tr></thead>
+					<tbody>
+						<tr><td><code># Heading</code></td><td>a heading (the first line is the title)</td></tr>
+						<tr><td><code>**bold**</code></td><td><strong>bold</strong></td></tr>
+						<tr><td><code>_italic_</code></td><td><em>italic</em></td></tr>
+						<tr><td><code>&gt; quote</code></td><td>a quote</td></tr>
+						<tr><td><code>- item</code></td><td>a bulleted list</td></tr>
+						<tr><td><code>1. item</code></td><td>a numbered list</td></tr>
+						<tr><td><code>- [ ] task</code></td><td>a task list (<code>- [x]</code> when done)</td></tr>
+						<tr><td><code>[text](https://…)</code></td><td>a link</td></tr>
+						<tr><td><code>`code`</code></td><td><code>code</code></td></tr>
+						<tr><td><code>```</code> on the lines before and after</td><td>a code block</td></tr>
+						{{- if not .EditLink}}
+						<tr><td><code>[[Note title]]</code></td><td>a link to another note</td></tr>
+						<tr><td><code>#project</code></td><td>a project tag, on any line but the title</td></tr>
+						{{- end}}
+					</tbody>
+				</table>
+			</details>
 			{{- with .Draft}}
 			<label for="draft-text" class="draft-label">Your text, not saved. Copy what you need.</label>
 			<textarea id="draft-text" class="editor-text draft" readonly>{{"\n"}}{{.}}</textarea>

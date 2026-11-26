@@ -208,6 +208,7 @@ func TestGetRoutes(t *testing.T) {
 		"EditShared":        {method: "GET", pattern: "/e/:token", web: true},
 		"EditSharedForm":    {method: "GET", pattern: "/e/:token/edit", web: true},
 		"EditSharedSave":    {method: "POST", pattern: "/e/:token/edit", web: true, allowCross: true},
+		"EditSharedPreview": {method: "POST", pattern: "/e/:token/preview", web: true, allowCross: true},
 		"EditSharedHistory": {method: "GET", pattern: "/e/:token/history", web: true},
 		// With the web app off, the root goes to the health check.
 		"RootToHealth": {method: "GET", pattern: "/", webOff: true},

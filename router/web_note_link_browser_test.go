@@ -118,7 +118,8 @@ func TestWebNoteLinkBrowser(t *testing.T) {
 		d.open(fmt.Sprintf("%s/note/%d/edit", srv, alpha.ID))
 		d.waitFor(`return document.querySelector("form.editor").dataset.markdown === "true"`)
 		d.exec(`document.getElementById("note-text").focus()`)
-		d.exec(`document.querySelector("[data-note-link]").scrollIntoView()`)
+		// To the middle: the note bar sticks to the top on phones.
+		d.exec(`document.querySelector("[data-note-link]").scrollIntoView({block: "center"})`)
 		d.click("[data-note-link]")
 		d.waitFor(`return document.getElementById("note-link-dialog").open`)
 		d.checkPage("note link picker")
