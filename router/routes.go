@@ -103,6 +103,12 @@ func GetRoutes(handler *handlers.Handler) Routes {
 		Route{Name: "EditSharedSave", Method: "POST", Pattern: handlers.EditSharedEditPath(":token"), HandlerFunc: handler.EditSharedSave, Web: true, AllowCrossOrigin: true},
 		Route{Name: "EditSharedPreview", Method: "POST", Pattern: handlers.EditSharedPreviewPath(":token"), HandlerFunc: handler.EditSharedPreview, Web: true, AllowCrossOrigin: true},
 		Route{Name: "EditSharedHistory", Method: "GET", Pattern: handlers.EditSharedHistoryPath(":token"), HandlerFunc: handler.EditSharedHistory, Web: true},
+		// Images in notes (#201, ADR 16): fetched with no login, as the
+		// SHA-256 in the name is the key; uploaded by the web app, or
+		// through an edit link with its token as the key.
+		Route{Name: "Image", Method: "GET", Pattern: handlers.ImagePath, HandlerFunc: handler.ServeImage, Web: true},
+		Route{Name: "AppUploadImage", Method: "POST", Pattern: handlers.ImagesUploadPath, HandlerFunc: handler.AppUploadImage, Web: true, UseSession: true},
+		Route{Name: "EditSharedUploadImage", Method: "POST", Pattern: handlers.EditSharedImagesPath(":token"), HandlerFunc: handler.EditSharedUploadImage, Web: true, AllowCrossOrigin: true},
 		Route{Name: "AppNew", Method: "GET", Pattern: handlers.NewPath, HandlerFunc: handler.AppNew, Web: true, UseSession: true},
 		Route{Name: "AppPreview", Method: "POST", Pattern: handlers.PreviewPath, HandlerFunc: handler.AppPreview, Web: true, UseSession: true},
 		Route{Name: "AppCreate", Method: "POST", Pattern: handlers.NewPath, HandlerFunc: handler.AppCreate, Web: true, UseSession: true},

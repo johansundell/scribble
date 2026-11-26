@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
+	"github.com/johansundell/scribble/images"
 	"github.com/johansundell/scribble/notes"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
@@ -32,7 +33,8 @@ var webMarkdown = goldmark.New(
 // renderNote renders body as HTML. [[links]] point at /title/<title>,
 // with class "missing" when exists says there is no such note, and #project
 // tags at that project's list. Links to anything but http(s) and mailto are
-// dropped, keeping their text.
+// dropped, keeping their text, and so are images from anywhere but http(s)
+// and the server's own /images/ (#201).
 func renderNote(body string, exists func(title string) bool) (template.HTML, error) {
 	return renderMarkdown(body, exists, func(path string) string { return path })
 }
@@ -86,7 +88,7 @@ func fixLinks(doc ast.Node, source []byte, exists func(string) bool, to func(str
 				drop = append(drop, n)
 			}
 		case *ast.Image:
-			if !allowedURL(string(n.Destination), "http", "https") {
+			if !allowedURL(string(n.Destination), "http", "https") && !images.IsPath(string(n.Destination)) {
 				drop = append(drop, n)
 			}
 		}

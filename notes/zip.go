@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/johansundell/scribble/images"
 )
 
 // MaxZipEntryBytes caps one file read from a ZIP archive, unpacked, so a
@@ -56,10 +58,23 @@ func fileNameFor(title string) string {
 	return name
 }
 
-// WriteZip writes list to w as a flat ZIP archive with one "<title>.md" file
-// per note, holding its Markdown body as it is. Titles that make the same
-// file name (ignoring case) get "-2", "-3", ... in the order given.
-func WriteZip(w io.Writer, list []Note) error {
+// ImageDir is the folder of an archive's images (#201): images/<file name>,
+// where the file name is the image's, <sha256>.<ext>.
+const ImageDir = "images/"
+
+// ZipImage is an image in an archive. Data reads its bytes, so an archive's
+// images need not all be in memory at once.
+type ZipImage struct {
+	// FileName is the image's file name, without ImageDir.
+	FileName string
+	Data     func() ([]byte, error)
+}
+
+// WriteZip writes list to w as a ZIP archive with one "<title>.md" file
+// per note, holding its Markdown body as it is, and imgs in ImageDir.
+// Titles that make the same file name (ignoring case) get "-2", "-3", ...
+// in the order given.
+func WriteZip(w io.Writer, list []Note, imgs ...ZipImage) error {
 	zw := zip.NewWriter(w)
 	used := map[string]bool{}
 	for _, n := range list {
@@ -77,6 +92,20 @@ func WriteZip(w io.Writer, list []Note) error {
 			return err
 		}
 	}
+	for _, img := range imgs {
+		data, err := img.Data()
+		if err != nil {
+			return err
+		}
+		// Stored, not deflated: image formats are compressed already.
+		f, err := zw.CreateHeader(&zip.FileHeader{Name: ImageDir + img.FileName, Method: zip.Store})
+		if err != nil {
+			return err
+		}
+		if _, err := f.Write(data); err != nil {
+			return err
+		}
+	}
 	return zw.Close()
 }
 
@@ -87,49 +116,71 @@ func WriteZip(w io.Writer, list []Note) error {
 // an export of a note whose title line has no '#'. Each Note has only Title
 // and Body set; titles may repeat.
 func ReadZip(r io.ReaderAt, size int64) ([]Note, error) {
+	list, _, err := ReadArchive(r, size)
+	return list, err
+}
+
+// ReadArchive reads the notes in a ZIP archive as ReadZip does, and its
+// images: the files in a folder named images whose names are image file
+// names, <sha256>.<ext>. Their Data reads them from r, up to
+// images.MaxBytes each; it doesn't check them.
+func ReadArchive(r io.ReaderAt, size int64) ([]Note, []ZipImage, error) {
 	zr, err := zip.NewReader(r, size)
 	if err != nil {
-		return nil, fmt.Errorf("not a ZIP archive: %w", err)
+		return nil, nil, fmt.Errorf("not a ZIP archive: %w", err)
 	}
 	var out []Note
+	var imgs []ZipImage
 	for _, f := range zr.File {
 		if f.FileInfo().IsDir() || strings.HasPrefix(f.Name, "__MACOSX/") {
 			continue
 		}
-		file := path.Base(strings.ReplaceAll(f.Name, `\`, "/")) // some Windows tools write \
+		name := strings.ReplaceAll(f.Name, `\`, "/") // some Windows tools write \
+		file := path.Base(name)
+		if _, _, ok := images.ParseFileName(file); ok && path.Base(path.Dir(name)) == "images" {
+			imgs = append(imgs, ZipImage{FileName: file, Data: func() ([]byte, error) {
+				data, err := readZipFile(f, images.MaxBytes)
+				if err != nil {
+					return nil, fmt.Errorf("%s: %w", f.Name, err)
+				}
+				return data, nil
+			}})
+			continue
+		}
 		ext := strings.ToLower(path.Ext(file))
 		if strings.HasPrefix(file, ".") || (ext != ".md" && ext != ".txt" && ext != ".note") {
 			continue
 		}
-		data, err := readZipFile(f)
+		data, err := readZipFile(f, MaxZipEntryBytes)
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", f.Name, err)
+			return nil, nil, fmt.Errorf("%s: %w", f.Name, err)
 		}
 		var body string
 		if ext == ".note" {
 			if body, err = ParseTomboy(bytes.NewReader(data)); err != nil {
-				return nil, fmt.Errorf("%s: %w", f.Name, err)
+				return nil, nil, fmt.Errorf("%s: %w", f.Name, err)
 			}
 		} else {
 			body = textBody(strings.TrimSuffix(file, path.Ext(file)), string(data))
 		}
 		out = append(out, Note{Title: TitleOf(body), Body: body})
 	}
-	return out, nil
+	return out, imgs, nil
 }
 
-func readZipFile(f *zip.File) ([]byte, error) {
+// readZipFile reads f, refusing it when it unpacks to more than max bytes.
+func readZipFile(f *zip.File, max int) ([]byte, error) {
 	rc, err := f.Open()
 	if err != nil {
 		return nil, err
 	}
 	defer rc.Close()
-	data, err := io.ReadAll(io.LimitReader(rc, MaxZipEntryBytes+1))
+	data, err := io.ReadAll(io.LimitReader(rc, int64(max)+1))
 	if err != nil {
 		return nil, err
 	}
-	if len(data) > MaxZipEntryBytes {
-		return nil, fmt.Errorf("larger than %d bytes", MaxZipEntryBytes)
+	if len(data) > max {
+		return nil, fmt.Errorf("larger than %d bytes", max)
 	}
 	return data, nil
 }

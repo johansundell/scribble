@@ -144,7 +144,8 @@ func checkPhone(t *testing.T, d *webDriver, srv string, n *notes.Note) {
 		t.Error("editor: Write / Preview are not above the toolbar")
 	}
 	var fonts []string
-	d.execInto(&fonts, `return Array.from(document.querySelectorAll("input:not([type=hidden]), select, textarea"))
+	// Not the Image button's file input, which is never shown (#201).
+	d.execInto(&fonts, `return Array.from(document.querySelectorAll("input:not([type=hidden]):not([hidden]), select, textarea"))
 		.filter(function (el) { return parseFloat(getComputedStyle(el).fontSize) < 16; })
 		.map(function (el) { return el.name || el.id; })`)
 	if len(fonts) > 0 {

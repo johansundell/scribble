@@ -96,7 +96,7 @@ func sharedEditor(n *notes.Note, token string) *noteEditor {
 // longer reach.
 func linkEditor(token string) *noteEditor {
 	return &noteEditor{Action: EditSharedEditPath(token), Cancel: EditSharedPath(token),
-		EditLink: true, Preview: EditSharedPreviewPath(token)}
+		EditLink: true, Preview: EditSharedPreviewPath(token), Images: EditSharedImagesPath(token)}
 }
 
 // EditSharedForm shows the editor behind an edit link.
