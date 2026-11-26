@@ -237,9 +237,9 @@ available".
 | GET | `/notes/:id/backlinks` | notes containing `[[Title]]` for this note |
 | POST | `/notes/:id/rename` | `{"title": "New"}`; rewrites `[[links]]` in other notes in one transaction |
 | POST | `/notes/:id/pin` | `{"pinned": true}` pins the note, `false` unpins it, and no body toggles; returns the note, with `"pinned": true` while pinned. Takes a new seq, so it reaches `/changes`, but keeps the revision, `updated_at` and history |
-| GET | `/notes/:id/share` | the note's live [share link](#web-app): `{"token": "…", "url": "https://…/s/<token>", "expires_at": "…"}` (`expires_at`, set in the web app, left out for never); empty `token` and `url` while the note is private or the web app is off |
-| POST | `/notes/:id/share` | shares the note with a link that never expires, keeping a live link's token, and returns the link as for `GET`. **501** while the web app is off (`WEB_TOTP_SECRET` unset), since it serves the links |
-| DELETE | `/notes/:id/share` | 204; revokes the link, which answers 404 at once |
+| GET | `/notes/:id/share` | the note's live [share link](#web-app): `{"token": "…", "url": "https://…/s/<token>", "expires_at": "…"}` (`expires_at`, set in the web app, left out for never), and its [edit link](#web-app) as `edit_url` and `edit_expires_at` (#195); empty `token`, `url` and `edit_url` while the note has no such link or the web app is off. The API can't make or revoke an edit link yet |
+| POST | `/notes/:id/share` | shares the note with a view link that never expires, keeping a live link's token, and returns the links as for `GET`. **501** while the web app is off (`WEB_TOTP_SECRET` unset), since it serves the links |
+| DELETE | `/notes/:id/share` | 204; revokes the view link, which answers 404 at once; the edit link stays |
 | GET | `/changes?since=N` | everything changed after seq N (deleted ones flagged) plus `latest_seq` to use next time, and `database_id`, which changes when the database is replaced (#167) |
 | GET | `/notes/:id/versions` | the note's kept versions, newest first, without bodies: `revision, title, reason, deleted, created_at, updated_at`. Works for deleted notes too |
 | GET | `/notes/:id/versions/:rev` | one version with its `body`. **404** if that revision wasn't kept |
@@ -377,6 +377,14 @@ limit stays. Never set it on a server with notes of your own.
   has the same in its **Share** button and File → Share note…: Create
   public link, Copy link, a QR code and Revoke link. Its links never
   expire. (#142)
+- **Edit links:** the Share pane has a second section, **Edit link**, with
+  its own expiry, Copy link, QR code and Revoke. Anyone with an edit link
+  (`/e/<token>`) can, without logging in, read the note, edit it in the web
+  editor, and see the versions made since the link was made. They can't
+  change the title line (renaming would break `[[links]]` to the note),
+  restore, rename, delete, pin or share. Each save is its own version,
+  labelled "Edited via link" in the history. The two links are independent;
+  deleting the note clears both. (#195, ADR 15)
 - **Pinned notes:** **Pin note** on a note (under **⋯** on phones) keeps it
   at the top of the list, marked 📌; **Unpin note** lets it sort by date
   again. Pinning isn't an edit, so it doesn't change the note's revision or

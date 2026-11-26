@@ -366,7 +366,7 @@ func timeTag(t time.Time) template.HTML {
 // renderWeb renders tmplFile inside the app layout. Web pages use
 // html/template, so note text and form values are escaped.
 func (h *Handler) renderWeb(c *gin.Context, status int, tmplFile string, data webPage) error {
-	tmpl, err := template.New(tmplFile).Funcs(webFuncs).ParseFS(h.templates, "tmpl/"+tmplFile, "tmpl/app.html")
+	tmpl, err := template.New(tmplFile).Funcs(webFuncs).ParseFS(h.templates, "tmpl/"+tmplFile, "tmpl/app.html", "tmpl/editor.html")
 	if err != nil {
 		return httperror.ReturnWithHTTPStatus(err, http.StatusInternalServerError)
 	}

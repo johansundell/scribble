@@ -77,6 +77,23 @@ func TestShareAPI(t *testing.T) {
 		t.Fatalf("GET answers expiry %v, want %v", got.ExpiresAt, exp)
 	}
 
+	// GET reports the edit link (#195) beside the view link.
+	if got := decodeShare(t, e.apiDo("GET", path), http.StatusOK); got.EditURL != "" || got.EditExpiresAt != nil {
+		t.Fatalf("no edit link, yet GET answers %+v", got)
+	}
+	editExp := time.Now().Add(2 * time.Hour)
+	editTok, err := e.store.ShareNoteEdit(context.Background(), n.ID, &editExp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := decodeShare(t, e.apiDo("GET", path), http.StatusOK)
+	if got.EditURL != "http://example.com/e/"+editTok || got.EditExpiresAt == nil || got.EditExpiresAt.Sub(editExp).Abs() > time.Second || got.Token != sh.Token {
+		t.Fatalf("GET answers %+v, want edit link %q", got, editTok)
+	}
+	if again := decodeShare(t, e.apiDo("POST", path), http.StatusOK); again.EditURL != got.EditURL {
+		t.Fatalf("POST answers %+v, want the edit link too", again)
+	}
+
 	// Revoking: the link stops working and the note reads as private.
 	if w := e.apiDo("DELETE", path); w.Code != http.StatusNoContent {
 		t.Fatalf("revoke = %d, want 204 (%q)", w.Code, w.Body.String())
@@ -84,8 +101,8 @@ func TestShareAPI(t *testing.T) {
 	if w := e.do(get("/s/" + sh.Token)); w.Code != http.StatusNotFound {
 		t.Fatalf("revoked link = %d, want 404", w.Code)
 	}
-	if got := decodeShare(t, e.apiDo("GET", path), http.StatusOK); got.Token != "" {
-		t.Fatalf("revoked note answers %+v", got)
+	if got := decodeShare(t, e.apiDo("GET", path), http.StatusOK); got.Token != "" || got.EditURL == "" {
+		t.Fatalf("revoked view link answers %+v, want only the edit link", got)
 	}
 
 	for _, m := range []string{"GET", "POST", "DELETE"} {
@@ -103,13 +120,22 @@ func TestShareAPI_WebOff(t *testing.T) {
 	if _, err := on.store.ShareNote(context.Background(), n.ID, nil); err != nil {
 		t.Fatal(err)
 	}
+	editTok, err := on.store.ShareNoteEdit(context.Background(), n.ID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	off := &webEnv{r: newWebRouter(t, on.store, nil, &testLogger{}, nil), store: on.store}
 	path := apiSharePath(n)
 
 	if w := off.apiDo("POST", path); w.Code != http.StatusNotImplemented || !strings.Contains(w.Body.String(), "Not Implemented") {
 		t.Fatalf("share with the web app off = %d %q, want 501", w.Code, w.Body.String())
 	}
-	if sh := decodeShare(t, off.apiDo("GET", path), http.StatusOK); sh.Token != "" || sh.URL != "" {
+	for _, p := range []string{"/e/" + editTok, "/e/" + editTok + "/edit", "/e/" + editTok + "/history"} {
+		if w := off.do(get(p)); w.Code != http.StatusNotFound {
+			t.Errorf("GET %s with the web app off = %d, want 404", p, w.Code)
+		}
+	}
+	if sh := decodeShare(t, off.apiDo("GET", path), http.StatusOK); sh.Token != "" || sh.URL != "" || sh.EditURL != "" {
 		t.Fatalf("GET shows a link the web app is not serving: %+v", sh)
 	}
 	if w := off.apiDo("DELETE", path); w.Code != http.StatusNoContent {

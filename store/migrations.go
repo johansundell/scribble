@@ -139,6 +139,18 @@ CREATE UNIQUE INDEX oauth_tokens_refresh ON oauth_tokens(refresh) WHERE refresh 
 CREATE INDEX oauth_tokens_expires_at ON oauth_tokens(expires_at);
 `,
 	},
+	{
+		// A note's edit link (#195, ADR 15), beside its view link: the
+		// token, when it stops working (NULL for never) and when it was
+		// made, which starts the history its holder may see.
+		name: "share_edit",
+		sql: `
+ALTER TABLE notes ADD COLUMN share_edit_token TEXT;
+CREATE UNIQUE INDEX notes_share_edit_token ON notes(share_edit_token);
+ALTER TABLE notes ADD COLUMN share_edit_expires_at TEXT;
+ALTER TABLE notes ADD COLUMN share_edit_created_at TEXT;
+`,
+	},
 }
 
 // migrate applies the migrations the database's user_version has not yet

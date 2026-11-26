@@ -1,5 +1,7 @@
-{{/* A shared note's public page (#83): the note and nothing of the app
-around it. Its [[links]] go through the login screen. */}}<!DOCTYPE html>
+{{/* A share link's public page (#83): the note and nothing of the app
+around it. Its [[links]] go through the login screen. Behind an edit link
+(#195) it also has Edit and History, and shows the note's editor or its
+history in place of the note. */}}<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -17,10 +19,54 @@ around it. Its [[links]] go through the login screen. */}}<!DOCTYPE html>
 
 <body class="web">
 	<main class="shared">
+		{{- if .Editor}}
+		{{/* editor.js swaps the .note-view the server answers with. */}}
+		<section class="note-view">
+		{{- template "editor" .Editor}}
+		</section>
+		{{- else if .History}}{{with .History}}
+		<div class="history">
+			<h1>History</h1>
+			{{- if .Versions}}
+			<ol class="history-list" aria-label="Versions">
+				{{- range .Versions}}
+				<li><a href="{{.Href}}"{{if .Selected}} aria-current="true"{{end}}>
+					<span class="rev-badge">r{{.Revision}}</span>
+					{{timeTag .At}}
+					<span class="reason-badge">{{.Reason}}</span>
+					{{- if .Current}}
+					<span class="current-badge">Current version</span>
+					{{- end}}
+				</a></li>
+				{{- end}}
+			</ol>
+			<div class="history-banner">
+				<p>Viewing revision r{{.Shown.Revision}} from {{timeTag .Shown.At}}</p>
+				<div class="editor-buttons">
+					<a class="button" href="{{.Back}}">← Back to note</a>
+				</div>
+			</div>
+			<article class="note-body">{{.ShownHTML}}</article>
+			{{- else}}
+			<p class="muted">{{.Error}}</p>
+			<div class="editor-buttons">
+				<a class="button" href="{{.Back}}">← Back to note</a>
+			</div>
+			{{- end}}
+		</div>
+		{{- end}}
+		{{- else}}
+		{{- with .EditHref}}
+		<div class="editor-buttons">
+			<a class="button primary" href="{{.}}">Edit</a>
+			<a class="button" href="{{$.HistoryHref}}">History</a>
+		</div>
+		{{- end}}
 		<article class="note-body">{{.NoteHTML}}</article>
 		<p class="muted">Updated {{.Updated}}</p>
 		{{- with .Expires}}
 		<p class="muted">{{.}}</p>
+		{{- end}}
 		{{- end}}
 	</main>
 	<footer class="app-footer">Shared from Scribble</footer>

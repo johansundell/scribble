@@ -78,6 +78,7 @@ var reasonLabels = map[string]string{
 	"undelete":           "Undeleted",
 	"filemaker-conflict": "Sync conflict",
 	"conflict-kept-app":  "Sync conflict",
+	"share-edit":         "Edited via link",
 }
 
 // reasonLabel is the badge text for reason.

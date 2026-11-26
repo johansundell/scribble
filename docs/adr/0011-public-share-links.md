@@ -1,6 +1,6 @@
 # 11. Public, read-only share links
 
-- **Status:** Accepted (built in #83)
+- **Status:** Accepted (built in #83; amended by [ADR 15](0015-share-links-can-grant-edit.md), which adds edit links)
 - **Tickets:** #83, #142, #145
 
 ## Context

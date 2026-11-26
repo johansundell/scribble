@@ -203,6 +203,12 @@ func TestGetRoutes(t *testing.T) {
 		"AppImport":     {method: "POST", pattern: "/import-notes", web: true, useSession: true},
 		// A share link's public page: web, but no session.
 		"Shared": {method: "GET", pattern: "/s/:token", web: true},
+		// An edit link's pages (#195): no session either, and the save takes
+		// its token, not a cookie, so it needs no same-origin check.
+		"EditShared":        {method: "GET", pattern: "/e/:token", web: true},
+		"EditSharedForm":    {method: "GET", pattern: "/e/:token/edit", web: true},
+		"EditSharedSave":    {method: "POST", pattern: "/e/:token/edit", web: true, allowCross: true},
+		"EditSharedHistory": {method: "GET", pattern: "/e/:token/history", web: true},
 		// With the web app off, the root goes to the health check.
 		"RootToHealth": {method: "GET", pattern: "/", webOff: true},
 		"Healthz":      {method: "GET", pattern: "/healthz", useLogger: false, useAuth: false},

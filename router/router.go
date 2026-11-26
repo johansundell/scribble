@@ -44,8 +44,9 @@ type Route struct {
 	// UseSession requires a web app session; anyone else is sent to the
 	// login screen. Web routes only.
 	UseSession bool
-	// AllowCrossOrigin skips the same-origin check. Only login and logout
-	// set it (#47). Web routes only.
+	// AllowCrossOrigin skips the same-origin check: login and logout (#47),
+	// and an edit link's save (#195), whose key is the token in its path,
+	// not a cookie. Web routes only.
 	AllowCrossOrigin bool
 	// WebOff marks a route registered only when WEB_TOTP_SECRET is unset, in place
 	// of the web app on the same path.
