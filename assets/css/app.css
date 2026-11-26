@@ -1370,12 +1370,20 @@ body.web:has(.app-main) {
 	display: contents;
 }
 
-/* A pinned note in the list (#140). */
-.pin-badge {
+/* A pinned note in the list (#140), and one with a view or edit link
+   (#208): the badges sit together at the right edge, pin last. */
+.pin-badge,
+.share-badge {
 	flex: none;
 	margin-left: auto;
 	padding-left: 0.5rem;
 	font-size: 0.875em;
+}
+
+.share-badge + .share-badge,
+.share-badge + .pin-badge {
+	margin-left: 0;
+	padding-left: 0.25rem;
 }
 
 /* AUTH_TOKEN is long: smaller type than a 6-digit code. */

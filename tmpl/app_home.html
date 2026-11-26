@@ -26,6 +26,10 @@ a note, the list otherwise. */}}
 			<ul>
 				{{- range .Notes}}
 				<li><a href="{{notePath .ID}}{{$filter}}"{{if eq .ID $open}} aria-current="page"{{end}}>{{.Title}}
+					{{- with index $.Shared .ID}}
+					{{- if .View}}<span class="share-badge" role="img" aria-label="Shared (view link)" title="Shared (view link)">🔗</span>{{end}}
+					{{- if .Edit}}<span class="share-badge" role="img" aria-label="Shared (edit link)" title="Shared (edit link)">✏️</span>{{end}}
+					{{- end}}
 					{{- if .Pinned}}<span class="pin-badge" role="img" aria-label="Pinned" title="Pinned">📌</span>{{end}}</a></li>
 				{{- end}}
 			</ul>

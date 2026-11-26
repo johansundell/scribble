@@ -71,6 +71,9 @@ type NoteStore interface {
 	// a version of its own with reason share-edit. baseRev works as in
 	// UpdateNote; a body with another title gives ErrTitleChanged.
 	UpdateEditSharedNote(ctx context.Context, token, body string, baseRev int64) (*notes.Note, error)
+	// SharedNotes returns, by note id, which live notes have a working view
+	// or edit link (#208). Notes with neither are left out.
+	SharedNotes(ctx context.Context) (map[int64]NoteShares, error)
 
 	// History (#55, ADR 7). Every write above records a version.
 	// NoteVersions lists note id's versions, newest first, without bodies.

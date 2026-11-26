@@ -223,3 +223,30 @@ func (s *SQLStore) UpdateEditSharedNote(ctx context.Context, token, body string,
 	}
 	return n, tx.Commit()
 }
+
+// NoteShares is which of a note's links work, for the web list (#208).
+type NoteShares struct {
+	View, Edit bool
+}
+
+func (s *SQLStore) SharedNotes(ctx context.Context) (map[int64]NoteShares, error) {
+	now := timeArg(time.Now())
+	view := viewLink.token + ` IS NOT NULL AND ` + viewLink.live()
+	edit := editLink.token + ` IS NOT NULL AND ` + editLink.live()
+	rows, err := s.db.QueryContext(ctx, `SELECT id, `+view+`, `+edit+` FROM notes
+		WHERE deleted = 0 AND ((`+view+`) OR (`+edit+`))`, now, now, now, now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]NoteShares{}
+	for rows.Next() {
+		var id int64
+		var sh NoteShares
+		if err := rows.Scan(&id, &sh.View, &sh.Edit); err != nil {
+			return nil, err
+		}
+		out[id] = sh
+	}
+	return out, rows.Err()
+}
