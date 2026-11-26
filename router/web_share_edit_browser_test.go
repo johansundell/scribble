@@ -34,7 +34,8 @@ func TestWebShareEditBrowser(t *testing.T) {
 		d.wantText(".share-warning", "Anyone with the edit link can change the note")
 		d.exec(`document.getElementById("edit-ttl").value = "7d"`)
 		d.click(`button[value="share-edit"]`)
-		d.waitPath(share)
+		// Not waitPath: the pane posts back to the path it is already at.
+		d.waitFor(`return !!document.getElementById("edit-url")`)
 		d.execInto(&link, `return document.getElementById("edit-url").value`)
 		if !strings.Contains(link, "/e/") {
 			t.Fatalf("edit link %q", link)
