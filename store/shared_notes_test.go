@@ -35,7 +35,11 @@ func TestSharedNotes(t *testing.T) {
 	must(s.ShareNote(ctx, expired, &past))
 	must(s.ShareNoteEdit(ctx, expired, &past))
 	must(s.ShareNote(ctx, revoked, nil))
+	must(s.ShareNoteEdit(ctx, revoked, nil))
 	if err := s.UnshareNote(ctx, revoked); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UnshareNoteEdit(ctx, revoked); err != nil {
 		t.Fatal(err)
 	}
 	must(s.ShareNote(ctx, deleted, nil))
@@ -47,7 +51,7 @@ func TestSharedNotes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[int64]NoteShares{
+	want := map[int64]ShareFlags{
 		view: {View: true},
 		edit: {Edit: true},
 		both: {View: true, Edit: true},

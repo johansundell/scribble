@@ -73,7 +73,7 @@ type NoteStore interface {
 	UpdateEditSharedNote(ctx context.Context, token, body string, baseRev int64) (*notes.Note, error)
 	// SharedNotes returns, by note id, which live notes have a working view
 	// or edit link (#208). Notes with neither are left out.
-	SharedNotes(ctx context.Context) (map[int64]NoteShares, error)
+	SharedNotes(ctx context.Context) (map[int64]ShareFlags, error)
 
 	// History (#55, ADR 7). Every write above records a version.
 	// NoteVersions lists note id's versions, newest first, without bodies.

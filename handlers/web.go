@@ -85,7 +85,7 @@ type webPage struct {
 	Notes []notes.Note
 	// Shared is which listed notes have a working view or edit link, for
 	// the list's badges (#208).
-	Shared    map[int64]store.NoteShares
+	Shared    map[int64]store.ShareFlags
 	Note      *notes.Note
 	NoteHTML  template.HTML
 	Backlinks []notes.Note
