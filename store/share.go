@@ -17,7 +17,7 @@ import (
 
 // ErrTitleChanged is why a save through an edit link was refused: renaming
 // is RenameNote's job, which rewrites the [[links]] to the note.
-var ErrTitleChanged = errors.New("the title can't be changed through a share link")
+var ErrTitleChanged = errors.New("the title can't be changed through an edit link")
 
 // reasonShareEdit is the history reason of a save through an edit link.
 const reasonShareEdit = "share-edit"
@@ -117,6 +117,7 @@ func (s *SQLStore) share(ctx context.Context, l shareLink, id int64, expires *ti
 	return tok, err
 }
 
+// unshare revokes note id's link l.
 func (s *SQLStore) unshare(ctx context.Context, l shareLink, id int64) error {
 	if err := s.checkNotes(); err != nil {
 		return err
@@ -149,6 +150,7 @@ func (s *SQLStore) noteShare(ctx context.Context, l shareLink, id int64) (Share,
 	return shareOf(tok.String, exp, created), nil
 }
 
+// shareOf is the Share read back from a link's columns.
 func shareOf(tok string, exp, created sql.NullString) Share {
 	sh := Share{Token: tok, ExpiresAt: parseExpiry(exp)}
 	if created.Valid {

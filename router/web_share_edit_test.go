@@ -127,9 +127,11 @@ func TestWebShareEdit_Page(t *testing.T) {
 	// The view token is no edit token, nor the other way round.
 	view, _ := e.store.ShareNote(context.Background(), n.ID, nil)
 	for _, bad := range []string{"/e/" + view, "/e/nope", "/e/" + strings.ToUpper(tok), "/e/" + tok + "x/edit", "/e/nope/history"} {
-		if w := e.do(get(bad)); w.Code != http.StatusNotFound {
+		w := e.do(get(bad))
+		if w.Code != http.StatusNotFound {
 			t.Errorf("GET %s = %d, want 404", bad, w.Code)
 		}
+		wantPublicHeaders(t, w)
 	}
 	if w := e.do(get("/s/" + tok)); w.Code != http.StatusNotFound {
 		t.Errorf("edit token at /s/ = %d, want 404", w.Code)
@@ -216,10 +218,10 @@ func TestWebShareEdit_Editor(t *testing.T) {
 	if err := e.store.UnshareNoteEdit(context.Background(), n.ID); err != nil {
 		t.Fatal(err)
 	}
+	// It says so in the editor, which keeps the text.
 	w = e.do(postForm(path, url.Values{"body": {"# Shared\nlate"}, "revision": {"4"}, "action": {"save"}}))
-	if w.Code != http.StatusNotFound {
-		t.Errorf("save through a revoked link = %d, want 404", w.Code)
-	}
+	wantBody(t, w, http.StatusNotFound, "This link no longer works", "# Shared\nlate</textarea>", `class="note-view"`)
+	wantPublicHeaders(t, w)
 	if e.get(t, n.ID).Body != "# Shared\nmine" {
 		t.Error("a revoked link saved")
 	}

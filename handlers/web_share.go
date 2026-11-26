@@ -142,16 +142,18 @@ func (h *Handler) AppShare(c *gin.Context) error {
 	ctx := c.Request.Context()
 	action := c.PostForm("action")
 	switch action {
-	case actionShare, actionShareEdit:
+	case actionShare:
 		expires, terr := shareExpiry(c.PostForm("ttl"))
 		if terr != nil {
 			return httperror.ReturnWithHTTPStatus(terr, http.StatusBadRequest)
 		}
-		if action == actionShare {
-			_, err = ns.ShareNote(ctx, n.ID, expires)
-		} else {
-			_, err = ns.ShareNoteEdit(ctx, n.ID, expires)
+		_, err = ns.ShareNote(ctx, n.ID, expires)
+	case actionShareEdit:
+		expires, terr := shareExpiry(c.PostForm("ttl"))
+		if terr != nil {
+			return httperror.ReturnWithHTTPStatus(terr, http.StatusBadRequest)
 		}
+		_, err = ns.ShareNoteEdit(ctx, n.ID, expires)
 	case actionUnshare:
 		err = ns.UnshareNote(ctx, n.ID)
 	case actionUnshareEdit:
@@ -173,6 +175,7 @@ func (h *Handler) AppShare(c *gin.Context) error {
 // none of the app around it. An unknown, revoked or expired token is a
 // plain 404.
 func (h *Handler) Shared(c *gin.Context) error {
+	publicHeaders(c)
 	ns, err := h.noteStore()
 	if err != nil {
 		return err

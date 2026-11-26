@@ -42,6 +42,7 @@ const (
 // editLinkNote is the note behind the edit link in :token and the link, or
 // a 404 when the token is unknown, revoked or expired.
 func (h *Handler) editLinkNote(c *gin.Context) (store.NoteStore, *notes.Note, store.Share, error) {
+	publicHeaders(c)
 	ns, err := h.noteStore()
 	if err != nil {
 		return nil, nil, store.Share{}, err
@@ -69,10 +70,10 @@ func (h *Handler) EditShared(c *gin.Context) error {
 		expires = "Never expires"
 	}
 	return h.renderShared(c, http.StatusOK, sharedPage{
-		Title:    n.Title,
-		NoteHTML: out,
-		Updated:  n.UpdatedAt.UTC().Format("2006-01-02 15:04 UTC"),
-		Expires:  expires,
+		Title:       n.Title,
+		NoteHTML:    out,
+		Updated:     n.UpdatedAt.UTC().Format("2006-01-02 15:04 UTC"),
+		Expires:     expires,
 		EditHref:    EditSharedEditPath(sh.Token),
 		HistoryHref: EditSharedHistoryPath(sh.Token),
 	})
@@ -96,13 +97,19 @@ func (h *Handler) EditSharedForm(c *gin.Context) error {
 
 // EditSharedSave saves the editor behind an edit link, as AppSave does:
 // Save stays in the editor, Done shows the note, and a stale revision offers
-// Reload and Overwrite. A save that changes the title is refused.
+// Reload and Overwrite. A save that changes the title is refused. A link
+// that stopped working shows the editor again, with the text, and says so.
 func (h *Handler) EditSharedSave(c *gin.Context) error {
-	ns, n, sh, err := h.editLinkNote(c)
+	body, err := formBody(c)
 	if err != nil {
 		return err
 	}
-	body, err := formBody(c)
+	ns, n, sh, err := h.editLinkNote(c)
+	if errors.Is(err, store.ErrNoteNotFound) {
+		tok := c.Param("token")
+		ed := &noteEditor{Action: EditSharedEditPath(tok), Cancel: EditSharedPath(tok), Body: body, Dirty: true, Error: msgLinkGone}
+		return h.renderShared(c, http.StatusNotFound, sharedPage{Title: "Edit link", Editor: ed})
+	}
 	if err != nil {
 		return err
 	}
@@ -223,16 +230,21 @@ type sharedPage struct {
 	History     *historyView
 }
 
-// renderShared renders a share link's public page with p. Its URL holds
-// the token, so it is never sent to the sites the note links to, and the
-// page is kept out of search engines.
+// publicHeaders keeps a share link's token, which is in the URL, from being
+// sent to the sites the note links to, and its pages (404s too) out of
+// search engines.
+func publicHeaders(c *gin.Context) {
+	c.Header("Referrer-Policy", "no-referrer")
+	c.Header("X-Robots-Tag", "noindex")
+}
+
+// renderShared renders a share link's public page with p.
 func (h *Handler) renderShared(c *gin.Context, status int, p sharedPage) error {
 	tmpl, err := template.New("shared.html").Funcs(webFuncs).ParseFS(h.templates, "tmpl/shared.html", "tmpl/editor.html")
 	if err != nil {
 		return httperror.ReturnWithHTTPStatus(err, http.StatusInternalServerError)
 	}
-	c.Header("Referrer-Policy", "no-referrer")
-	c.Header("X-Robots-Tag", "noindex")
+	publicHeaders(c)
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.Status(status)
 	if err := tmpl.Execute(c.Writer, p); err != nil {

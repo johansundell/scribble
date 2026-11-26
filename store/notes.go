@@ -432,4 +432,3 @@ func (s *SQLStore) PinNote(ctx context.Context, id int64, pinned bool) (*notes.N
 	}
 	return n, tx.Commit()
 }
-
