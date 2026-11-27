@@ -48,6 +48,12 @@ func (l shareLink) live() string {
 	return `(` + l.expires + ` IS NULL OR ` + l.expires + ` > ?)`
 }
 
+// working is the SQL condition of a link that is set and has not expired;
+// it takes the current time as its one argument.
+func (l shareLink) working() string {
+	return l.token + ` IS NOT NULL AND ` + l.live()
+}
+
 // createdCol is the column read back as the creation time: NULL for the view
 // link.
 func (l shareLink) createdCol() string {
@@ -97,7 +103,7 @@ func parseExpiry(v sql.NullString) *time.Time {
 // sets its expiry and returns the token.
 func (s *SQLStore) share(ctx context.Context, l shareLink, id int64, expires *time.Time) (string, error) {
 	now := timeArg(time.Now())
-	keep := l.token + ` IS NOT NULL AND ` + l.live()
+	keep := l.working()
 	set := l.token + ` = CASE WHEN ` + keep + ` THEN ` + l.token + ` ELSE ? END, ` + l.expires + ` = ?`
 	args := []any{now, newShareToken(), expiryArg(expires)}
 	if l.created != "" {
@@ -222,4 +228,30 @@ func (s *SQLStore) UpdateEditSharedNote(ctx context.Context, token, body string,
 		return nil, err
 	}
 	return n, tx.Commit()
+}
+
+// ShareFlags says which of a note's two links work, for the web list (#208).
+type ShareFlags struct {
+	View, Edit bool
+}
+
+func (s *SQLStore) SharedNotes(ctx context.Context) (map[int64]ShareFlags, error) {
+	now := timeArg(time.Now())
+	view, edit := viewLink.working(), editLink.working()
+	rows, err := s.db.QueryContext(ctx, `SELECT id, `+view+`, `+edit+` FROM notes
+		WHERE deleted = 0 AND ((`+view+`) OR (`+edit+`))`, now, now, now, now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]ShareFlags{}
+	for rows.Next() {
+		var id int64
+		var sh ShareFlags
+		if err := rows.Scan(&id, &sh.View, &sh.Edit); err != nil {
+			return nil, err
+		}
+		out[id] = sh
+	}
+	return out, rows.Err()
 }

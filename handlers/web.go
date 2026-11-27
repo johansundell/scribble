@@ -82,7 +82,10 @@ type webPage struct {
 	Setup *totpSetup
 	// Notes pages only. Note is the open one, if any; Message replaces it
 	// when there is nothing to show.
-	Notes     []notes.Note
+	Notes []notes.Note
+	// Shared is which listed notes have a working view or edit link, for
+	// the list's badges (#208).
+	Shared    map[int64]store.ShareFlags
 	Note      *notes.Note
 	NoteHTML  template.HTML
 	Backlinks []notes.Note
@@ -288,6 +291,9 @@ func (h *Handler) notesPage(c *gin.Context) (webPage, store.NoteStore, error) {
 		p.Project = notes.NormalizeProject(c.Query("project"))
 	}
 	if p.Notes, err = ns.ListNotes(ctx, p.Query, p.Project); err != nil {
+		return webPage{}, nil, noteError(err)
+	}
+	if p.Shared, err = ns.SharedNotes(ctx); err != nil {
 		return webPage{}, nil, noteError(err)
 	}
 	if p.Projects, err = ns.Projects(ctx); err != nil {
